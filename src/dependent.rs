@@ -2,7 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[cfg(creusot)]
+use creusot_contracts::prelude::*;
+
+#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
+#[derive(Debug)]
 pub struct DependentNode<T> {
     pub id: u128,
     pub from: Option<u128>,
@@ -13,7 +17,8 @@ pub struct DependentNode<T> {
     pub contents: T,
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
+#[derive(Debug)]
 pub struct DependentWeave<T, M> {
     nodes: HashMap<u128, DependentNode<T>, FxHasher64>,
     roots: HashSet<u128, FxHasher64>,

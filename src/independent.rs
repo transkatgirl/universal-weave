@@ -2,9 +2,13 @@ use std::collections::{HashMap, HashSet};
 
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
+#[cfg(creusot)]
+use creusot_contracts::prelude::*;
+
 use crate::IndependentContents;
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
+#[derive(Debug)]
 pub struct IndependentNode<T>
 where
     T: IndependentContents,
@@ -18,7 +22,8 @@ where
     pub contents: T,
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
+#[derive(Debug)]
 pub struct IndependentWeave<T, M>
 where
     T: IndependentContents,
