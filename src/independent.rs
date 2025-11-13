@@ -11,7 +11,10 @@ use creusot_contracts::prelude::*;
 #[cfg(not(creusot))]
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::{IndependentContents, Node};
+use crate::{
+    DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, IndependentContents,
+    Node, Weave,
+};
 
 #[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
 #[derive(Debug)]
@@ -87,5 +90,68 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
+    }
+}
+
+impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
+    fn get_node(&self, id: u128) -> Option<&IndependentNode<T>> {
+        self.nodes.get(&id)
+    }
+
+    fn get_roots(&self) -> impl Iterator<Item = u128> {
+        self.roots.iter().copied()
+    }
+
+    fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
+        self.bookmarked.iter().copied()
+    }
+
+    fn get_active_threads(&self) -> impl Iterator<Item = u128> {
+        self.active.iter().copied()
+    }
+
+    fn add_node(&mut self, node: IndependentNode<T>) -> bool {
+        todo!()
+    }
+
+    fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
+        todo!()
+    }
+
+    fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
+        todo!()
+    }
+
+    fn remove_node(&mut self, id: u128) -> Option<IndependentNode<T>> {
+        todo!()
+    }
+}
+
+impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode<T>, T>
+    for IndependentWeave<T, M>
+{
+    fn split_node(&mut self, id: u128, at: usize) -> bool {
+        todo!()
+    }
+
+    fn merge_with_parent(&mut self, id: u128) -> bool {
+        todo!()
+    }
+}
+
+/*impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
+    for IndependentWeave<T, M>
+{
+    fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
+        todo!()
+    }
+}
+*/
+
+impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
+    for IndependentWeave<T, M>
+{
+    fn replace_node_parents(&mut self, target: u128, parents: &[u128]) -> bool {
+        todo!()
     }
 }

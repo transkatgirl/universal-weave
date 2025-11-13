@@ -11,7 +11,9 @@ use creusot_contracts::prelude::*;
 #[cfg(not(creusot))]
 use rkyv::{Archive, Deserialize, Serialize};
 
-use crate::Node;
+use crate::{
+    DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, Node, Weave,
+};
 
 #[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
 #[derive(Debug)]
@@ -85,6 +87,56 @@ impl<T, M> DependentWeave<T, M> {
         self.active
     }
 }
+
+impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
+    fn get_node(&self, id: u128) -> Option<&DependentNode<T>> {
+        self.nodes.get(&id)
+    }
+
+    fn get_roots(&self) -> impl Iterator<Item = u128> {
+        self.roots.iter().copied()
+    }
+
+    fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
+        self.bookmarked.iter().copied()
+    }
+
+    fn get_active_threads(&self) -> impl Iterator<Item = u128> {
+        self.active.into_iter()
+    }
+
+    fn add_node(&mut self, node: DependentNode<T>) -> bool {
+        todo!()
+    }
+
+    fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
+        todo!()
+    }
+
+    fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
+        todo!()
+    }
+
+    fn remove_node(&mut self, id: u128) -> Option<DependentNode<T>> {
+        todo!()
+    }
+}
+
+impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+    fn split_node(&mut self, id: u128, at: usize) -> bool {
+        todo!()
+    }
+
+    fn merge_with_parent(&mut self, id: u128) -> bool {
+        todo!()
+    }
+}
+
+/*impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+    fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
+        todo!()
+    }
+}*/
 
 /*#[requires(a@ < i64::MAX@)]
 #[ensures(result@ == a@ + 1)]

@@ -14,14 +14,14 @@ pub trait Weave<N, T>
 where
     N: Node<T>,
 {
-    fn get_node(&self, id: u128) -> Option<&impl Node<T>>;
+    fn get_node(&self, id: u128) -> Option<&N>;
     fn get_roots(&self) -> impl Iterator<Item = u128>;
     fn get_bookmarks(&self) -> impl Iterator<Item = u128>;
     fn get_active_threads(&self) -> impl Iterator<Item = u128>;
-    fn add_node(&mut self, node: impl Node<T>) -> bool;
+    fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool;
-    fn remove_node(&mut self, id: u128) -> Option<impl Node<T>>;
+    fn remove_node(&mut self, id: u128) -> Option<N>;
 }
 
 pub trait IndependentWeave<N, T>
