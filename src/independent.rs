@@ -1,11 +1,14 @@
 use std::collections::{HashMap, HashSet};
 
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
+use rkyv::hash::FxHasher64;
 
 #[cfg(creusot)]
 use creusot_contracts::prelude::*;
 
-use crate::IndependentContents;
+#[cfg(not(creusot))]
+use rkyv::{Archive, Deserialize, Serialize};
+
+use crate::{IndependentContents, Node};
 
 #[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
 #[derive(Debug)]
@@ -20,6 +23,27 @@ where
     pub active: bool,
     pub bookmarked: bool,
     pub contents: T,
+}
+
+impl<T: IndependentContents> Node<T> for IndependentNode<T> {
+    fn id(&self) -> u128 {
+        self.id
+    }
+    fn from(&self) -> impl Iterator<Item = u128> {
+        self.from.iter().copied()
+    }
+    fn to(&self) -> impl Iterator<Item = u128> {
+        self.to.iter().copied()
+    }
+    fn is_active(&self) -> bool {
+        self.active
+    }
+    fn is_bookmarked(&self) -> bool {
+        self.bookmarked
+    }
+    fn contents(&self) -> &T {
+        &self.contents
+    }
 }
 
 #[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
