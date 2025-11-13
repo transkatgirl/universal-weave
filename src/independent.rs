@@ -3,9 +3,13 @@ use std::{
     hash::BuildHasherDefault,
 };
 
+use creusot_contracts::{
+    logic::{FMap, FSet},
+    model::View,
+};
 use rkyv::hash::FxHasher64;
 
-#[cfg(creusot)]
+//#[cfg(creusot)]
 use creusot_contracts::prelude::*;
 
 #[cfg(not(creusot))]
@@ -29,6 +33,46 @@ where
     pub active: bool,
     pub bookmarked: bool,
     pub contents: T,
+}
+
+#[cfg(creusot)]
+pub struct IndependentNodeView<T>
+where
+    T: IndependentContents,
+{
+    id: u128,
+    from: FSet<u128>,
+    to: FSet<u128>,
+
+    active: bool,
+    bookmarked: bool,
+    contents: T,
+}
+
+#[cfg(creusot)]
+impl<T> View for IndependentNode<T>
+where
+    T: IndependentContents,
+{
+    type ViewTy = IndependentNodeView<T>;
+
+    #[logic(opaque)]
+    fn view(self) -> Self::ViewTy {
+        dead
+    }
+}
+
+#[cfg(creusot)]
+impl<T> Invariant for IndependentNode<T>
+where
+    T: IndependentContents,
+{
+    #[logic]
+    fn invariant(self) -> bool {
+        pearlite! {
+            self@.from.intersection(self@.to) == FSet::empty() && !self@.from.contains(self@.id) && !self@.to.contains(self@.id)
+        }
+    }
 }
 
 impl<T: IndependentContents> Node<T> for IndependentNode<T> {
@@ -66,6 +110,43 @@ where
     pub metadata: M,
 }
 
+#[cfg(creusot)]
+pub struct IndependentWeaveView<T>
+where
+    T: IndependentContents,
+{
+    nodes: FMap<u128, IndependentNode<T>>,
+    roots: FSet<u128>,
+    active: FSet<u128>,
+    bookmarked: FSet<u128>,
+}
+
+#[cfg(creusot)]
+impl<T, M> View for IndependentWeave<T, M>
+where
+    T: IndependentContents,
+{
+    type ViewTy = IndependentWeaveView<T>;
+
+    #[logic(opaque)]
+    fn view(self) -> Self::ViewTy {
+        dead
+    }
+}
+
+//#[cfg(creusot)]
+/*impl<T, M> Invariant for IndependentWeave<T, M>
+where
+    T: IndependentContents,
+{
+    #[logic]
+    fn invariant(self) -> bool {
+        pearlite! {
+            true
+        }
+    }
+}*/
+
 impl<T: IndependentContents, M> IndependentWeave<T, M> {
     #[cfg(not(creusot))]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
@@ -90,6 +171,18 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
+    }
+    #[requires(self@.nodes.contains(id))]
+    fn siblings(&self, id: u128) -> impl Iterator<Item = &IndependentNode<T>> {
+        self.nodes.get(&id).into_iter().flat_map(|node| {
+            node.from.iter().copied().flat_map(|id| {
+                self.nodes
+                    .get(&id)
+                    .into_iter()
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                    .filter_map(|id| self.nodes.get(&id))
+            })
+        })
     }
 }
 
@@ -145,8 +238,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
         todo!()
     }
-}
-*/
+}*/
 
 impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
