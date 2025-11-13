@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasherDefault,
+};
 
 use rkyv::hash::FxHasher64;
 
@@ -15,7 +18,7 @@ use crate::Node;
 pub struct DependentNode<T> {
     pub id: u128,
     pub from: Option<u128>,
-    pub to: HashSet<u128, FxHasher64>,
+    pub to: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub active: bool,
     pub bookmarked: bool,
@@ -46,12 +49,37 @@ impl<T> Node<T> for DependentNode<T> {
 #[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
 #[derive(Debug)]
 pub struct DependentWeave<T, M> {
-    nodes: HashMap<u128, DependentNode<T>, FxHasher64>,
-    roots: HashSet<u128, FxHasher64>,
+    nodes: HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    roots: HashSet<u128, BuildHasherDefault<FxHasher64>>,
     active: Option<u128>,
-    bookmarked: HashSet<u128, FxHasher64>,
+    bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
+}
+
+impl<T, M> DependentWeave<T, M> {
+    pub fn with_capacity(capacity: usize, metadata: M) -> Self {
+        Self {
+            nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            roots: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            active: None,
+            bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            metadata,
+        }
+    }
+    pub fn reserve(&mut self, additional: usize) {
+        self.nodes.reserve(additional);
+        self.roots.reserve(additional);
+        self.bookmarked.reserve(additional);
+    }
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.nodes.shrink_to(min_capacity);
+        self.roots.shrink_to(min_capacity);
+        self.bookmarked.shrink_to(min_capacity);
+    }
+    pub fn get_active_thread(&self) -> Option<u128> {
+        self.active
+    }
 }
 
 /*#[requires(a@ < i64::MAX@)]

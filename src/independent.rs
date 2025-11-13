@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::BuildHasherDefault,
+};
 
 use rkyv::hash::FxHasher64;
 
@@ -17,8 +20,8 @@ where
     T: IndependentContents,
 {
     pub id: u128,
-    pub from: HashSet<u128, FxHasher64>,
-    pub to: HashSet<u128, FxHasher64>,
+    pub from: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    pub to: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub active: bool,
     pub bookmarked: bool,
@@ -52,10 +55,34 @@ pub struct IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    nodes: HashMap<u128, IndependentNode<T>, FxHasher64>,
-    roots: HashSet<u128, FxHasher64>,
-    active: HashSet<u128, FxHasher64>,
-    bookmarked: HashSet<u128, FxHasher64>,
+    nodes: HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    roots: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    active: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
+}
+
+impl<T: IndependentContents, M> IndependentWeave<T, M> {
+    pub fn with_capacity(capacity: usize, metadata: M) -> Self {
+        Self {
+            nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            roots: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            active: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            metadata,
+        }
+    }
+    pub fn reserve(&mut self, additional: usize) {
+        self.nodes.reserve(additional);
+        self.roots.reserve(additional);
+        self.active.reserve(additional);
+        self.bookmarked.reserve(additional);
+    }
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.nodes.shrink_to(min_capacity);
+        self.roots.shrink_to(min_capacity);
+        self.active.shrink_to(min_capacity);
+        self.bookmarked.shrink_to(min_capacity);
+    }
 }
