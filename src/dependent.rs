@@ -58,6 +58,7 @@ pub struct DependentWeave<T, M> {
 }
 
 impl<T, M> DependentWeave<T, M> {
+    #[cfg(not(creusot))]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
@@ -67,16 +68,19 @@ impl<T, M> DependentWeave<T, M> {
             metadata,
         }
     }
+    #[cfg(not(creusot))]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
         self.bookmarked.reserve(additional);
     }
+    #[cfg(not(creusot))]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
+    #[cfg(not(creusot))]
     pub fn get_active_thread(&self) -> Option<u128> {
         self.active
     }
