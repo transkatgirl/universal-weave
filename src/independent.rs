@@ -153,9 +153,9 @@ where
                     n@.id == k &&
                     n@.from.is_subset(self@.nodes.keys()) &&
                     n@.to.is_subset(self@.nodes.keys()) &&
-                    if n@.from.is_empty() { self@.roots.contains(n@.id) } else { true } &&
-                    if n@.active { self@.active.contains(n@.id) } else { true } &&
-                    if n@.bookmarked { self@.bookmarked.contains(n@.id) } else { true } &&
+                    n@.from.is_empty() == self@.roots.contains(n@.id) &&
+                    n@.active == self@.active.contains(n@.id) &&
+                    n@.bookmarked == self@.bookmarked.contains(n@.id) &&
                     forall<k> n@.from.contains(k) ==> match self@.nodes.get(k) {
                         Some(p) => {p@.to.contains(n@.id)},
                         None => false
