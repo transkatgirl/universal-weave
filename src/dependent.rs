@@ -7,7 +7,8 @@ use contracts::*;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
-    DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, Node, Weave,
+    DiscreetContentSplit, DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave,
+    Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -253,12 +254,62 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 }
 
 impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
-    fn split_node(&mut self, id: u128, at: usize) -> bool {
-        todo!()
+    #[debug_ensures(self.verify())]
+    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
+        if self.nodes.contains_key(&new_id) || id == new_id {
+            return false;
+        }
+
+        if let Some(mut node) = self.nodes.remove(&id) {
+            match node.contents.split(at) {
+                DiscreetContentSplit::Success((left, right)) => {
+                    let left_node = DependentNode {
+                        id,
+                        from: node.from,
+                        to: HashSet::from_iter([new_id]),
+                        active: node.active,
+                        bookmarked: node.bookmarked,
+                        contents: left,
+                    };
+
+                    node.from = Some(node.id);
+                    node.id = new_id;
+                    node.contents = right;
+                    node.active = false;
+                    node.bookmarked = false;
+
+                    for child in node.to.iter() {
+                        match self.nodes.get_mut(child) {
+                            Some(child) => {
+                                child.from = Some(node.id);
+                            }
+                            None => return false,
+                        }
+                    }
+
+                    self.nodes.insert(left_node.id, left_node);
+                    self.nodes.insert(node.id, node);
+
+                    true
+                }
+                DiscreetContentSplit::Failure(content) => {
+                    node.contents = content;
+                    self.nodes.insert(node.id, node);
+                    false
+                }
+            }
+        } else {
+            false
+        }
     }
 
+    #[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: u128) -> bool {
-        todo!()
+        if let Some(node) = self.nodes.get(&id) {
+            todo!()
+        } else {
+            false
+        }
     }
 }
 

@@ -200,7 +200,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    fn split_node(&mut self, id: u128, at: usize) -> bool {
+    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
         todo!()
     }
 

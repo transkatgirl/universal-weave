@@ -39,7 +39,7 @@ where
     N: Node<T>,
     T: DiscreteContents,
 {
-    fn split_node(&mut self, id: u128, at: usize) -> bool;
+    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool;
     fn merge_with_parent(&mut self, id: u128) -> bool;
 }
 
