@@ -155,7 +155,15 @@ where
                     n@.to.is_subset(self@.nodes.keys()) &&
                     if n@.from.is_empty() { self@.roots.contains(n@.id) } else { true } &&
                     if n@.active { self@.active.contains(n@.id) } else { true } &&
-                    if n@.bookmarked { self@.bookmarked.contains(n@.id) } else { true },
+                    if n@.bookmarked { self@.bookmarked.contains(n@.id) } else { true } &&
+                    forall<k> n@.from.contains(k) ==> match self@.nodes.get(k) {
+                        Some(p) => {p@.to.contains(n@.id)},
+                        None => false
+                    } &&
+                    forall<k> n@.to.contains(k) ==> match self@.nodes.get(k) {
+                        Some(c) => {c@.from.contains(n@.id)},
+                        None => false
+                    },
                 None => true
             }
         }
