@@ -156,22 +156,23 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(value == (self.active == Some(id)))]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
-        if value
-            && self.nodes.contains_key(&id)
-            && let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id))
-        {
-            active.active = false;
-        }
-
         match self.nodes.get_mut(&id) {
             Some(node) => {
+                node.active = value;
+
                 if value {
-                    self.active = Some(id)
+                    if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                        active.active = false;
+                    }
+
+                    self.active = Some(id);
                 } else if self.active == Some(id) {
                     self.active = node.from;
-                }
 
-                node.active = value;
+                    if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                        parent.active = true;
+                    }
+                }
 
                 true
             }
@@ -197,8 +198,29 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         }
     }
 
+    #[debug_ensures(!self.nodes.contains_key(&id))]
+    #[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: u128) -> Option<DependentNode<T>> {
-        todo!()
+        if let Some(node) = self.nodes.remove(&id) {
+            self.roots.remove(&id);
+            self.bookmarked.remove(&id);
+            if node.active {
+                self.active = node.from;
+                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                    parent.active = true;
+                }
+            }
+            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                parent.to.remove(&id);
+            }
+            for child in node.to.iter().copied() {
+                self.remove_node(child);
+            }
+
+            Some(node)
+        } else {
+            None
+        }
     }
 }
 
