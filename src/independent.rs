@@ -70,7 +70,7 @@ where
     #[logic]
     fn invariant(self) -> bool {
         pearlite! {
-            self@.from.intersection(self@.to) == FSet::empty() &&
+            self@.from.disjoint(self@.to) &&
             !self@.from.contains(self@.id) &&
             !self@.to.contains(self@.id)
         }
@@ -136,14 +136,13 @@ where
     }
 }
 
-//#[cfg(creusot)]
+#[cfg(creusot)]
 impl<T, M> Invariant for IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
     #[logic]
     fn invariant(self) -> bool {
-        // WIP
         pearlite! {
             self@.roots.is_subset(self@.nodes.keys()) &&
             self@.active.is_subset(self@.nodes.keys()) &&
@@ -157,12 +156,17 @@ where
                     n@.active == self@.active.contains(n@.id) &&
                     n@.bookmarked == self@.bookmarked.contains(n@.id) &&
                     forall<k> n@.from.contains(k) ==> match self@.nodes.get(k) {
-                        Some(p) => {p@.to.contains(n@.id)},
+                        Some(p) => p@.to.contains(n@.id),
                         None => false
                     } &&
                     forall<k> n@.to.contains(k) ==> match self@.nodes.get(k) {
-                        Some(c) => {c@.from.contains(n@.id)},
+                        Some(c) => c@.from.contains(n@.id),
                         None => false
+                    } &&
+                    if n@.active && !n@.from.is_empty() {
+                        !n@.from.disjoint(self@.active)
+                    } else {
+                        true
                     },
                 None => true
             }
