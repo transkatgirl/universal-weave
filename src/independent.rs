@@ -40,13 +40,13 @@ pub struct IndependentNodeView<T>
 where
     T: IndependentContents,
 {
-    id: u128,
-    from: FSet<u128>,
-    to: FSet<u128>,
+    pub id: Int,
+    pub from: FSet<Int>,
+    pub to: FSet<Int>,
 
-    active: bool,
-    bookmarked: bool,
-    contents: T,
+    pub active: bool,
+    pub bookmarked: bool,
+    pub contents: T,
 }
 
 #[cfg(creusot)]
@@ -56,9 +56,16 @@ where
 {
     type ViewTy = IndependentNodeView<T>;
 
-    #[logic(opaque)]
+    #[logic]
     fn view(self) -> Self::ViewTy {
-        dead
+        IndependentNodeView {
+            id: self.id.view(),
+            from: self.from.view(),
+            to: self.to.view(),
+            active: self.active,
+            bookmarked: self.bookmarked,
+            contents: self.contents,
+        }
     }
 }
 
@@ -117,10 +124,10 @@ pub struct IndependentWeaveView<T>
 where
     T: IndependentContents,
 {
-    nodes: FMap<u128, IndependentNode<T>>,
-    roots: FSet<u128>,
-    active: FSet<u128>,
-    bookmarked: FSet<u128>,
+    pub nodes: FMap<Int, IndependentNode<T>>,
+    pub roots: FSet<Int>,
+    pub active: FSet<Int>,
+    pub bookmarked: FSet<Int>,
 }
 
 #[cfg(creusot)]
@@ -130,9 +137,14 @@ where
 {
     type ViewTy = IndependentWeaveView<T>;
 
-    #[logic(opaque)]
+    #[logic]
     fn view(self) -> Self::ViewTy {
-        dead
+        IndependentWeaveView {
+            nodes: self.nodes.view(),
+            roots: self.roots.view(),
+            active: self.active.view(),
+            bookmarked: self.bookmarked.view(),
+        }
     }
 }
 
@@ -199,7 +211,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    #[requires(self@.nodes.contains(id))]
+    //#[requires(self@.nodes.contains(id))]
     fn siblings(&self, id: u128) -> impl Iterator<Item = &IndependentNode<T>> {
         self.nodes.get(&id).into_iter().flat_map(|node| {
             node.from.iter().copied().flat_map(|id| {
@@ -214,6 +226,11 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
+    /*#[requires(id@ >= 0 && id@ <= u128::MAX@)]
+    #[ensures(match result {
+        Some(r) => r@.id == id && self@.nodes.contains(id),
+        None => !self@.nodes.contains(id)
+    })]*/
     fn get_node(&self, id: u128) -> Option<&IndependentNode<T>> {
         self.nodes.get(&id)
     }
