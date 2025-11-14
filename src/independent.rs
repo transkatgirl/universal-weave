@@ -135,17 +135,21 @@ where
 }
 
 //#[cfg(creusot)]
-/*impl<T, M> Invariant for IndependentWeave<T, M>
+impl<T, M> Invariant for IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
     #[logic]
     fn invariant(self) -> bool {
+        // WIP
         pearlite! {
-            true
+            self@.roots.is_subset(self@.nodes.keys()) && self@.active.is_subset(self@.nodes.keys()) && self@.bookmarked.is_subset(self@.nodes.keys()) && forall<k> match self@.nodes.get(k) {
+                Some(n) => n@.id == k && n@.from.is_subset(self@.nodes.keys()) && n@.to.is_subset(self@.nodes.keys()),
+                None => true
+            }
         }
     }
-}*/
+}
 
 impl<T: IndependentContents, M> IndependentWeave<T, M> {
     #[cfg(not(creusot))]
