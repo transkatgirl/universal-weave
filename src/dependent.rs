@@ -3,6 +3,7 @@ use std::{
     hash::BuildHasherDefault,
 };
 
+use contracts::*;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
@@ -21,8 +22,7 @@ pub struct DependentNode<T> {
 }
 
 impl<T> DependentNode<T> {
-    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    pub fn verify(&self) -> bool {
+    fn verify(&self) -> bool {
         (if let Some(from) = self.from {
             !self.to.contains(&from)
         } else {
@@ -64,8 +64,7 @@ pub struct DependentWeave<T, M> {
 }
 
 impl<T, M> DependentWeave<T, M> {
-    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    pub fn verify(&self) -> bool {
+    fn verify(&self) -> bool {
         let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
 
@@ -154,6 +153,14 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         todo!()
     }
 
+    #[ensures({
+        if value {
+            self.active == Some(id)
+        } else {
+            self.active != Some(id)
+        }
+    })]
+    #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
         if value
             && self.nodes.contains_key(&id)
@@ -172,16 +179,13 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
                 node.active = value;
 
-                debug_assert!(self.verify());
                 true
             }
-            None => {
-                debug_assert!(self.verify());
-                false
-            }
+            None => false,
         }
     }
 
+    #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
         match self.nodes.get_mut(&id) {
             Some(node) => {
@@ -192,7 +196,6 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                     self.bookmarked.remove(&id);
                 }
 
-                debug_assert!(self.verify());
                 true
             }
             None => false,

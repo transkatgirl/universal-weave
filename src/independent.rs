@@ -3,6 +3,7 @@ use std::{
     hash::BuildHasherDefault,
 };
 
+use contracts::*;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
@@ -28,8 +29,7 @@ impl<T> IndependentNode<T>
 where
     T: IndependentContents,
 {
-    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    pub fn verify(&self) -> bool {
+    fn verify(&self) -> bool {
         self.from.is_disjoint(&self.to)
             && !self.from.contains(&self.id)
             && !self.to.contains(&self.id)
@@ -74,8 +74,7 @@ impl<T, M> IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    pub fn verify(&self) -> bool {
+    fn verify(&self) -> bool {
         let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
 
@@ -175,6 +174,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         todo!()
     }
 
+    #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
         match self.nodes.get_mut(&id) {
             Some(node) => {
@@ -185,7 +185,6 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
                     self.bookmarked.remove(&id);
                 }
 
-                debug_assert!(self.verify());
                 true
             }
             None => false,
