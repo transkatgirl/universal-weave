@@ -24,52 +24,17 @@ where
     pub contents: T,
 }
 
-#[cfg(creusot)]
-pub struct IndependentNodeView<T>
+impl<T> IndependentNode<T>
 where
     T: IndependentContents,
 {
-    pub id: Int,
-    pub from: FSet<Int>,
-    pub to: FSet<Int>,
-
-    pub active: bool,
-    pub bookmarked: bool,
-    pub contents: T,
-}
-
-#[cfg(creusot)]
-impl<T> View for IndependentNode<T>
-where
-    T: IndependentContents,
-{
-    type ViewTy = IndependentNodeView<T>;
-
-    #[logic]
-    fn view(self) -> Self::ViewTy {
-        IndependentNodeView {
-            id: self.id.view(),
-            from: self.from.view(),
-            to: self.to.view(),
-            active: self.active,
-            bookmarked: self.bookmarked,
-            contents: self.contents,
-        }
-    }
-}
-
-#[cfg(creusot)]
-impl<T> Invariant for IndependentNode<T>
-where
-    T: IndependentContents,
-{
-    #[logic(open)]
-    fn invariant(self) -> bool {
-        pearlite! {
-            self@.from.disjoint(self@.to) &&
-            !self@.from.contains(self@.id) &&
-            !self@.to.contains(self@.id)
-        }
+    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    fn verify(&self) {
+        debug_assert!(
+            self.from.is_disjoint(&self.to)
+                && !self.from.contains(&self.id)
+                && !self.to.contains(&self.id)
+        );
     }
 }
 
@@ -107,70 +72,43 @@ where
     pub metadata: M,
 }
 
-#[cfg(creusot)]
-pub struct IndependentWeaveView<T>
+impl<T, M> IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    pub nodes: FMap<Int, IndependentNode<T>>,
-    pub roots: FSet<Int>,
-    pub active: FSet<Int>,
-    pub bookmarked: FSet<Int>,
-}
+    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    fn verify(&self) {
+        debug_assert!({
+            let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+                self.nodes.keys().copied().collect();
 
-#[cfg(creusot)]
-impl<T, M> View for IndependentWeave<T, M>
-where
-    T: IndependentContents,
-{
-    type ViewTy = IndependentWeaveView<T>;
-
-    #[logic]
-    fn view(self) -> Self::ViewTy {
-        IndependentWeaveView {
-            nodes: self.nodes.view(),
-            roots: self.roots.view(),
-            active: self.active.view(),
-            bookmarked: self.bookmarked.view(),
-        }
-    }
-}
-
-#[cfg(creusot)]
-impl<T, M> Invariant for IndependentWeave<T, M>
-where
-    T: IndependentContents,
-{
-    #[logic(open)]
-    fn invariant(self) -> bool {
-        pearlite! {
-            self@.roots.is_subset(self@.nodes.keys()) &&
-            self@.active.is_subset(self@.nodes.keys()) &&
-            self@.bookmarked.is_subset(self@.nodes.keys()) &&
-            forall<k> match self@.nodes.get(k) {
-                Some(n) =>
-                    n@.id == k &&
-                    n@.from.is_subset(self@.nodes.keys()) &&
-                    n@.to.is_subset(self@.nodes.keys()) &&
-                    n@.from.is_empty() == self@.roots.contains(n@.id) &&
-                    n@.active == self@.active.contains(n@.id) &&
-                    n@.bookmarked == self@.bookmarked.contains(n@.id) &&
-                    forall<k> n@.from.contains(k) ==> match self@.nodes.get(k) {
-                        Some(p) => p@.to.contains(n@.id),
-                        None => false
-                    } &&
-                    forall<k> n@.to.contains(k) ==> match self@.nodes.get(k) {
-                        Some(c) => c@.from.contains(n@.id),
-                        None => false
-                    } &&
-                    if n@.active && !n@.from.is_empty() {
-                        !n@.from.disjoint(self@.active)
-                    } else {
-                        true
-                    },
-                None => true
-            }
-        }
+            self.roots.is_subset(&nodes)
+                && self.active.is_subset(&nodes)
+                && self.bookmarked.is_subset(&nodes)
+                && self.nodes.iter().all(|(key, value)| {
+                    value.id == *key
+                        && value.from.is_subset(&nodes)
+                        && value.to.is_subset(&nodes)
+                        && value.from.is_empty() == self.roots.contains(key)
+                        && value.active == self.active.contains(key)
+                        && value.bookmarked == self.bookmarked.contains(key)
+                        && value
+                            .from
+                            .iter()
+                            .map(|v| self.nodes.get(v).unwrap())
+                            .all(|p| p.to.contains(key))
+                        && value
+                            .to
+                            .iter()
+                            .map(|v| self.nodes.get(v).unwrap())
+                            .all(|p| p.from.contains(key))
+                        && if value.active && !value.from.is_empty() {
+                            !value.from.is_disjoint(&self.active)
+                        } else {
+                            true
+                        }
+                })
+        });
     }
 }
 
