@@ -86,6 +86,8 @@ where
                 && self.active.is_subset(&nodes)
                 && self.bookmarked.is_subset(&nodes)
                 && self.nodes.iter().all(|(key, value)| {
+                    value.verify();
+
                     value.id == *key
                         && value.from.is_subset(&nodes)
                         && value.to.is_subset(&nodes)
