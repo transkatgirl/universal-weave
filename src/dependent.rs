@@ -20,6 +20,20 @@ pub struct DependentNode<T> {
     pub contents: T,
 }
 
+impl<T> DependentNode<T> {
+    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    fn verify(&self) {
+        debug_assert!(
+            if let Some(from) = self.from {
+                !self.to.contains(&from)
+            } else {
+                true
+            } && self.from != Some(self.id)
+                && !self.to.contains(&self.id)
+        );
+    }
+}
+
 impl<T> Node<T> for DependentNode<T> {
     fn id(&self) -> u128 {
         self.id
@@ -49,6 +63,48 @@ pub struct DependentWeave<T, M> {
     bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
+}
+
+impl<T, M> DependentWeave<T, M> {
+    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    fn verify(&self) {
+        debug_assert!({
+            let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+                self.nodes.keys().copied().collect();
+
+            self.roots.is_subset(&nodes)
+                && if let Some(active) = self.active {
+                    self.nodes.contains_key(&active)
+                } else {
+                    true
+                }
+                && self.bookmarked.is_subset(&nodes)
+                && self.nodes.iter().all(|(key, value)| {
+                    value.verify();
+
+                    value.id == *key
+                        && if let Some(from) = value.from {
+                            self.nodes.contains_key(&from)
+                        } else {
+                            true
+                        }
+                        && value.to.is_subset(&nodes)
+                        && value.from.is_none() == self.roots.contains(key)
+                        && value.active == (self.active == Some(*key))
+                        && value.bookmarked == self.bookmarked.contains(key)
+                        && value
+                            .from
+                            .iter()
+                            .map(|v| self.nodes.get(v).unwrap())
+                            .all(|p| p.to.contains(key))
+                        && value
+                            .to
+                            .iter()
+                            .map(|v| self.nodes.get(v).unwrap())
+                            .all(|p| p.from == Some(*key))
+                })
+        });
+    }
 }
 
 impl<T, M> DependentWeave<T, M> {
