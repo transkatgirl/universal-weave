@@ -21,16 +21,14 @@ pub struct DependentNode<T> {
 }
 
 impl<T> DependentNode<T> {
-    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    fn verify(&self) {
-        debug_assert!(
-            if let Some(from) = self.from {
-                !self.to.contains(&from)
-            } else {
-                true
-            } && self.from != Some(self.id)
-                && !self.to.contains(&self.id)
-        );
+    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    pub fn verify(&self) -> bool {
+        (if let Some(from) = self.from {
+            !self.to.contains(&from)
+        } else {
+            true
+        } && self.from != Some(self.id)
+            && !self.to.contains(&self.id))
     }
 }
 
@@ -66,44 +64,41 @@ pub struct DependentWeave<T, M> {
 }
 
 impl<T, M> DependentWeave<T, M> {
-    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    fn verify(&self) {
-        debug_assert!({
-            let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
-                self.nodes.keys().copied().collect();
+    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    pub fn verify(&self) -> bool {
+        let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+            self.nodes.keys().copied().collect();
 
-            self.roots.is_subset(&nodes)
-                && if let Some(active) = self.active {
-                    self.nodes.contains_key(&active)
-                } else {
-                    true
-                }
-                && self.bookmarked.is_subset(&nodes)
-                && self.nodes.iter().all(|(key, value)| {
-                    value.verify();
-
-                    value.id == *key
-                        && if let Some(from) = value.from {
-                            self.nodes.contains_key(&from)
-                        } else {
-                            true
-                        }
-                        && value.to.is_subset(&nodes)
-                        && value.from.is_none() == self.roots.contains(key)
-                        && value.active == (self.active == Some(*key))
-                        && value.bookmarked == self.bookmarked.contains(key)
-                        && value
-                            .from
-                            .iter()
-                            .map(|v| self.nodes.get(v).unwrap())
-                            .all(|p| p.to.contains(key))
-                        && value
-                            .to
-                            .iter()
-                            .map(|v| self.nodes.get(v).unwrap())
-                            .all(|p| p.from == Some(*key))
-                })
-        });
+        self.roots.is_subset(&nodes)
+            && if let Some(active) = self.active {
+                self.nodes.contains_key(&active)
+            } else {
+                true
+            }
+            && self.bookmarked.is_subset(&nodes)
+            && self.nodes.iter().all(|(key, value)| {
+                value.verify()
+                    && value.id == *key
+                    && if let Some(from) = value.from {
+                        self.nodes.contains_key(&from)
+                    } else {
+                        true
+                    }
+                    && value.to.is_subset(&nodes)
+                    && value.from.is_none() == self.roots.contains(key)
+                    && value.active == (self.active == Some(*key))
+                    && value.bookmarked == self.bookmarked.contains(key)
+                    && value
+                        .from
+                        .iter()
+                        .map(|v| self.nodes.get(v).unwrap())
+                        .all(|p| p.to.contains(key))
+                    && value
+                        .to
+                        .iter()
+                        .map(|v| self.nodes.get(v).unwrap())
+                        .all(|p| p.from == Some(*key))
+            })
     }
 }
 
@@ -116,6 +111,12 @@ impl<T, M> DependentWeave<T, M> {
             bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             metadata,
         }
+    }
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
@@ -154,11 +155,45 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
 
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
-        todo!()
+        if value && let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+            active.active = false;
+        }
+
+        match self.nodes.get_mut(&id) {
+            Some(node) => {
+                if value {
+                    self.active = Some(id)
+                } else if self.active == Some(id) {
+                    self.active = node.from;
+                }
+
+                node.active = value;
+
+                debug_assert!(self.verify());
+                true
+            }
+            None => {
+                debug_assert!(self.verify());
+                false
+            }
+        }
     }
 
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
-        todo!()
+        match self.nodes.get_mut(&id) {
+            Some(node) => {
+                node.bookmarked = value;
+                if value {
+                    self.bookmarked.insert(id);
+                } else {
+                    self.bookmarked.remove(&id);
+                }
+
+                debug_assert!(self.verify());
+                true
+            }
+            None => false,
+        }
     }
 
     fn remove_node(&mut self, id: u128) -> Option<DependentNode<T>> {

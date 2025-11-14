@@ -28,13 +28,11 @@ impl<T> IndependentNode<T>
 where
     T: IndependentContents,
 {
-    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    fn verify(&self) {
-        debug_assert!(
-            self.from.is_disjoint(&self.to)
-                && !self.from.contains(&self.id)
-                && !self.to.contains(&self.id)
-        );
+    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    pub fn verify(&self) -> bool {
+        self.from.is_disjoint(&self.to)
+            && !self.from.contains(&self.id)
+            && !self.to.contains(&self.id)
     }
 }
 
@@ -76,41 +74,38 @@ impl<T, M> IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    // TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-    fn verify(&self) {
-        debug_assert!({
-            let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
-                self.nodes.keys().copied().collect();
+    /// TODO: Replace this with a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+    pub fn verify(&self) -> bool {
+        let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+            self.nodes.keys().copied().collect();
 
-            self.roots.is_subset(&nodes)
-                && self.active.is_subset(&nodes)
-                && self.bookmarked.is_subset(&nodes)
-                && self.nodes.iter().all(|(key, value)| {
-                    value.verify();
-
-                    value.id == *key
-                        && value.from.is_subset(&nodes)
-                        && value.to.is_subset(&nodes)
-                        && value.from.is_empty() == self.roots.contains(key)
-                        && value.active == self.active.contains(key)
-                        && value.bookmarked == self.bookmarked.contains(key)
-                        && value
-                            .from
-                            .iter()
-                            .map(|v| self.nodes.get(v).unwrap())
-                            .all(|p| p.to.contains(key))
-                        && value
-                            .to
-                            .iter()
-                            .map(|v| self.nodes.get(v).unwrap())
-                            .all(|p| p.from.contains(key))
-                        && if value.active && !value.from.is_empty() {
-                            !value.from.is_disjoint(&self.active)
-                        } else {
-                            true
-                        }
-                })
-        });
+        self.roots.is_subset(&nodes)
+            && self.active.is_subset(&nodes)
+            && self.bookmarked.is_subset(&nodes)
+            && self.nodes.iter().all(|(key, value)| {
+                value.verify()
+                    && value.id == *key
+                    && value.from.is_subset(&nodes)
+                    && value.to.is_subset(&nodes)
+                    && value.from.is_empty() == self.roots.contains(key)
+                    && value.active == self.active.contains(key)
+                    && value.bookmarked == self.bookmarked.contains(key)
+                    && value
+                        .from
+                        .iter()
+                        .map(|v| self.nodes.get(v).unwrap())
+                        .all(|p| p.to.contains(key))
+                    && value
+                        .to
+                        .iter()
+                        .map(|v| self.nodes.get(v).unwrap())
+                        .all(|p| p.from.contains(key))
+                    && if value.active && !value.from.is_empty() {
+                        !value.from.is_disjoint(&self.active)
+                    } else {
+                        true
+                    }
+            })
     }
 }
 
@@ -123,6 +118,12 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             metadata,
         }
+    }
+    pub fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
     }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
@@ -175,7 +176,20 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     }
 
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
-        todo!()
+        match self.nodes.get_mut(&id) {
+            Some(node) => {
+                node.bookmarked = value;
+                if value {
+                    self.bookmarked.insert(id);
+                } else {
+                    self.bookmarked.remove(&id);
+                }
+
+                debug_assert!(self.verify());
+                true
+            }
+            None => false,
+        }
     }
 
     fn remove_node(&mut self, id: u128) -> Option<IndependentNode<T>> {
