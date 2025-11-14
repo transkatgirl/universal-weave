@@ -149,8 +149,36 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         self.active.into_iter()
     }
 
+    #[debug_ensures(self.verify())]
     fn add_node(&mut self, node: DependentNode<T>) -> bool {
-        todo!()
+        if self.nodes.contains_key(&node.id) || !node.verify() || !node.to.is_empty() {
+            return false;
+        }
+
+        if let Some(from) = node.from {
+            match self.nodes.get_mut(&from) {
+                Some(node) => {
+                    node.to.insert(node.id);
+                }
+                None => return false,
+            }
+        }
+
+        if node.active {
+            if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                active.active = false;
+            }
+
+            self.active = Some(node.id);
+        }
+
+        if node.bookmarked {
+            self.bookmarked.insert(node.id);
+        }
+
+        self.nodes.insert(node.id, node);
+
+        true
     }
 
     #[debug_ensures(value == (self.active == Some(id)))]
