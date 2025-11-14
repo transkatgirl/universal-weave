@@ -155,7 +155,10 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
 
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
-        if value && let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+        if value
+            && self.nodes.contains_key(&id)
+            && let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id))
+        {
             active.active = false;
         }
 
