@@ -70,7 +70,9 @@ where
     #[logic]
     fn invariant(self) -> bool {
         pearlite! {
-            self@.from.intersection(self@.to) == FSet::empty() && !self@.from.contains(self@.id) && !self@.to.contains(self@.id)
+            self@.from.intersection(self@.to) == FSet::empty() &&
+            !self@.from.contains(self@.id) &&
+            !self@.to.contains(self@.id)
         }
     }
 }
@@ -143,8 +145,17 @@ where
     fn invariant(self) -> bool {
         // WIP
         pearlite! {
-            self@.roots.is_subset(self@.nodes.keys()) && self@.active.is_subset(self@.nodes.keys()) && self@.bookmarked.is_subset(self@.nodes.keys()) && forall<k> match self@.nodes.get(k) {
-                Some(n) => n@.id == k && n@.from.is_subset(self@.nodes.keys()) && n@.to.is_subset(self@.nodes.keys()),
+            self@.roots.is_subset(self@.nodes.keys()) &&
+            self@.active.is_subset(self@.nodes.keys()) &&
+            self@.bookmarked.is_subset(self@.nodes.keys()) &&
+            forall<k> match self@.nodes.get(k) {
+                Some(n) =>
+                    n@.id == k &&
+                    n@.from.is_subset(self@.nodes.keys()) &&
+                    n@.to.is_subset(self@.nodes.keys()) &&
+                    if n@.from.is_empty() { self@.roots.contains(n@.id) } else { true } &&
+                    if n@.active { self@.active.contains(n@.id) } else { true } &&
+                    if n@.bookmarked { self@.bookmarked.contains(n@.id) } else { true },
                 None => true
             }
         }
