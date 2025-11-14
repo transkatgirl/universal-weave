@@ -153,13 +153,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         todo!()
     }
 
-    #[ensures({
-        if value {
-            self.active == Some(id)
-        } else {
-            self.active != Some(id)
-        }
-    })]
+    #[ensures(value == (self.active == Some(id)))]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
         if value
