@@ -157,8 +157,8 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
         if let Some(from) = node.from {
             match self.nodes.get_mut(&from) {
-                Some(node) => {
-                    node.to.insert(node.id);
+                Some(parent) => {
+                    parent.to.insert(node.id);
                 }
                 None => return false,
             }
