@@ -3,20 +3,13 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-use rkyv::hash::FxHasher64;
-
-#[cfg(creusot)]
-use creusot_contracts::prelude::*;
-
-#[cfg(not(creusot))]
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
     DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, Node, Weave,
 };
 
-#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
-#[derive(Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct DependentNode<T> {
     pub id: u128,
     pub from: Option<u128>,
@@ -48,8 +41,7 @@ impl<T> Node<T> for DependentNode<T> {
     }
 }
 
-#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
-#[derive(Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct DependentWeave<T, M> {
     nodes: HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
     roots: HashSet<u128, BuildHasherDefault<FxHasher64>>,
@@ -60,7 +52,6 @@ pub struct DependentWeave<T, M> {
 }
 
 impl<T, M> DependentWeave<T, M> {
-    #[cfg(not(creusot))]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
@@ -70,19 +61,16 @@ impl<T, M> DependentWeave<T, M> {
             metadata,
         }
     }
-    #[cfg(not(creusot))]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
         self.bookmarked.reserve(additional);
     }
-    #[cfg(not(creusot))]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    #[cfg(not(creusot))]
     pub fn get_active_thread(&self) -> Option<u128> {
         self.active
     }
@@ -136,10 +124,4 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
         todo!()
     }
-}*/
-
-/*#[requires(a@ < i64::MAX@)]
-#[ensures(result@ == a@ + 1)]
-pub fn add_one(a: i64) -> i64 {
-    a + 1
 }*/

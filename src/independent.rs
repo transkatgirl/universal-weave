@@ -3,25 +3,14 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-use creusot_contracts::{
-    logic::{FMap, FSet},
-    model::View,
-};
-use rkyv::hash::FxHasher64;
-
-//#[cfg(creusot)]
-use creusot_contracts::prelude::*;
-
-#[cfg(not(creusot))]
-use rkyv::{Archive, Deserialize, Serialize};
+use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
     DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, IndependentContents,
     Node, Weave,
 };
 
-#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
-#[derive(Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct IndependentNode<T>
 where
     T: IndependentContents,
@@ -74,7 +63,7 @@ impl<T> Invariant for IndependentNode<T>
 where
     T: IndependentContents,
 {
-    #[logic]
+    #[logic(open)]
     fn invariant(self) -> bool {
         pearlite! {
             self@.from.disjoint(self@.to) &&
@@ -105,8 +94,7 @@ impl<T: IndependentContents> Node<T> for IndependentNode<T> {
     }
 }
 
-#[cfg_attr(not(creusot), derive(Archive, Deserialize, Serialize))]
-#[derive(Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct IndependentWeave<T, M>
 where
     T: IndependentContents,
@@ -153,7 +141,7 @@ impl<T, M> Invariant for IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    #[logic]
+    #[logic(open)]
     fn invariant(self) -> bool {
         pearlite! {
             self@.roots.is_subset(self@.nodes.keys()) &&
@@ -187,7 +175,6 @@ where
 }
 
 impl<T: IndependentContents, M> IndependentWeave<T, M> {
-    #[cfg(not(creusot))]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
@@ -197,21 +184,18 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             metadata,
         }
     }
-    #[cfg(not(creusot))]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
         self.active.reserve(additional);
         self.bookmarked.reserve(additional);
     }
-    #[cfg(not(creusot))]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    //#[requires(self@.nodes.contains(id))]
     fn siblings(&self, id: u128) -> impl Iterator<Item = &IndependentNode<T>> {
         self.nodes.get(&id).into_iter().flat_map(|node| {
             node.from.iter().copied().flat_map(|id| {
@@ -226,11 +210,6 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
-    /*#[requires(id@ >= 0 && id@ <= u128::MAX@)]
-    #[ensures(match result {
-        Some(r) => r@.id == id && self@.nodes.contains(id),
-        None => !self@.nodes.contains(id)
-    })]*/
     fn get_node(&self, id: u128) -> Option<&IndependentNode<T>> {
         self.nodes.get(&id)
     }
