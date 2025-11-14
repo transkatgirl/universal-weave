@@ -174,6 +174,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         todo!()
     }
 
+    #[debug_ensures(value == self.bookmarked.contains(&id))]
     #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
         match self.nodes.get_mut(&id) {
