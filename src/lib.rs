@@ -51,14 +51,14 @@ where
     fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128>;
 }
 
-pub enum DiscreetContentSplit<T> {
-    Success((T, T)),
-    Failure(T),
+pub enum DiscreteContentResult<T> {
+    Two((T, T)),
+    One(T),
 }
 
 pub trait DiscreteContents: Sized {
-    fn split(self, at: usize) -> DiscreetContentSplit<Self>;
-    fn merge(self, value: Self) -> Self;
+    fn split(self, at: usize) -> DiscreteContentResult<Self>;
+    fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
 pub trait DuplicatableContents {

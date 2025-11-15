@@ -7,8 +7,8 @@ use contracts::*;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
-    DiscreetContentSplit, DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave,
-    Node, Weave,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, DuplicatableContents,
+    DuplicatableWeave, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -262,7 +262,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
 
         if let Some(mut node) = self.nodes.remove(&id) {
             match node.contents.split(at) {
-                DiscreetContentSplit::Success((left, right)) => {
+                DiscreteContentResult::Two((left, right)) => {
                     let left_node = DependentNode {
                         id,
                         from: node.from,
@@ -292,7 +292,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
 
                     true
                 }
-                DiscreetContentSplit::Failure(content) => {
+                DiscreteContentResult::One(content) => {
                     node.contents = content;
                     self.nodes.insert(node.id, node);
                     false
@@ -305,8 +305,13 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
 
     #[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: u128) -> bool {
-        if let Some(node) = self.nodes.get(&id) {
-            todo!()
+        if let Some(mut node) = self.nodes.remove(&id) {
+            if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
+                todo!()
+            } else {
+                self.nodes.insert(node.id, node);
+                false
+            }
         } else {
             false
         }
