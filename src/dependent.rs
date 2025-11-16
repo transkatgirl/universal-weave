@@ -131,6 +131,15 @@ impl<T, M> DependentWeave<T, M> {
     pub fn get_active_thread(&self) -> Option<u128> {
         self.active
     }
+    fn siblings(&self, node: &DependentNode<T>) -> impl Iterator<Item = &DependentNode<T>> {
+        node.from.iter().copied().flat_map(|id| {
+            self.nodes
+                .get(&id)
+                .into_iter()
+                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                .filter_map(|id| self.nodes.get(&id))
+        })
+    }
 }
 
 impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
@@ -340,8 +349,16 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     }
 }
 
-/*impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
-        todo!()
+        self.nodes.get(&id).into_iter().flat_map(|node| {
+            self.siblings(node).filter_map(|sibling| {
+                if node.contents.is_duplicate_of(&sibling.contents) {
+                    Some(sibling.id)
+                } else {
+                    None
+                }
+            })
+        })
     }
-}*/
+}

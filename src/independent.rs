@@ -136,15 +136,13 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    fn siblings(&self, id: u128) -> impl Iterator<Item = &IndependentNode<T>> {
-        self.nodes.get(&id).into_iter().flat_map(|node| {
-            node.from.iter().copied().flat_map(|id| {
-                self.nodes
-                    .get(&id)
-                    .into_iter()
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                    .filter_map(|id| self.nodes.get(&id))
-            })
+    fn siblings(&self, node: &IndependentNode<T>) -> impl Iterator<Item = &IndependentNode<T>> {
+        node.from.iter().copied().flat_map(|id| {
+            self.nodes
+                .get(&id)
+                .into_iter()
+                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                .filter_map(|id| self.nodes.get(&id))
         })
     }
 }
@@ -209,13 +207,21 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     }
 }
 
-/*impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
+impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
     fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
-        todo!()
+        self.nodes.get(&id).into_iter().flat_map(|node| {
+            self.siblings(node).filter_map(|sibling| {
+                if node.contents.is_duplicate_of(&sibling.contents) {
+                    Some(sibling.id)
+                } else {
+                    None
+                }
+            })
+        })
     }
-}*/
+}
 
 impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
