@@ -106,6 +106,9 @@ where
                     }
             })
     }
+    fn under_max_size(&self) -> bool {
+        (self.nodes.len() as u64) < (i32::MAX as u64)
+    }
 }
 
 impl<T: IndependentContents, M> IndependentWeave<T, M> {
@@ -164,10 +167,14 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         self.active.iter().copied()
     }
 
+    //#[debug_ensures(self.verify())]
+    //#[ensures(self.under_max_size())]
     fn add_node(&mut self, node: IndependentNode<T>) -> bool {
         todo!()
     }
 
+    //#[debug_ensures(value == (self.active == Some(id)))]
+    //#[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
         todo!()
     }
@@ -190,6 +197,8 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         }
     }
 
+    //#[debug_ensures(!self.nodes.contains_key(&id))]
+    //#[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: u128) -> Option<IndependentNode<T>> {
         todo!()
     }
@@ -198,10 +207,13 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
+    //#[debug_ensures(self.verify())]
+    //#[ensures(self.under_max_size())]
     fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
         todo!()
     }
 
+    //#[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: u128) -> bool {
         todo!()
     }
@@ -226,6 +238,7 @@ impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<Indepen
 impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
+    //#[debug_ensures(self.verify())]
     fn replace_node_parents(&mut self, target: u128, parents: &[u128]) -> bool {
         todo!()
     }

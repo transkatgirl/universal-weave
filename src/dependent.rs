@@ -100,6 +100,9 @@ impl<T, M> DependentWeave<T, M> {
                         .all(|p| p.from == Some(*key))
             })
     }
+    fn under_max_size(&self) -> bool {
+        (self.nodes.len() as u64) < (i32::MAX as u64)
+    }
 }
 
 impl<T, M> DependentWeave<T, M> {
@@ -160,6 +163,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
 
     #[debug_ensures(self.verify())]
+    #[ensures(self.under_max_size())]
     fn add_node(&mut self, node: DependentNode<T>) -> bool {
         if self.nodes.contains_key(&node.id) || !node.verify() || !node.to.is_empty() {
             return false;
@@ -264,6 +268,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
 impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(self.verify())]
+    #[ensures(self.under_max_size())]
     fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
         if self.nodes.contains_key(&new_id) || id == new_id {
             return false;

@@ -10,5 +10,9 @@ edition = "2024"
 
 [dependencies]
 contracts = "0.6.7"
-rkyv      = "0.8.12"
-rkyv_dyn  = "0.7.44"
+rkyv = { version = "0.8.12", features = [
+	"little_endian",
+	"aligned",
+	"pointer_width_32",
+] }
+rkyv_dyn = "0.7.44"
