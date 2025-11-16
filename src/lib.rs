@@ -1,7 +1,9 @@
-/// ! THIS IS A PROTOTYPE
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 pub mod dependent;
+/// WIP
 pub mod independent;
+
+pub use rkyv;
 
 pub trait Node<T> {
     fn id(&self) -> u128;

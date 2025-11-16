@@ -9,4 +9,4 @@ description = "An implementation of Tapestry Loom's document format."
 edition = "2024"
 
 [dependencies]
-loomkit = { path = ".." }
+universal-weave = { path = ".." }
