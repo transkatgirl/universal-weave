@@ -307,7 +307,24 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     fn merge_with_parent(&mut self, id: u128) -> bool {
         if let Some(mut node) = self.nodes.remove(&id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
-                todo!()
+                if parent.to.len() > 1 {
+                    self.nodes.insert(parent.id, parent);
+                    self.nodes.insert(node.id, node);
+                    return false;
+                }
+
+                match parent.contents.merge(node.contents) {
+                    DiscreteContentResult::Two((left, right)) => {
+                        parent.contents = left;
+                        node.contents = right;
+                        self.nodes.insert(parent.id, parent);
+                        self.nodes.insert(node.id, node);
+                        false
+                    }
+                    DiscreteContentResult::One(content) => {
+                        todo!()
+                    }
+                }
             } else {
                 self.nodes.insert(node.id, node);
                 false
