@@ -279,12 +279,8 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
                     node.bookmarked = false;
 
                     for child in node.to.iter() {
-                        match self.nodes.get_mut(child) {
-                            Some(child) => {
-                                child.from = Some(node.id);
-                            }
-                            None => return false,
-                        }
+                        let child = self.nodes.get_mut(child).unwrap();
+                        child.from = Some(node.id);
                     }
 
                     self.nodes.insert(left_node.id, left_node);
@@ -322,7 +318,16 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
                         false
                     }
                     DiscreteContentResult::One(content) => {
-                        todo!()
+                        parent.contents = content;
+                        parent.to = node.to;
+
+                        for child in parent.to.iter() {
+                            let child = self.nodes.get_mut(child).unwrap();
+                            child.from = Some(parent.id);
+                        }
+
+                        self.nodes.insert(parent.id, parent);
+                        true
                     }
                 }
             } else {
