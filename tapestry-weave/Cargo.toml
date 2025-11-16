@@ -1,0 +1,12 @@
+[package]
+name = "tapestry-weave"
+version = "0.1.0"
+authors = [
+	"transkatgirl",
+]
+license = "Unlicense"
+description = "An implementation of Tapestry Loom's document format."
+edition = "2024"
+
+[dependencies]
+loomkit = { path = ".." }

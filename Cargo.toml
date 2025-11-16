@@ -1,11 +1,11 @@
 [package]
-name = "loomkit"
+name = "universal-weave"
 version = "0.1.0"
 authors = [
 	"transkatgirl",
 ]
 license = "Unlicense"
-description = "A library for building loom-like data structures."
+description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
 [dependencies]
@@ -16,3 +16,8 @@ rkyv = { version = "0.8.12", features = [
 	"pointer_width_32",
 ] }
 rkyv_dyn = "0.7.44"
+
+[workspace]
+members = [
+	"tapestry-weave",
+]
