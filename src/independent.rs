@@ -203,7 +203,8 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                     .iter()
                     .copied()
                     .filter(|id| {
-                        self.nodes
+                        !self
+                            .nodes
                             .get(id)
                             .iter()
                             .flat_map(|child| child.from.iter().filter_map(|id| self.nodes.get(id)))
