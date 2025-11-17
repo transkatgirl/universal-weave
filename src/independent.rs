@@ -4,6 +4,7 @@ use std::{
 };
 
 use contracts::*;
+use indexmap::IndexSet;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
@@ -17,8 +18,8 @@ where
     T: IndependentContents,
 {
     pub id: u128,
-    pub from: HashSet<u128, BuildHasherDefault<FxHasher64>>,
-    pub to: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    pub from: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
+    pub to: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub active: bool,
     pub bookmarked: bool,
@@ -63,9 +64,9 @@ where
     T: IndependentContents,
 {
     nodes: HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
-    roots: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
     active: HashSet<u128, BuildHasherDefault<FxHasher64>>,
-    bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    bookmarked: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
 }
@@ -75,11 +76,15 @@ where
     T: IndependentContents,
 {
     fn verify(&self) -> bool {
-        let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+        let nodes: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
+        let nodes_std: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+            self.nodes.keys().copied().collect();
+        let active_index: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
+            self.active.iter().copied().collect();
 
         self.roots.is_subset(&nodes)
-            && self.active.is_subset(&nodes)
+            && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
                 value.verify()
@@ -100,7 +105,7 @@ where
                         .map(|v| self.nodes.get(v).unwrap())
                         .all(|p| p.from.contains(key))
                     && if value.active && !value.from.is_empty() {
-                        !value.from.is_disjoint(&self.active)
+                        !value.from.is_disjoint(&active_index)
                     } else {
                         true
                     }
@@ -115,9 +120,9 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
-            roots: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            roots: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             active: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
-            bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            bookmarked: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             metadata,
         }
     }
@@ -142,6 +147,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 .filter_map(|id| self.nodes.get(&id))
         })
     }
+    fn update_node_activity(&self, node: &IndependentNode<T>) {}
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
@@ -185,7 +191,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
                 if value {
                     self.bookmarked.insert(node.id);
                 } else {
-                    self.bookmarked.remove(id);
+                    self.bookmarked.shift_remove(id);
                 }
 
                 true

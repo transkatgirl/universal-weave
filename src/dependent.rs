@@ -1,9 +1,7 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::BuildHasherDefault,
-};
+use std::{collections::HashMap, hash::BuildHasherDefault};
 
 use contracts::*;
+use indexmap::IndexSet;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
@@ -15,7 +13,7 @@ use crate::{
 pub struct DependentNode<T> {
     pub id: u128,
     pub from: Option<u128>,
-    pub to: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    pub to: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub active: bool,
     pub bookmarked: bool,
@@ -57,16 +55,16 @@ impl<T> Node<T> for DependentNode<T> {
 #[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct DependentWeave<T, M> {
     nodes: HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
-    roots: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
     active: Option<u128>,
-    bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    bookmarked: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
 }
 
 impl<T, M> DependentWeave<T, M> {
     fn verify(&self) -> bool {
-        let nodes: HashSet<u128, BuildHasherDefault<FxHasher64>> =
+        let nodes: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
 
         self.roots.is_subset(&nodes)
@@ -109,9 +107,9 @@ impl<T, M> DependentWeave<T, M> {
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
-            roots: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            roots: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             active: None,
-            bookmarked: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            bookmarked: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             metadata,
         }
     }
@@ -140,8 +138,8 @@ impl<T, M> DependentWeave<T, M> {
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &u128) -> Option<DependentNode<T>> {
         if let Some(node) = self.nodes.remove(id) {
-            self.roots.remove(id);
-            self.bookmarked.remove(id);
+            self.roots.shift_remove(id);
+            self.bookmarked.shift_remove(id);
             if node.active {
                 self.active = node.from;
                 if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
@@ -149,7 +147,7 @@ impl<T, M> DependentWeave<T, M> {
                 }
             }
             if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                parent.to.remove(id);
+                parent.to.shift_remove(id);
             }
             for child in node.to.iter() {
                 self.remove_node_unverified(child);
@@ -247,7 +245,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                 if value {
                     self.bookmarked.insert(node.id);
                 } else {
-                    self.bookmarked.remove(id);
+                    self.bookmarked.shift_remove(id);
                 }
 
                 true
@@ -276,7 +274,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
                     let left_node = DependentNode {
                         id: node.id,
                         from: node.from,
-                        to: HashSet::from_iter([new_id]),
+                        to: IndexSet::from_iter([new_id]),
                         active: node.active,
                         bookmarked: node.bookmarked,
                         contents: left,
