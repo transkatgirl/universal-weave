@@ -4,6 +4,7 @@ pub mod dependent;
 pub mod independent;
 
 pub use rkyv;
+use rkyv::{Archive, Deserialize, Serialize, rancor::Fallible};
 
 pub trait Node<T> {
     fn id(&self) -> u128;
@@ -71,3 +72,77 @@ pub trait DuplicatableContents {
 }
 
 pub trait IndependentContents {}
+
+pub enum DowContents<'a, T>
+where
+    T: Archive,
+{
+    Archived(&'a T::Archived),
+    Owned(T),
+}
+
+impl<'a, T> DowContents<'a, T>
+where
+    T: Archive,
+{
+    pub fn is_archived(&self) -> bool {
+        match &self {
+            Self::Archived(_) => true,
+            Self::Owned(_) => false,
+        }
+    }
+    pub fn is_owned(&self) -> bool {
+        match &self {
+            Self::Archived(_) => false,
+            Self::Owned(_) => true,
+        }
+    }
+    pub fn to_owned<D>(self, deserializer: &mut D) -> Result<Self, D::Error>
+    where
+        D: rkyv::rancor::Fallible + ?Sized,
+        T::Archived: Deserialize<T, D>,
+    {
+        match self {
+            Self::Archived(archived) => Ok(Self::Owned(archived.deserialize(deserializer)?)),
+            Self::Owned(owned) => Ok(Self::Owned(owned)),
+        }
+    }
+}
+
+impl<'a, T> Archive for DowContents<'a, T>
+where
+    T: Archive,
+{
+    type Archived = T::Archived;
+    type Resolver = T::Resolver;
+
+    fn resolve(
+        &self,
+        resolver: Self::Resolver,
+        out: rkyv::Place<<DowContents<'a, T> as Archive>::Archived>,
+    ) {
+        match self {
+            Self::Archived(archived) => {
+                todo!()
+            }
+            Self::Owned(owned) => {
+                owned.resolve(resolver, out);
+            }
+        }
+    }
+}
+
+impl<'a, T, S> Serialize<S> for DowContents<'a, T>
+where
+    T: Archive + Serialize<S>,
+    S: Fallible + Sized,
+{
+    fn serialize(&self, serializer: &mut S) -> Result<Self::Resolver, <S as Fallible>::Error> {
+        match self {
+            Self::Archived(archived) => {
+                todo!()
+            }
+            Self::Owned(owned) => owned.serialize(serializer),
+        }
+    }
+}

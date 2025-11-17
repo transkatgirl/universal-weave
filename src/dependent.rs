@@ -4,10 +4,10 @@ use std::{
 };
 
 use contracts::*;
-use rkyv::{Archive, Archived, Deserialize, Serialize, hash::FxHasher64};
+use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, DuplicatableContents,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, DowContents, DuplicatableContents,
     DuplicatableWeave, Node, Weave,
 };
 
@@ -68,10 +68,10 @@ impl<T> ArchivedDependentNode<T>
 where
     T: Archive,
 {
-    pub fn partial_deserialize<D>(
-        &self,
+    pub fn partial_deserialize<'a, D>(
+        &'a self,
         deserializer: &mut D,
-    ) -> Result<DependentNode<&Archived<T>>, D::Error>
+    ) -> Result<DependentNode<DowContents<'a, T>>, D::Error>
     where
         D: rkyv::rancor::Fallible + ?Sized,
         T::Archived: Deserialize<T, D> + Hash + Eq,
@@ -82,7 +82,7 @@ where
             to: self.to.deserialize(deserializer)?,
             active: self.active.deserialize(deserializer)?,
             bookmarked: self.bookmarked.deserialize(deserializer)?,
-            contents: &self.contents,
+            contents: DowContents::Archived(&self.contents),
         })
     }
 }
@@ -92,10 +92,10 @@ where
     T: Archive,
     M: Archive,
 {
-    pub fn partial_deserialize<D>(
-        &self,
+    pub fn partial_deserialize<'a, D>(
+        &'a self,
         deserializer: &mut D,
-    ) -> Result<DependentWeave<&Archived<T>, &Archived<M>>, D::Error>
+    ) -> Result<DependentWeave<DowContents<'a, T>, DowContents<'a, M>>, D::Error>
     where
         D: rkyv::rancor::Fallible + ?Sized,
         T::Archived: Deserialize<T, D> + Hash + Eq,
@@ -114,7 +114,7 @@ where
             roots: self.roots.deserialize(deserializer)?,
             active: self.active.deserialize(deserializer)?,
             bookmarked: self.bookmarked.deserialize(deserializer)?,
-            metadata: &self.metadata,
+            metadata: DowContents::Archived(&self.metadata),
         })
     }
 }
