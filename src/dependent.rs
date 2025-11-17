@@ -2,7 +2,9 @@ use std::{collections::HashMap, hash::BuildHasherDefault};
 
 use contracts::*;
 use indexmap::IndexSet;
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
+use rkyv::{
+    Archive, Deserialize, Serialize, hash::FxHasher64, option::ArchivedOption, rend::u128_le,
+};
 
 use crate::{
     ArchivedNode, ArchivedWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
@@ -410,5 +412,15 @@ where
     }
     fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
         self.active.into_iter().copied()
+    }
+}
+
+impl<T, M> ArchivedDependentWeave<T, M>
+where
+    T: Archive<Archived = T>,
+    M: Archive<Archived = T>,
+{
+    pub fn get_active_thread(&self) -> ArchivedOption<u128_le> {
+        self.active
     }
 }
