@@ -138,7 +138,35 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    fn siblings(&self, node: &IndependentNode<T>) -> impl Iterator<Item = &IndependentNode<T>> {
+    fn siblings_from_active_parent(
+        &self,
+        node: &IndependentNode<T>,
+    ) -> impl Iterator<Item = &IndependentNode<T>> {
+        node.from.iter().copied().flat_map(|id| {
+            self.nodes
+                .get(&id)
+                .into_iter()
+                .filter(|node| node.active)
+                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                .filter_map(|id| self.nodes.get(&id))
+        })
+    }
+    fn sibling_ids_from_active_parent(
+        &self,
+        node: &IndependentNode<T>,
+    ) -> impl Iterator<Item = u128> {
+        node.from.iter().copied().flat_map(|id| {
+            self.nodes
+                .get(&id)
+                .into_iter()
+                .filter(|node| node.active)
+                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+        })
+    }
+    fn siblings_from_all_parents(
+        &self,
+        node: &IndependentNode<T>,
+    ) -> impl Iterator<Item = &IndependentNode<T>> {
         node.from.iter().copied().flat_map(|id| {
             self.nodes
                 .get(&id)
@@ -147,7 +175,55 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 .filter_map(|id| self.nodes.get(&id))
         })
     }
-    fn update_node_activity(&self, node: &IndependentNode<T>) {}
+    #[debug_ensures(self.verify())]
+    fn update_node_activity_inner(&mut self, id: &u128, value: bool) -> bool {
+        if let Some(node) = self.nodes.get(id) {
+            if node.active == value {
+                return true;
+            }
+
+            if node.active {
+                let has_active_parents = node
+                    .from
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .any(|parent| parent.active);
+                if has_active_parents {
+                    let siblings: Vec<u128> = self.sibling_ids_from_active_parent(node).collect();
+
+                    for sibling in siblings {
+                        self.update_node_activity_inner(&sibling, false);
+                    }
+                } else if let Some(child) = node.from.first().copied() {
+                    self.update_node_activity_inner(&child, true);
+                }
+            } else {
+                let selected_children: Vec<u128> = node
+                    .to
+                    .iter()
+                    .copied()
+                    .filter(|id| {
+                        self.nodes
+                            .get(id)
+                            .iter()
+                            .flat_map(|child| child.from.iter().filter_map(|id| self.nodes.get(id)))
+                            .any(|child_parent| child_parent.active && child_parent.id != node.id)
+                    })
+                    .collect();
+
+                for child in selected_children {
+                    self.update_node_activity_inner(&child, false);
+                }
+            }
+        }
+        match self.nodes.get_mut(id) {
+            Some(node) => {
+                node.active = value;
+                true
+            }
+            None => false,
+        }
+    }
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
@@ -225,7 +301,13 @@ impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<Indepen
 {
     fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
         self.nodes.get(id).into_iter().flat_map(|node| {
-            self.siblings(node).filter_map(|sibling| {
+            let iter: Box<dyn Iterator<Item = &IndependentNode<T>>> = if node.active {
+                Box::new(self.siblings_from_active_parent(node))
+            } else {
+                Box::new(self.siblings_from_all_parents(node))
+            };
+
+            iter.filter_map(|sibling| {
                 if node.contents.is_duplicate_of(&sibling.contents) {
                     Some(sibling.id)
                 } else {
