@@ -275,8 +275,8 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     #[debug_ensures(value == self.active.contains(id))]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
-        let top_level_deactivation = if let Some(node) = self.nodes.get(id) {
-            if node.active && !value {
+        let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
+            if node.active {
                 let has_active_children = node
                     .to
                     .iter()
