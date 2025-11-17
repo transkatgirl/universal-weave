@@ -175,8 +175,8 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 .filter_map(|id| self.nodes.get(&id))
         })
     }
-    #[debug_ensures(self.verify())]
-    fn update_node_activity_inner(&mut self, id: &u128, value: bool) -> bool {
+    //#[debug_ensures(self.verify())]
+    fn update_node_activity_in_place(&mut self, id: &u128, value: bool) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
@@ -192,10 +192,10 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                     let siblings: Vec<u128> = self.sibling_ids_from_active_parent(node).collect();
 
                     for sibling in siblings {
-                        self.update_node_activity_inner(&sibling, false);
+                        self.update_node_activity_in_place(&sibling, false);
                     }
                 } else if let Some(child) = node.from.first().copied() {
-                    self.update_node_activity_inner(&child, true);
+                    self.update_node_activity_in_place(&child, true);
                 }
             } else {
                 let selected_children: Vec<u128> = node
@@ -213,7 +213,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                     .collect();
 
                 for child in selected_children {
-                    self.update_node_activity_inner(&child, false);
+                    self.update_node_activity_in_place(&child, false);
                 }
             }
         }
@@ -223,6 +223,24 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 true
             }
             None => false,
+        }
+    }
+    fn deactivate_top_level_node_recursive(&mut self, id: &u128) -> bool {
+        if let Some(node) = self.nodes.get_mut(id) {
+            if !node.active {
+                return true;
+            }
+            node.active = false;
+
+            let parents: Vec<u128> = node.from.iter().copied().collect();
+
+            for parent in parents {
+                self.deactivate_top_level_node_recursive(&parent);
+            }
+
+            true
+        } else {
+            false
         }
     }
 }
@@ -254,10 +272,30 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn add_node(&mut self, node: IndependentNode<T>) -> bool {
         todo!()
     }
-    //#[debug_ensures(value == (self.active == Some(id)))]
-    //#[debug_ensures(self.verify())]
+    #[debug_ensures(value == self.active.contains(id))]
+    #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
-        todo!()
+        let top_level_deactivation = if let Some(node) = self.nodes.get(id) {
+            if node.active && !value {
+                let has_active_children = node
+                    .to
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .any(|child| child.active);
+
+                !has_active_children
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
+        if top_level_deactivation {
+            self.deactivate_top_level_node_recursive(id)
+        } else {
+            self.update_node_activity_in_place(id, value)
+        }
     }
     #[debug_ensures(value == self.bookmarked.contains(id))]
     #[debug_ensures(self.verify())]
