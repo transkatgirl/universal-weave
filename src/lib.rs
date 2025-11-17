@@ -4,6 +4,7 @@ pub mod dependent;
 pub mod independent;
 
 pub use rkyv;
+use rkyv::rend::u128_le;
 
 pub trait Node<T> {
     fn id(&self) -> u128;
@@ -12,19 +13,6 @@ pub trait Node<T> {
     fn is_active(&self) -> bool;
     fn is_bookmarked(&self) -> bool;
     fn contents(&self) -> &T;
-}
-
-pub trait ArchivedWeave<N, T>
-where
-    N: Node<T>,
-{
-    fn len(&self) -> usize;
-    fn is_empty(&self) -> bool;
-    fn contains(&self, id: &u128) -> bool;
-    fn get_node(&self, id: &u128) -> Option<&N>;
-    fn get_roots(&self) -> impl Iterator<Item = u128>;
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128>;
-    fn get_active_threads(&self) -> impl Iterator<Item = u128>;
 }
 
 pub trait Weave<N, T>
@@ -84,3 +72,25 @@ pub trait DuplicatableContents {
 }
 
 pub trait IndependentContents {}
+
+pub trait ArchivedNode<T> {
+    fn id(&self) -> u128_le;
+    fn from(&self) -> impl Iterator<Item = u128_le>;
+    fn to(&self) -> impl Iterator<Item = u128_le>;
+    fn is_active(&self) -> bool;
+    fn is_bookmarked(&self) -> bool;
+    fn contents(&self) -> &T;
+}
+
+pub trait ArchivedWeave<N, T>
+where
+    N: ArchivedNode<T>,
+{
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn contains(&self, id: &u128_le) -> bool;
+    fn get_node(&self, id: &u128_le) -> Option<&N>;
+    fn get_roots(&self) -> impl Iterator<Item = u128_le>;
+    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le>;
+    fn get_active_threads(&self) -> impl Iterator<Item = u128_le>;
+}
