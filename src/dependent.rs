@@ -115,12 +115,6 @@ impl<T, M> DependentWeave<T, M> {
             metadata,
         }
     }
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
@@ -146,8 +140,17 @@ impl<T, M> DependentWeave<T, M> {
 }
 
 impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
-    fn get_node(&self, id: u128) -> Option<&DependentNode<T>> {
-        self.nodes.get(&id)
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+    fn contains(&self, id: &u128) -> bool {
+        self.nodes.contains_key(id)
+    }
+    fn get_node(&self, id: &u128) -> Option<&DependentNode<T>> {
+        self.nodes.get(id)
     }
 
     fn get_roots(&self) -> impl Iterator<Item = u128> {
@@ -195,10 +198,10 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         true
     }
 
-    #[debug_ensures(value == (self.active == Some(id)))]
+    #[debug_ensures(value == (self.active == Some(*id)))]
     #[debug_ensures(self.verify())]
-    fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
-        match self.nodes.get_mut(&id) {
+    fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
+        match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
 
@@ -207,13 +210,9 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                         active.active = false;
                     }
 
-                    self.active = Some(id);
-                } else if self.active == Some(id) {
-                    self.active = node.from;
-
-                    if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                        parent.active = true;
-                    }
+                    self.active = Some(*id);
+                } else if self.active == Some(node.id) {
+                    self.active = None;
                 }
 
                 true
@@ -222,16 +221,16 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         }
     }
 
-    #[debug_ensures(value == self.bookmarked.contains(&id))]
+    #[debug_ensures(value == self.bookmarked.contains(id))]
     #[debug_ensures(self.verify())]
-    fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
-        match self.nodes.get_mut(&id) {
+    fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
+        match self.nodes.get_mut(id) {
             Some(node) => {
                 node.bookmarked = value;
                 if value {
-                    self.bookmarked.insert(id);
+                    self.bookmarked.insert(node.id);
                 } else {
-                    self.bookmarked.remove(&id);
+                    self.bookmarked.remove(id);
                 }
 
                 true
@@ -240,12 +239,12 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         }
     }
 
-    #[debug_ensures(!self.nodes.contains_key(&id))]
+    #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.verify())]
-    fn remove_node(&mut self, id: u128) -> Option<DependentNode<T>> {
-        if let Some(node) = self.nodes.remove(&id) {
-            self.roots.remove(&id);
-            self.bookmarked.remove(&id);
+    fn remove_node(&mut self, id: &u128) -> Option<DependentNode<T>> {
+        if let Some(node) = self.nodes.remove(id) {
+            self.roots.remove(id);
+            self.bookmarked.remove(id);
             if node.active {
                 self.active = node.from;
                 if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
@@ -253,9 +252,9 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                 }
             }
             if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                parent.to.remove(&id);
+                parent.to.remove(id);
             }
-            for child in node.to.iter().copied() {
+            for child in node.to.iter() {
                 self.remove_node(child);
             }
 
@@ -269,16 +268,16 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(self.verify())]
     #[ensures(self.under_max_size())]
-    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
-        if self.nodes.contains_key(&new_id) || id == new_id {
+    fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
+        if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
 
-        if let Some(mut node) = self.nodes.remove(&id) {
+        if let Some(mut node) = self.nodes.remove(id) {
             match node.contents.split(at) {
                 DiscreteContentResult::Two((left, right)) => {
                     let left_node = DependentNode {
-                        id,
+                        id: node.id,
                         from: node.from,
                         to: HashSet::from_iter([new_id]),
                         active: node.active,
@@ -314,8 +313,8 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     }
 
     #[debug_ensures(self.verify())]
-    fn merge_with_parent(&mut self, id: u128) -> bool {
-        if let Some(mut node) = self.nodes.remove(&id) {
+    fn merge_with_parent(&mut self, id: &u128) -> bool {
+        if let Some(mut node) = self.nodes.remove(id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
@@ -355,8 +354,8 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
 }
 
 impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
-    fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
-        self.nodes.get(&id).into_iter().flat_map(|node| {
+    fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
+        self.nodes.get(id).into_iter().flat_map(|node| {
             self.siblings(node).filter_map(|sibling| {
                 if node.contents.is_duplicate_of(&sibling.contents) {
                     Some(sibling.id)

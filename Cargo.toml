@@ -15,7 +15,6 @@ rkyv = { version = "0.8.12", features = [
 	"aligned",
 	"pointer_width_32",
 ] }
-rkyv_dyn = "0.7.44"
 
 [workspace]
 members = [

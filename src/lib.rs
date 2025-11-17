@@ -18,14 +18,17 @@ pub trait Weave<N, T>
 where
     N: Node<T>,
 {
-    fn get_node(&self, id: u128) -> Option<&N>;
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool;
+    fn contains(&self, id: &u128) -> bool;
+    fn get_node(&self, id: &u128) -> Option<&N>;
     fn get_roots(&self) -> impl Iterator<Item = u128>;
     fn get_bookmarks(&self) -> impl Iterator<Item = u128>;
     fn get_active_threads(&self) -> impl Iterator<Item = u128>;
     fn add_node(&mut self, node: N) -> bool;
-    fn set_node_active_status(&mut self, id: u128, value: bool) -> bool;
-    fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool;
-    fn remove_node(&mut self, id: u128) -> Option<N>;
+    fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool;
+    fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;
+    fn remove_node(&mut self, id: &u128) -> Option<N>;
 }
 
 pub trait IndependentWeave<N, T>
@@ -33,7 +36,7 @@ where
     N: Node<T>,
     T: IndependentContents,
 {
-    fn replace_node_parents(&mut self, target: u128, parents: &[u128]) -> bool;
+    fn replace_node_parents(&mut self, target: &u128, parents: &[u128]) -> bool;
 }
 
 pub trait DiscreteWeave<N, T>
@@ -41,8 +44,8 @@ where
     N: Node<T>,
     T: DiscreteContents,
 {
-    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool;
-    fn merge_with_parent(&mut self, id: u128) -> bool;
+    fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool;
+    fn merge_with_parent(&mut self, id: &u128) -> bool;
 }
 
 pub trait DuplicatableWeave<N, T>
@@ -50,7 +53,7 @@ where
     N: Node<T>,
     T: DuplicatableContents,
 {
-    fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128>;
+    fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128>;
 }
 
 pub enum DiscreteContentResult<T> {

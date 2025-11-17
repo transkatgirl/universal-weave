@@ -121,12 +121,6 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             metadata,
         }
     }
-    pub fn len(&self) -> usize {
-        self.nodes.len()
-    }
-    pub fn is_empty(&self) -> bool {
-        self.nodes.is_empty()
-    }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
@@ -151,8 +145,17 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
-    fn get_node(&self, id: u128) -> Option<&IndependentNode<T>> {
-        self.nodes.get(&id)
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+    fn contains(&self, id: &u128) -> bool {
+        self.nodes.contains_key(id)
+    }
+    fn get_node(&self, id: &u128) -> Option<&IndependentNode<T>> {
+        self.nodes.get(id)
     }
 
     fn get_roots(&self) -> impl Iterator<Item = u128> {
@@ -175,20 +178,20 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 
     //#[debug_ensures(value == (self.active == Some(id)))]
     //#[debug_ensures(self.verify())]
-    fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         todo!()
     }
 
-    #[debug_ensures(value == self.bookmarked.contains(&id))]
+    #[debug_ensures(value == self.bookmarked.contains(id))]
     #[debug_ensures(self.verify())]
-    fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
-        match self.nodes.get_mut(&id) {
+    fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
+        match self.nodes.get_mut(id) {
             Some(node) => {
                 node.bookmarked = value;
                 if value {
-                    self.bookmarked.insert(id);
+                    self.bookmarked.insert(node.id);
                 } else {
-                    self.bookmarked.remove(&id);
+                    self.bookmarked.remove(id);
                 }
 
                 true
@@ -199,7 +202,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 
     //#[debug_ensures(!self.nodes.contains_key(&id))]
     //#[debug_ensures(self.verify())]
-    fn remove_node(&mut self, id: u128) -> Option<IndependentNode<T>> {
+    fn remove_node(&mut self, id: &u128) -> Option<IndependentNode<T>> {
         todo!()
     }
 }
@@ -209,12 +212,12 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
 {
     //#[debug_ensures(self.verify())]
     //#[ensures(self.under_max_size())]
-    fn split_node(&mut self, id: u128, at: usize, new_id: u128) -> bool {
+    fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         todo!()
     }
 
     //#[debug_ensures(self.verify())]
-    fn merge_with_parent(&mut self, id: u128) -> bool {
+    fn merge_with_parent(&mut self, id: &u128) -> bool {
         todo!()
     }
 }
@@ -222,8 +225,8 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
 impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    fn find_duplicates(&self, id: u128) -> impl Iterator<Item = u128> {
-        self.nodes.get(&id).into_iter().flat_map(|node| {
+    fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
+        self.nodes.get(id).into_iter().flat_map(|node| {
             self.siblings(node).filter_map(|sibling| {
                 if node.contents.is_duplicate_of(&sibling.contents) {
                     Some(sibling.id)
@@ -239,7 +242,7 @@ impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
     //#[debug_ensures(self.verify())]
-    fn replace_node_parents(&mut self, target: u128, parents: &[u128]) -> bool {
+    fn replace_node_parents(&mut self, target: &u128, parents: &[u128]) -> bool {
         todo!()
     }
 }
