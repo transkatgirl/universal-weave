@@ -1,10 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
-    hash::BuildHasherDefault,
+    hash::{BuildHasherDefault, Hash},
 };
 
 use contracts::*;
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
+use rkyv::{Archive, Archived, Deserialize, Serialize, hash::FxHasher64};
 
 use crate::{
     DiscreteContentResult, DiscreteContents, DiscreteWeave, DuplicatableContents,
@@ -62,6 +62,61 @@ pub struct DependentWeave<T, M> {
     bookmarked: HashSet<u128, BuildHasherDefault<FxHasher64>>,
 
     pub metadata: M,
+}
+
+impl<T> ArchivedDependentNode<T>
+where
+    T: Archive,
+{
+    pub fn partial_deserialize<D>(
+        &self,
+        deserializer: &mut D,
+    ) -> Result<DependentNode<&Archived<T>>, D::Error>
+    where
+        D: rkyv::rancor::Fallible + ?Sized,
+        T::Archived: Deserialize<T, D> + Hash + Eq,
+    {
+        Ok(DependentNode {
+            id: self.id.deserialize(deserializer)?,
+            from: self.from.deserialize(deserializer)?,
+            to: self.to.deserialize(deserializer)?,
+            active: self.active.deserialize(deserializer)?,
+            bookmarked: self.bookmarked.deserialize(deserializer)?,
+            contents: &self.contents,
+        })
+    }
+}
+
+impl<T, M> ArchivedDependentWeave<T, M>
+where
+    T: Archive,
+    M: Archive,
+{
+    pub fn partial_deserialize<D>(
+        &self,
+        deserializer: &mut D,
+    ) -> Result<DependentWeave<&Archived<T>, &Archived<M>>, D::Error>
+    where
+        D: rkyv::rancor::Fallible + ?Sized,
+        T::Archived: Deserialize<T, D> + Hash + Eq,
+    {
+        let mut nodes =
+            HashMap::with_capacity_and_hasher(self.nodes.len(), BuildHasherDefault::default());
+        for (k, v) in self.nodes.iter() {
+            nodes.insert(
+                rkyv::Deserialize::<u128, _>::deserialize(k, deserializer)?,
+                v.partial_deserialize(deserializer)?,
+            );
+        }
+
+        Ok(DependentWeave {
+            nodes,
+            roots: self.roots.deserialize(deserializer)?,
+            active: self.active.deserialize(deserializer)?,
+            bookmarked: self.bookmarked.deserialize(deserializer)?,
+            metadata: &self.metadata,
+        })
+    }
 }
 
 impl<T, M> DependentWeave<T, M> {
