@@ -104,7 +104,7 @@ where
             HashMap::with_capacity_and_hasher(self.nodes.len(), BuildHasherDefault::default());
         for (k, v) in self.nodes.iter() {
             nodes.insert(
-                rkyv::Deserialize::<u128, _>::deserialize(k, deserializer)?,
+                k.deserialize(deserializer)?,
                 v.partial_deserialize(deserializer)?,
             );
         }
