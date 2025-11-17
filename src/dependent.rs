@@ -137,6 +137,29 @@ impl<T, M> DependentWeave<T, M> {
                 .filter_map(|id| self.nodes.get(&id))
         })
     }
+    #[debug_ensures(!self.nodes.contains_key(id))]
+    fn remove_node_unverified(&mut self, id: &u128) -> Option<DependentNode<T>> {
+        if let Some(node) = self.nodes.remove(id) {
+            self.roots.remove(id);
+            self.bookmarked.remove(id);
+            if node.active {
+                self.active = node.from;
+                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                    parent.active = true;
+                }
+            }
+            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                parent.to.remove(id);
+            }
+            for child in node.to.iter() {
+                self.remove_node_unverified(child);
+            }
+
+            Some(node)
+        } else {
+            None
+        }
+    }
 }
 
 impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
@@ -152,19 +175,15 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn get_node(&self, id: &u128) -> Option<&DependentNode<T>> {
         self.nodes.get(id)
     }
-
     fn get_roots(&self) -> impl Iterator<Item = u128> {
         self.roots.iter().copied()
     }
-
     fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
         self.bookmarked.iter().copied()
     }
-
     fn get_active_threads(&self) -> impl Iterator<Item = u128> {
         self.active.into_iter()
     }
-
     #[debug_ensures(self.verify())]
     #[ensures(self.under_max_size())]
     fn add_node(&mut self, node: DependentNode<T>) -> bool {
@@ -197,7 +216,6 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
         true
     }
-
     #[debug_ensures(value == (self.active == Some(*id)))]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
@@ -220,7 +238,6 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
             None => false,
         }
     }
-
     #[debug_ensures(value == self.bookmarked.contains(id))]
     #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
@@ -238,30 +255,10 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
             None => false,
         }
     }
-
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: &u128) -> Option<DependentNode<T>> {
-        if let Some(node) = self.nodes.remove(id) {
-            self.roots.remove(id);
-            self.bookmarked.remove(id);
-            if node.active {
-                self.active = node.from;
-                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                    parent.active = true;
-                }
-            }
-            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                parent.to.remove(id);
-            }
-            for child in node.to.iter() {
-                self.remove_node(child);
-            }
-
-            Some(node)
-        } else {
-            None
-        }
+        self.remove_node_unverified(id)
     }
 }
 
@@ -311,7 +308,6 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
             false
         }
     }
-
     #[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
@@ -408,15 +404,12 @@ where
     fn get_node(&self, id: &u128_le) -> Option<&ArchivedDependentNode<T>> {
         self.nodes.get(id)
     }
-
     fn get_roots(&self) -> impl Iterator<Item = u128_le> {
         self.roots.iter().copied()
     }
-
     fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
         self.bookmarked.iter().copied()
     }
-
     fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
         self.active.into_iter().copied()
     }

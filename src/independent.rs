@@ -157,15 +157,12 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn get_node(&self, id: &u128) -> Option<&IndependentNode<T>> {
         self.nodes.get(id)
     }
-
     fn get_roots(&self) -> impl Iterator<Item = u128> {
         self.roots.iter().copied()
     }
-
     fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
         self.bookmarked.iter().copied()
     }
-
     fn get_active_threads(&self) -> impl Iterator<Item = u128> {
         self.active.iter().copied()
     }
@@ -288,15 +285,12 @@ where
     fn get_node(&self, id: &u128_le) -> Option<&ArchivedIndependentNode<T>> {
         self.nodes.get(id)
     }
-
     fn get_roots(&self) -> impl Iterator<Item = u128_le> {
         self.roots.iter().copied()
     }
-
     fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
         self.bookmarked.iter().copied()
     }
-
     fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
         self.active.iter().copied()
     }
