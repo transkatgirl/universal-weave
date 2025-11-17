@@ -166,19 +166,16 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn get_active_threads(&self) -> impl Iterator<Item = u128> {
         self.active.iter().copied()
     }
-
     //#[debug_ensures(self.verify())]
     //#[ensures(self.under_max_size())]
     fn add_node(&mut self, node: IndependentNode<T>) -> bool {
         todo!()
     }
-
     //#[debug_ensures(value == (self.active == Some(id)))]
     //#[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         todo!()
     }
-
     #[debug_ensures(value == self.bookmarked.contains(id))]
     #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
@@ -196,7 +193,6 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             None => false,
         }
     }
-
     //#[debug_ensures(!self.nodes.contains_key(&id))]
     //#[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: &u128) -> Option<IndependentNode<T>> {
@@ -212,7 +208,6 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         todo!()
     }
-
     //#[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         todo!()
