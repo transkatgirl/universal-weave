@@ -4,11 +4,11 @@ use std::{
 };
 
 use contracts::*;
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
+use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, DuplicatableContents,
-    DuplicatableWeave, Node, Weave,
+    ArchivedNode, ArchivedWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    DuplicatableContents, DuplicatableWeave, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -364,5 +364,60 @@ impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for Depe
                 }
             })
         })
+    }
+}
+
+impl<T> ArchivedNode<T> for ArchivedDependentNode<T>
+where
+    T: Archive<Archived = T>,
+{
+    fn id(&self) -> u128_le {
+        self.id
+    }
+    fn from(&self) -> impl Iterator<Item = u128_le> {
+        self.from.into_iter().copied()
+    }
+    fn to(&self) -> impl Iterator<Item = u128_le> {
+        self.to.iter().copied()
+    }
+    fn is_active(&self) -> bool {
+        self.active
+    }
+    fn is_bookmarked(&self) -> bool {
+        self.bookmarked
+    }
+    fn contents(&self) -> &T {
+        &self.contents
+    }
+}
+
+impl<T, M> ArchivedWeave<ArchivedDependentNode<T>, T> for ArchivedDependentWeave<T, M>
+where
+    T: Archive<Archived = T>,
+    M: Archive<Archived = T>,
+{
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+    fn contains(&self, id: &u128_le) -> bool {
+        self.nodes.contains_key(id)
+    }
+    fn get_node(&self, id: &u128_le) -> Option<&ArchivedDependentNode<T>> {
+        self.nodes.get(id)
+    }
+
+    fn get_roots(&self) -> impl Iterator<Item = u128_le> {
+        self.roots.iter().copied()
+    }
+
+    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
+        self.bookmarked.iter().copied()
+    }
+
+    fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
+        self.active.into_iter().copied()
     }
 }

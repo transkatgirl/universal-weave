@@ -4,11 +4,11 @@ use std::{
 };
 
 use contracts::*;
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64};
+use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
-    DiscreteContents, DiscreteWeave, DuplicatableContents, DuplicatableWeave, IndependentContents,
-    Node, Weave,
+    ArchivedNode, ArchivedWeave, DiscreteContents, DiscreteWeave, DuplicatableContents,
+    DuplicatableWeave, IndependentContents, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -244,5 +244,60 @@ impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     //#[debug_ensures(self.verify())]
     fn replace_node_parents(&mut self, target: &u128, parents: &[u128]) -> bool {
         todo!()
+    }
+}
+
+impl<T> ArchivedNode<T> for ArchivedIndependentNode<T>
+where
+    T: Archive<Archived = T> + IndependentContents,
+{
+    fn id(&self) -> u128_le {
+        self.id
+    }
+    fn from(&self) -> impl Iterator<Item = u128_le> {
+        self.from.iter().copied()
+    }
+    fn to(&self) -> impl Iterator<Item = u128_le> {
+        self.to.iter().copied()
+    }
+    fn is_active(&self) -> bool {
+        self.active
+    }
+    fn is_bookmarked(&self) -> bool {
+        self.bookmarked
+    }
+    fn contents(&self) -> &T {
+        &self.contents
+    }
+}
+
+impl<T, M> ArchivedWeave<ArchivedIndependentNode<T>, T> for ArchivedIndependentWeave<T, M>
+where
+    T: Archive<Archived = T> + IndependentContents,
+    M: Archive<Archived = T>,
+{
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+    fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+    fn contains(&self, id: &u128_le) -> bool {
+        self.nodes.contains_key(id)
+    }
+    fn get_node(&self, id: &u128_le) -> Option<&ArchivedIndependentNode<T>> {
+        self.nodes.get(id)
+    }
+
+    fn get_roots(&self) -> impl Iterator<Item = u128_le> {
+        self.roots.iter().copied()
+    }
+
+    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
+        self.bookmarked.iter().copied()
+    }
+
+    fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
+        self.active.iter().copied()
     }
 }
