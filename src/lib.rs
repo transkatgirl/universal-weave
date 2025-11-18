@@ -3,6 +3,7 @@ pub mod dependent;
 /// WIP
 pub mod independent;
 
+pub use indexmap;
 pub use rkyv;
 use rkyv::rend::u128_le;
 
