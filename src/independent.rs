@@ -289,7 +289,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 
         todo!()
     }
-    #[debug_ensures(value == self.active.contains(id))]
+    #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
@@ -314,7 +314,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             self.update_node_activity_in_place(id, value)
         }
     }
-    #[debug_ensures(value == self.bookmarked.contains(id))]
+    #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {

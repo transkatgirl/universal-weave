@@ -231,7 +231,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
         true
     }
-    #[debug_ensures(value == (self.active == Some(*id)))]
+    #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.verify())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {
@@ -253,7 +253,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
             None => false,
         }
     }
-    #[debug_ensures(value == self.bookmarked.contains(id))]
+    #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.verify())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {
