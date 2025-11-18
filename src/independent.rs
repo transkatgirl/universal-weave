@@ -138,45 +138,58 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
+    fn active_parents(
+        &self,
+        node: &IndependentNode<T>,
+    ) -> impl Iterator<Item = &IndependentNode<T>> {
+        node.from
+            .iter()
+            .filter_map(|id| self.nodes.get(id))
+            .filter(|parent| parent.active)
+    }
+    fn all_parents_excluding_roots(
+        &self,
+        node: &IndependentNode<T>,
+    ) -> impl Iterator<Item = &IndependentNode<T>> {
+        node.from.iter().filter_map(|id| self.nodes.get(id))
+    }
+    fn all_parents_including_roots<'a>(
+        &'a self,
+        node: &'a IndependentNode<T>,
+    ) -> Box<dyn Iterator<Item = &'a IndependentNode<T>> + 'a> {
+        if node.from.is_empty() {
+            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
+        } else {
+            Box::new(node.from.iter().filter_map(|id| self.nodes.get(id)))
+        }
+    }
     fn siblings_from_active_parent(
         &self,
         node: &IndependentNode<T>,
     ) -> impl Iterator<Item = &IndependentNode<T>> {
-        node.from.iter().copied().flat_map(|id| {
-            self.nodes
-                .get(&id)
-                .into_iter()
-                .filter(|node| node.active)
-                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                .filter_map(|id| self.nodes.get(&id))
-        })
+        self.active_parents(node)
+            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+            .filter_map(|id| self.nodes.get(&id))
     }
     fn sibling_ids_from_active_parent(
         &self,
         node: &IndependentNode<T>,
     ) -> impl Iterator<Item = u128> {
-        node.from.iter().copied().flat_map(|id| {
-            self.nodes
-                .get(&id)
-                .into_iter()
-                .filter(|node| node.active)
-                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-        })
+        self.active_parents(node)
+            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
     }
-    fn siblings_from_all_parents(
-        &self,
-        node: &IndependentNode<T>,
-    ) -> impl Iterator<Item = &IndependentNode<T>> {
-        node.from.iter().copied().flat_map(|id| {
-            self.nodes
-                .get(&id)
-                .into_iter()
-                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                .filter_map(|id| self.nodes.get(&id))
-        })
+    fn siblings_from_all_parents_including_roots<'a>(
+        &'a self,
+        node: &'a IndependentNode<T>,
+    ) -> impl Iterator<Item = &'a IndependentNode<T>> {
+        self.all_parents_including_roots(node)
+            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+            .filter_map(|id| self.nodes.get(&id))
     }
     //#[debug_ensures(self.verify())]
     fn update_node_activity_in_place(&mut self, id: &u128, value: bool) -> bool {
+        // TODO: Properly handle multiple root nodes
+
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
@@ -340,11 +353,12 @@ impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<Indepen
 {
     fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
         self.nodes.get(id).into_iter().flat_map(|node| {
-            let iter: Box<dyn Iterator<Item = &IndependentNode<T>>> = if node.active {
-                Box::new(self.siblings_from_active_parent(node))
-            } else {
-                Box::new(self.siblings_from_all_parents(node))
-            };
+            let iter: Box<dyn Iterator<Item = &IndependentNode<T>>> =
+                if node.active && !node.from.is_empty() {
+                    Box::new(self.siblings_from_active_parent(node))
+                } else {
+                    Box::new(self.siblings_from_all_parents_including_roots(node))
+                };
 
             iter.filter_map(|sibling| {
                 if node.contents.is_duplicate_of(&sibling.contents) {
@@ -417,5 +431,3 @@ where
         self.active.iter().copied()
     }
 }
-
-// TODO: Properly handle multiple root nodes
