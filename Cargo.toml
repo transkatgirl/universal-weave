@@ -22,3 +22,8 @@ rkyv = { version = "0.8.12", features = [
 members = [
 	"tapestry-weave",
 ]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+	'cfg(mirai)',
+] }
