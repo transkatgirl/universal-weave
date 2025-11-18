@@ -147,13 +147,10 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             .filter_map(|id| self.nodes.get(id))
             .filter(|parent| parent.active)
     }
-    fn all_parents_excluding_roots(
-        &self,
-        node: &IndependentNode<T>,
-    ) -> impl Iterator<Item = &IndependentNode<T>> {
+    fn all_parents(&self, node: &IndependentNode<T>) -> impl Iterator<Item = &IndependentNode<T>> {
         node.from.iter().filter_map(|id| self.nodes.get(id))
     }
-    fn all_parents_including_roots<'a>(
+    fn all_parents_or_roots<'a>(
         &'a self,
         node: &'a IndependentNode<T>,
     ) -> Box<dyn Iterator<Item = &'a IndependentNode<T>> + 'a> {
@@ -181,28 +178,33 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
     fn siblings_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<T>,
-    ) -> impl Iterator<Item = &'a IndependentNode<T>> {
-        self.all_parents_including_roots(node)
-            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-            .filter_map(|id| self.nodes.get(&id))
+    ) -> Box<dyn Iterator<Item = &'a IndependentNode<T>> + 'a> {
+        if node.from.is_empty() {
+            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
+        } else {
+            Box::new(
+                self.all_parents(node)
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                    .filter_map(|id| self.nodes.get(&id)),
+            )
+        }
     }
     //#[debug_ensures(self.verify())]
     fn update_node_activity_in_place(&mut self, id: &u128, value: bool) -> bool {
-        // TODO: Properly handle multiple root nodes
-
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
             }
 
             if value {
-                let has_active_parents = node
-                    .from
-                    .iter()
-                    .filter_map(|id| self.nodes.get(id))
-                    .any(|parent| parent.active);
+                let has_active_parents =
+                    self.all_parents_or_roots(node).any(|parent| parent.active);
                 if has_active_parents {
-                    let siblings: Vec<u128> = self.sibling_ids_from_active_parent(node).collect();
+                    let siblings: Vec<u128> = self
+                        .siblings_from_all_parents_including_roots(node)
+                        .filter(|sibling| sibling.active)
+                        .map(|sibling| sibling.id)
+                        .collect();
 
                     for sibling in siblings {
                         self.update_node_activity_in_place(&sibling, false);
