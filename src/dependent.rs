@@ -198,9 +198,11 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         self.active.into_iter()
     }
     #[debug_ensures(self.verify())]
-    #[ensures(self.under_max_size())]
+    #[requires(self.under_max_size())]
     fn add_node(&mut self, node: DependentNode<T>) -> bool {
-        if self.nodes.contains_key(&node.id) || !node.verify() || !node.to.is_empty() {
+        let is_invalid = self.nodes.contains_key(&node.id) || !node.verify() || !node.to.is_empty();
+
+        if is_invalid {
             return false;
         }
 
@@ -277,7 +279,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
 impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(self.verify())]
-    #[ensures(self.under_max_size())]
+    #[requires(self.under_max_size())]
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;

@@ -160,20 +160,13 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             Box::new(node.from.iter().filter_map(|id| self.nodes.get(id)))
         }
     }
-    fn siblings_from_active_parent(
+    fn siblings_from_active_parents(
         &self,
         node: &IndependentNode<T>,
     ) -> impl Iterator<Item = &IndependentNode<T>> {
         self.active_parents(node)
             .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
             .filter_map(|id| self.nodes.get(&id))
-    }
-    fn sibling_ids_from_active_parent(
-        &self,
-        node: &IndependentNode<T>,
-    ) -> impl Iterator<Item = u128> {
-        self.active_parents(node)
-            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
     }
     fn siblings_from_all_parents_including_roots<'a>(
         &'a self,
@@ -283,8 +276,17 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         self.active.iter().copied()
     }
     //#[debug_ensures(self.verify())]
-    //#[ensures(self.under_max_size())]
+    //#[requires(self.under_max_size())]
     fn add_node(&mut self, node: IndependentNode<T>) -> bool {
+        let is_invalid = self.nodes.contains_key(&node.id)
+            || !node.verify()
+            || !node.from.iter().all(|id| self.nodes.contains_key(id))
+            || !node.to.iter().all(|id| self.nodes.contains_key(id));
+
+        if is_invalid {
+            return false;
+        }
+
         todo!()
     }
     #[debug_ensures(value == self.active.contains(id))]
@@ -340,7 +342,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     for IndependentWeave<T, M>
 {
     //#[debug_ensures(self.verify())]
-    //#[ensures(self.under_max_size())]
+    //#[requires(self.under_max_size())]
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         todo!()
     }
@@ -357,7 +359,7 @@ impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<Indepen
         self.nodes.get(id).into_iter().flat_map(|node| {
             let iter: Box<dyn Iterator<Item = &IndependentNode<T>>> =
                 if node.active && !node.from.is_empty() {
-                    Box::new(self.siblings_from_active_parent(node))
+                    Box::new(self.siblings_from_active_parents(node))
                 } else {
                     Box::new(self.siblings_from_all_parents_including_roots(node))
                 };
