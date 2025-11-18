@@ -417,3 +417,5 @@ where
         self.active.iter().copied()
     }
 }
+
+// TODO: Properly handle multiple root nodes
