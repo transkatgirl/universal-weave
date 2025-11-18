@@ -3,9 +3,14 @@ pub mod dependent;
 /// WIP
 pub mod independent;
 
+use std::hash::BuildHasherDefault;
+
 pub use indexmap;
+use indexmap::IndexSet;
 pub use rkyv;
-use rkyv::rend::u128_le;
+use rkyv::{hash::FxHasher64, rend::u128_le};
+
+pub type IdentifierSet = IndexSet<u128, BuildHasherDefault<FxHasher64>>;
 
 pub trait Node<T> {
     fn id(&self) -> u128;
