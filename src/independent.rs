@@ -182,7 +182,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 return true;
             }
 
-            if node.active {
+            if value {
                 let has_active_parents = node
                     .from
                     .iter()
