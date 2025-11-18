@@ -128,14 +128,27 @@ impl<T, M> DependentWeave<T, M> {
     pub fn get_active_thread(&self) -> Option<u128> {
         self.active
     }
-    fn siblings(&self, node: &DependentNode<T>) -> impl Iterator<Item = &DependentNode<T>> {
-        node.from.iter().copied().flat_map(|id| {
-            self.nodes
-                .get(&id)
-                .into_iter()
-                .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                .filter_map(|id| self.nodes.get(&id))
-        })
+    fn siblings<'a>(
+        &'a self,
+        node: &'a DependentNode<T>,
+    ) -> Box<dyn Iterator<Item = &'a DependentNode<T>> + 'a> {
+        match &node.from {
+            Some(parent) => Box::new(self.nodes.get(parent).into_iter().flat_map(|parent| {
+                parent
+                    .to
+                    .iter()
+                    .copied()
+                    .filter(|id| *id != node.id)
+                    .filter_map(|id| self.nodes.get(&id))
+            })),
+            None => Box::new(
+                self.roots
+                    .iter()
+                    .copied()
+                    .filter(|id| *id != node.id)
+                    .filter_map(|id| self.nodes.get(&id)),
+            ),
+        }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &u128) -> Option<DependentNode<T>> {
