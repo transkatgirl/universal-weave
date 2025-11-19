@@ -350,7 +350,15 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
                             child.from = Some(parent.id);
                         }
 
+                        if node.active {
+                            parent.active = true;
+                            self.active = Some(parent.id);
+                        }
+
                         self.nodes.insert(parent.id, parent);
+
+                        self.bookmarked.shift_remove(&node.id);
+
                         true
                     }
                 }
