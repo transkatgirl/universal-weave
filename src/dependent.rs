@@ -7,8 +7,8 @@ use rkyv::{
 };
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    DuplicatableContents, DuplicatableWeave, Node, Weave,
+    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, DuplicatableWeave, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -364,7 +364,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     }
 }
 
-impl<T: DuplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+impl<T: DeduplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
         self.nodes.get(id).into_iter().flat_map(|node| {
             self.siblings(node).filter_map(|sibling| {

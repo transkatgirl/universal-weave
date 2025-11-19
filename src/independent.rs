@@ -8,7 +8,7 @@ use indexmap::IndexSet;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DiscreteContents, DiscreteWeave, DuplicatableContents,
+    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContents, DiscreteWeave,
     DuplicatableWeave, IndependentContents, Node, Weave,
 };
 
@@ -352,7 +352,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     }
 }
 
-impl<T: DuplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
+impl<T: DeduplicatableContents + IndependentContents, M> DuplicatableWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
     fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {

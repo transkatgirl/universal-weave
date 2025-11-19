@@ -60,7 +60,7 @@ where
 pub trait DuplicatableWeave<N, T>
 where
     N: Node<T>,
-    T: DuplicatableContents,
+    T: DeduplicatableContents,
 {
     fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128>;
 }
@@ -75,7 +75,7 @@ pub trait DiscreteContents: Sized {
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
-pub trait DuplicatableContents {
+pub trait DeduplicatableContents {
     fn is_duplicate_of(&self, value: &Self) -> bool;
 }
 
