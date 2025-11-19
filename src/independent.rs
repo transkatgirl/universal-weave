@@ -275,9 +275,9 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn get_active_threads(&self) -> impl Iterator<Item = u128> {
         self.active.iter().copied()
     }
-    //#[debug_ensures(self.verify())]
-    //#[requires(self.under_max_size())]
-    fn add_node(&mut self, node: IndependentNode<T>) -> bool {
+    #[debug_ensures(self.verify())]
+    #[requires(self.under_max_size())]
+    fn add_node(&mut self, mut node: IndependentNode<T>) -> bool {
         let is_invalid = self.nodes.contains_key(&node.id)
             || !node.verify()
             || !node.from.iter().all(|id| self.nodes.contains_key(id))
@@ -287,7 +287,74 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             return false;
         }
 
-        todo!()
+        for child in &node.to {
+            let child = self.nodes.get(child).unwrap();
+            if child.from.is_empty() && child.active {
+                node.active = true;
+                self.roots.shift_remove(&child.id);
+            }
+        }
+
+        if node.from.is_empty() {
+            if node.active {
+                let roots: Vec<u128> = self.roots.iter().copied().collect();
+
+                for root in &roots {
+                    let is_active = self.nodes.get(root).unwrap().active;
+
+                    if is_active {
+                        self.update_node_activity_in_place(root, false);
+                    }
+                }
+            }
+
+            self.roots.insert(node.id);
+        } else {
+            if node.active {
+                let has_active_parents = node
+                    .from
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .any(|parent| parent.active);
+
+                if !has_active_parents {
+                    let parent = node.from.first().unwrap();
+                    self.update_node_activity_in_place(parent, true);
+                }
+
+                let siblings: Vec<u128> = node
+                    .from
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                    .filter_map(|id| self.nodes.get(&id))
+                    .filter(|sibling| sibling.active)
+                    .map(|sibling| sibling.id)
+                    .collect();
+
+                for sibling in siblings {
+                    self.update_node_activity_in_place(&sibling, false);
+                }
+            }
+
+            for parent in &node.from {
+                let parent = self.nodes.get_mut(parent).unwrap();
+                parent.to.insert(node.id);
+            }
+        }
+
+        for child in &node.to {
+            let child = self.nodes.get_mut(child).unwrap();
+            child.from.insert(node.id);
+        }
+
+        if node.bookmarked {
+            self.bookmarked.insert(node.id);
+        }
+
+        self.nodes.insert(node.id, node);
+
+        true
     }
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.verify())]
