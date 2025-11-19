@@ -230,6 +230,11 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
+                if value {
+                    self.active.insert(node.id);
+                } else {
+                    self.active.remove(&node.id);
+                }
                 true
             }
             None => false,
@@ -241,6 +246,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
                 return true;
             }
             node.active = false;
+            self.active.remove(&node.id);
 
             let parents: Vec<u128> = node.from.iter().copied().collect();
 
@@ -271,6 +277,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         }
         if let Some(node) = self.nodes.get_mut(id) {
             node.active = false;
+            self.active.remove(&node.id);
 
             let children: Vec<u128> = node.to.iter().copied().collect();
             for child in &children {
@@ -287,6 +294,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
+            self.active.remove(id);
             for parent in &node.from {
                 if let Some(parent) = self.nodes.get_mut(parent) {
                     parent.to.shift_remove(&node.id);
