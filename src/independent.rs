@@ -254,7 +254,33 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         }
     }
     fn update_removed_child_activity(&mut self, id: &u128) -> bool {
-        todo!()
+        if let Some(node) = self.nodes.get(id) {
+            if !node.active {
+                return true;
+            }
+
+            let has_active_parents = node
+                .from
+                .iter()
+                .filter_map(|id| self.nodes.get(id))
+                .any(|parent| parent.active);
+
+            if has_active_parents {
+                return true;
+            }
+        }
+        if let Some(node) = self.nodes.get_mut(id) {
+            node.active = false;
+
+            let children: Vec<u128> = node.to.iter().copied().collect();
+            for child in &children {
+                self.update_removed_child_activity(child);
+            }
+
+            true
+        } else {
+            false
+        }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &u128) -> Option<IndependentNode<T>> {
@@ -434,7 +460,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             None => false,
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(&id))]
+    #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: &u128) -> Option<IndependentNode<T>> {
         self.remove_node_unverified(id)
