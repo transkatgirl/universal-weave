@@ -251,6 +251,19 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             false
         }
     }
+    fn update_node_activity_based_on_parents(&mut self, id: &u128) -> bool {
+        todo!()
+    }
+    #[debug_ensures(!self.nodes.contains_key(id))]
+    fn remove_node_unverified(&mut self, id: &u128) -> Option<IndependentNode<T>> {
+        if let Some(node) = self.nodes.remove(id) {
+            self.roots.shift_remove(id);
+            self.bookmarked.shift_remove(id);
+            todo!()
+        } else {
+            None
+        }
+    }
 }
 
 impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeave<T, M> {
@@ -348,6 +361,10 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             child.from.insert(node.id);
         }
 
+        if node.active {
+            self.active.insert(node.id);
+        }
+
         if node.bookmarked {
             self.bookmarked.insert(node.id);
         }
@@ -398,10 +415,10 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             None => false,
         }
     }
-    //#[debug_ensures(!self.nodes.contains_key(&id))]
-    //#[debug_ensures(self.verify())]
+    #[debug_ensures(!self.nodes.contains_key(&id))]
+    #[debug_ensures(self.verify())]
     fn remove_node(&mut self, id: &u128) -> Option<IndependentNode<T>> {
-        todo!()
+        self.remove_node_unverified(id)
     }
 }
 
