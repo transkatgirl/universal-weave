@@ -1,7 +1,7 @@
 //! WIP
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     hash::BuildHasherDefault,
 };
 
@@ -84,8 +84,10 @@ where
             self.nodes.keys().copied().collect();
         let active_index: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
             self.active.iter().copied().collect();
+        let roots: Vec<u128> = self.roots.iter().copied().collect();
 
-        self.roots.is_subset(&nodes)
+        //self.roots.is_subset(&nodes)
+        self.verify_layer(&roots)
             && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
@@ -112,6 +114,32 @@ where
                         true
                     }
             })
+    }
+    fn verify_layer(&self, layer: &[u128]) -> bool {
+        let mut next_layer = Vec::new();
+        let mut has_active = false;
+
+        for node in layer {
+            if let Some(node) = self.nodes.get(node) {
+                next_layer.extend(node.to.iter().copied());
+
+                if node.active {
+                    if !has_active {
+                        has_active = true;
+                    } else {
+                        return false;
+                    }
+                }
+            } else {
+                return false;
+            }
+        }
+
+        if !next_layer.is_empty() {
+            self.verify_layer(&next_layer)
+        } else {
+            true
+        }
     }
     fn under_max_size(&self) -> bool {
         (self.nodes.len() as u64) < (i32::MAX as u64)
@@ -289,6 +317,43 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             false
         }
     }
+    fn build_thread(&self, id: &u128, thread: &mut VecDeque<u128>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_back(*id);
+
+            for child in &node.from {
+                self.build_thread_children(child, thread);
+            }
+
+            for parent in &node.to {
+                self.build_thread_parents(parent, thread);
+            }
+        }
+    }
+    fn build_thread_children(&self, id: &u128, thread: &mut VecDeque<u128>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_back(*id);
+
+            for child in &node.from {
+                self.build_thread_children(child, thread);
+            }
+        }
+    }
+    fn build_thread_parents(&self, id: &u128, thread: &mut VecDeque<u128>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_front(*id);
+
+            for parent in &node.to {
+                self.build_thread_parents(parent, thread);
+            }
+        }
+    }
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &u128) -> Option<IndependentNode<T>> {
         if let Some(node) = self.nodes.remove(id) {
@@ -338,8 +403,15 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
         self.bookmarked.iter().copied()
     }
-    fn get_active_threads(&self) -> impl Iterator<Item = u128> {
-        self.active.iter().copied()
+    fn get_active_thread(&self) -> impl Iterator<Item = u128> {
+        let mut thread =
+            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+
+        if let Some(active) = self.active.iter().last() {
+            self.build_thread(active, &mut thread);
+        }
+
+        thread.into_iter()
     }
     #[debug_ensures(self.verify())]
     #[requires(self.under_max_size())]

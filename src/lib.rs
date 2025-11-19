@@ -30,7 +30,7 @@ where
     fn get_node(&self, id: &u128) -> Option<&N>;
     fn get_roots(&self) -> impl Iterator<Item = u128>;
     fn get_bookmarks(&self) -> impl Iterator<Item = u128>;
-    fn get_active_threads(&self) -> impl Iterator<Item = u128>;
+    fn get_active_thread(&self) -> impl Iterator<Item = u128>;
     fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;

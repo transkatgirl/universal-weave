@@ -173,6 +173,14 @@ impl<T, M> DependentWeave<T, M> {
             None
         }
     }
+    fn build_thread(&self, id: &u128, thread: &mut Vec<u128>) {
+        if let Some(node) = self.nodes.get(id) {
+            thread.push(*id);
+            if let Some(parent) = node.from {
+                self.build_thread(&parent, thread);
+            }
+        }
+    }
 }
 
 impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
@@ -194,8 +202,15 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
         self.bookmarked.iter().copied()
     }
-    fn get_active_threads(&self) -> impl Iterator<Item = u128> {
-        self.active.into_iter()
+    fn get_active_thread(&self) -> impl Iterator<Item = u128> {
+        let mut thread =
+            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+
+        if let Some(active) = self.active {
+            self.build_thread(&active, &mut thread);
+        }
+
+        thread.into_iter()
     }
     #[debug_ensures(self.verify())]
     #[requires(self.under_max_size())]
