@@ -508,7 +508,7 @@ impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
     //#[debug_ensures(self.verify())]
-    fn replace_node_parents(&mut self, target: &u128, parents: &[u128]) -> bool {
+    fn move_node(&mut self, target: &u128, parents: &[u128]) -> bool {
         todo!()
     }
 }

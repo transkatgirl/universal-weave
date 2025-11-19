@@ -42,7 +42,7 @@ where
     N: Node<T>,
     T: IndependentContents,
 {
-    fn replace_node_parents(&mut self, target: &u128, parents: &[u128]) -> bool;
+    fn move_node(&mut self, target: &u128, parents: &[u128]) -> bool;
 }
 
 pub trait DiscreteWeave<N, T>
