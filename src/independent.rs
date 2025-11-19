@@ -1,3 +1,5 @@
+//! WIP
+
 use std::{
     collections::{HashMap, HashSet},
     hash::BuildHasherDefault,
@@ -251,7 +253,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             false
         }
     }
-    fn update_node_activity_based_on_parents(&mut self, id: &u128) -> bool {
+    fn update_removed_child_activity(&mut self, id: &u128) -> bool {
         todo!()
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
@@ -259,7 +261,24 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
-            todo!()
+            for parent in &node.from {
+                if let Some(parent) = self.nodes.get_mut(parent) {
+                    parent.to.shift_remove(&node.id);
+                }
+            }
+            for child in &node.to {
+                if let Some(child) = self.nodes.get_mut(child) {
+                    child.from.shift_remove(&node.id);
+
+                    let identifier = child.id;
+                    if child.from.is_empty() {
+                        self.remove_node_unverified(&identifier);
+                    } else if node.active && child.active {
+                        self.update_removed_child_activity(&identifier);
+                    }
+                }
+            }
+            Some(node)
         } else {
             None
         }
