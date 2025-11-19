@@ -617,6 +617,50 @@ where
     }
 }
 
+impl<T, M> ArchivedIndependentWeave<T, M>
+where
+    T: Archive<Archived = T> + IndependentContents,
+    M: Archive<Archived = T>,
+{
+    fn build_thread(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_back(*id);
+
+            for child in node.from.iter() {
+                self.build_thread_children(child, thread);
+            }
+
+            for parent in node.to.iter() {
+                self.build_thread_parents(parent, thread);
+            }
+        }
+    }
+    fn build_thread_children(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_back(*id);
+
+            for child in node.from.iter() {
+                self.build_thread_children(child, thread);
+            }
+        }
+    }
+    fn build_thread_parents(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
+        if let Some(node) = self.nodes.get(id)
+            && node.active
+        {
+            thread.push_front(*id);
+
+            for parent in node.to.iter() {
+                self.build_thread_parents(parent, thread);
+            }
+        }
+    }
+}
+
 impl<T, M> ArchivedWeave<ArchivedIndependentNode<T>, T> for ArchivedIndependentWeave<T, M>
 where
     T: Archive<Archived = T> + IndependentContents,
@@ -640,7 +684,14 @@ where
     fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
         self.bookmarked.iter().copied()
     }
-    fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
-        self.active.iter().copied()
+    fn get_active_thread(&self) -> impl Iterator<Item = u128_le> {
+        let mut thread =
+            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+
+        if let Some(active) = self.active.iter().last() {
+            self.build_thread(active, &mut thread);
+        }
+
+        thread.into_iter()
     }
 }

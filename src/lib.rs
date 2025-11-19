@@ -97,5 +97,5 @@ where
     fn get_node(&self, id: &u128_le) -> Option<&N>;
     fn get_roots(&self) -> impl Iterator<Item = u128_le>;
     fn get_bookmarks(&self) -> impl Iterator<Item = u128_le>;
-    fn get_active_threads(&self) -> impl Iterator<Item = u128_le>;
+    fn get_active_thread(&self) -> impl Iterator<Item = u128_le>;
 }

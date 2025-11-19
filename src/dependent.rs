@@ -125,9 +125,6 @@ impl<T, M> DependentWeave<T, M> {
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
     }
-    pub fn get_active_thread(&self) -> Option<u128> {
-        self.active
-    }
     fn siblings<'a>(
         &'a self,
         node: &'a DependentNode<T>,
@@ -425,6 +422,21 @@ where
     }
 }
 
+impl<T, M> ArchivedDependentWeave<T, M>
+where
+    T: Archive<Archived = T>,
+    M: Archive<Archived = T>,
+{
+    fn build_thread(&self, id: &u128_le, thread: &mut Vec<u128_le>) {
+        if let Some(node) = self.nodes.get(id) {
+            thread.push(*id);
+            if let ArchivedOption::Some(parent) = node.from {
+                self.build_thread(&parent, thread);
+            }
+        }
+    }
+}
+
 impl<T, M> ArchivedWeave<ArchivedDependentNode<T>, T> for ArchivedDependentWeave<T, M>
 where
     T: Archive<Archived = T>,
@@ -448,17 +460,14 @@ where
     fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
         self.bookmarked.iter().copied()
     }
-    fn get_active_threads(&self) -> impl Iterator<Item = u128_le> {
-        self.active.into_iter().copied()
-    }
-}
+    fn get_active_thread(&self) -> impl Iterator<Item = u128_le> {
+        let mut thread =
+            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
-impl<T, M> ArchivedDependentWeave<T, M>
-where
-    T: Archive<Archived = T>,
-    M: Archive<Archived = T>,
-{
-    pub fn get_active_thread(&self) -> ArchivedOption<u128_le> {
-        self.active
+        if let ArchivedOption::Some(active) = self.active {
+            self.build_thread(&active, &mut thread);
+        }
+
+        thread.into_iter()
     }
 }
