@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, Node, Weave,
-    dependent::DependentWeave,
+    dependent::{DependentNode, DependentWeave},
     rkyv::{Archive, Deserialize, Serialize},
 };
 
@@ -81,11 +81,44 @@ impl InnerNodeContent {
                 }
 
                 let right = snippet.split_off(at);
+                snippet.shrink_to_fit();
 
                 DiscreteContentResult::Two((Self::Snippet(snippet), Self::Snippet(right)))
             }
             Self::Tokens(tokens) => {
-                todo!()
+                if tokens.iter().map(|token| token.0.len()).sum::<usize>() >= at {
+                    return DiscreteContentResult::One(Self::Tokens(tokens));
+                }
+
+                let mut content_index = 0;
+
+                let location = tokens.iter().enumerate().find_map(|(location, token)| {
+                    if content_index + token.0.len() > at {
+                        return Some(location);
+                    }
+                    content_index += token.0.len();
+
+                    None
+                });
+
+                if let Some(location) = location {
+                    let mut left = tokens;
+                    let mut right = left.split_off(location);
+                    left.shrink_to_fit();
+
+                    let mut left_token = right[0].0.clone();
+                    let right_token = left_token.split_off(at - content_index);
+
+                    if !left_token.is_empty() {
+                        left_token.shrink_to_fit();
+                        left.push((left_token, right[0].1.clone()));
+                    }
+                    right[0].0 = right_token;
+
+                    DiscreteContentResult::Two((Self::Tokens(left), Self::Tokens(right)))
+                } else {
+                    DiscreteContentResult::One(Self::Tokens(tokens))
+                }
             }
         }
     }
@@ -148,5 +181,22 @@ impl TapestryWeave {
     }
     pub fn contains(&self, id: &Ulid) -> bool {
         self.weave.contains(&id.0)
+    }
+    pub fn get_node(&self, id: &Ulid) -> Option<&DependentNode<NodeContent>> {
+        self.weave.get_node(&id.0)
+    }
+    pub fn get_roots(&self) -> impl Iterator<Item = Ulid> {
+        self.weave.get_roots().map(Ulid)
+    }
+    pub fn get_bookmarks(&self) -> impl Iterator<Item = Ulid> {
+        self.weave.get_bookmarks().map(Ulid)
+    }
+    pub fn get_active_thread(&self) -> impl Iterator<Item = &DependentNode<NodeContent>> {
+        self.weave
+            .get_active_thread()
+            .filter_map(|id| self.weave.get_node(&id))
+    }
+    pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
+        self.weave.add_node(node)
     }
 }
