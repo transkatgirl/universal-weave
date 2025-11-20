@@ -56,6 +56,12 @@ impl DiscreteContents for NodeContent {
     }
 }
 
+impl NodeContent {
+    fn is_mergeable_with(&self, value: &Self) -> bool {
+        todo!()
+    }
+}
+
 impl DeduplicatableContents for NodeContent {
     fn is_duplicate_of(&self, value: &Self) -> bool {
         self == value
@@ -216,13 +222,23 @@ impl TapestryWeave {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
     pub fn split_node(&mut self, id: &Ulid, at: usize, new_id: Ulid) -> bool {
-        todo!()
+        // TODO: Deduplication!
+
+        self.weave.split_node(&id.0, at, new_id.0)
     }
     pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
         self.weave.merge_with_parent(&id.0)
     }
     pub fn is_mergeable_with_parent(&mut self, id: &Ulid) -> bool {
-        todo!()
+        if let Some(node) = self.weave.get_node(&id.0) {
+            if let Some(parent) = node.from.and_then(|id| self.weave.get_node(&id)) {
+                parent.contents.is_mergeable_with(&node.contents)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
     pub fn remove_node(&mut self, id: &Ulid) -> Option<DependentNode<NodeContent>> {
         self.weave.remove_node(&id.0)
