@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
-    DeduplicatableContents, DiscreteContentResult, DiscreteContents, Weave,
+    DeduplicatableContents, DiscreteContentResult, DiscreteContents, DuplicatableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
     rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
 };
@@ -204,6 +204,8 @@ impl TapestryWeave {
             .filter_map(|id| self.weave.get_node(&id))
     }
     pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
+        // TODO: Deduplication!
+
         self.weave.add_node(node)
     }
     pub fn set_node_active_status(&mut self, id: &Ulid, value: bool) -> bool {
@@ -214,5 +216,14 @@ impl TapestryWeave {
     }
     pub fn remove_node(&mut self, id: &Ulid) -> Option<DependentNode<NodeContent>> {
         self.weave.remove_node(&id.0)
+    }
+    pub fn split_node(&mut self, id: &Ulid, at: usize, new_id: Ulid) -> bool {
+        todo!()
+    }
+    pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
+        todo!()
+    }
+    pub fn is_mergeable_with_parent(&mut self, id: &Ulid) -> bool {
+        todo!()
     }
 }
