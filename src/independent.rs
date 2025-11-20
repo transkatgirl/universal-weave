@@ -10,8 +10,8 @@ use indexmap::IndexSet;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContents, DiscreteWeave,
-    DuplicatableWeave, IndependentContents, Node, Weave,
+    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, DuplicatableWeave, IndependentContents, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -553,14 +553,73 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    //#[debug_ensures(self.verify())]
-    //#[requires(self.under_max_size())]
+    #[debug_ensures(self.verify())]
+    #[requires(self.under_max_size())]
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
-        todo!()
+        if self.nodes.contains_key(&new_id) || *id == new_id {
+            return false;
+        }
+
+        if let Some(mut node) = self.nodes.remove(id) {
+            match node.contents.split(at) {
+                DiscreteContentResult::Two((left, right)) => {
+                    let left_node = IndependentNode {
+                        id: node.id,
+                        from: node.from,
+                        to: IndexSet::from_iter([new_id]),
+                        active: node.active,
+                        bookmarked: node.bookmarked,
+                        contents: left,
+                    };
+
+                    node.from = IndexSet::from_iter([node.id]);
+                    node.id = new_id;
+                    node.contents = right;
+                    node.active = false;
+                    node.bookmarked = false;
+
+                    for child in node.to.iter() {
+                        let child = self.nodes.get_mut(child).unwrap();
+
+                        if let Some(index) = child.from.get_index_of(&left_node.id) {
+                            if child.from.replace_index(index, node.id).is_err() {
+                                child.from.shift_remove_index(index);
+                            }
+                        } else {
+                            child.from.insert(node.id);
+                        }
+                    }
+
+                    self.nodes.insert(left_node.id, left_node);
+                    self.nodes.insert(node.id, node);
+
+                    true
+                }
+                DiscreteContentResult::One(content) => {
+                    node.contents = content;
+                    self.nodes.insert(node.id, node);
+                    false
+                }
+            }
+        } else {
+            false
+        }
     }
     //#[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
-        todo!()
+        if let Some(mut node) = self.nodes.remove(id) {
+            if node.from.len() != 1 {
+                return false;
+            }
+
+            if let Some(mut parent) = node.from.first().and_then(|id| self.nodes.remove(&id)) {
+                todo!()
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 }
 
