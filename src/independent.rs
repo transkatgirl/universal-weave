@@ -608,15 +608,52 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
             false
         }
     }
-    //#[debug_ensures(self.verify())]
+    #[debug_ensures(self.verify())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
                 return false;
             }
 
-            if let Some(mut parent) = node.from.first().and_then(|id| self.nodes.remove(&id)) {
-                todo!()
+            if let Some(mut parent) = node.from.first().and_then(|id| self.nodes.remove(id)) {
+                if parent.to.len() > 1 {
+                    self.nodes.insert(parent.id, parent);
+                    self.nodes.insert(node.id, node);
+                    return false;
+                }
+
+                match parent.contents.merge(node.contents) {
+                    DiscreteContentResult::Two((left, right)) => {
+                        parent.contents = left;
+                        node.contents = right;
+                        self.nodes.insert(parent.id, parent);
+                        self.nodes.insert(node.id, node);
+                        false
+                    }
+                    DiscreteContentResult::One(content) => {
+                        parent.contents = content;
+                        parent.to = node.to;
+
+                        for child in parent.to.iter() {
+                            let child = self.nodes.get_mut(child).unwrap();
+
+                            if let Some(index) = child.from.get_index_of(&node.id) {
+                                if child.from.replace_index(index, parent.id).is_err() {
+                                    child.from.shift_remove_index(index);
+                                }
+                            } else {
+                                child.from.insert(parent.id);
+                            }
+                        }
+
+                        self.nodes.insert(parent.id, parent);
+
+                        self.bookmarked.shift_remove(&node.id);
+                        self.active.remove(&node.id);
+
+                        true
+                    }
+                }
             } else {
                 false
             }
