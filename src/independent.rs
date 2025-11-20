@@ -656,6 +656,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
                     }
                 }
             } else {
+                self.nodes.insert(node.id, node);
                 false
             }
         } else {
