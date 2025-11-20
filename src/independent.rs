@@ -1,4 +1,4 @@
-//! WIP
+//! Experimental & untested; likely contains serious bugs
 
 use std::{
     collections::{HashMap, HashSet, VecDeque},

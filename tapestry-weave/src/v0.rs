@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
 use universal_weave::{
     dependent::DependentWeave,
@@ -9,7 +9,7 @@ use universal_weave::{
 pub struct NodeContent {
     pub content: InnerNodeContent,
     pub metadata: HashMap<String, String>,
-    pub model: Option<Model>,
+    pub model: Option<Rc<Model>>,
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
