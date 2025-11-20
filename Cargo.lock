@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "tapestry-weave"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "rkyv",
  "ulid",
