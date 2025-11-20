@@ -8,7 +8,7 @@ use universal_weave::{
 #[derive(Archive, Deserialize, Serialize, Debug)]
 pub struct NodeContent {
     pub content: InnerNodeContent,
-    pub metadata: HashMap<String, String>,
+    pub metadata: Rc<HashMap<String, String>>,
     pub model: Option<Rc<Model>>,
 }
 
