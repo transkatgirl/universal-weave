@@ -96,16 +96,19 @@ impl InnerNodeContent {
                     left_snippet.append(&mut right_snippet);
                     DiscreteContentResult::One(Self::Snippet(left_snippet))
                 }
-                Self::Tokens(right_tokens) => {
-                    todo!()
-                }
+                Self::Tokens(right_tokens) => DiscreteContentResult::Two((
+                    Self::Snippet(left_snippet),
+                    Self::Tokens(right_tokens),
+                )),
             },
-            Self::Tokens(left_tokens) => match value {
-                Self::Snippet(right_snippet) => {
-                    todo!()
-                }
-                Self::Tokens(right_tokens) => {
-                    todo!()
+            Self::Tokens(mut left_tokens) => match value {
+                Self::Snippet(right_snippet) => DiscreteContentResult::Two((
+                    Self::Tokens(left_tokens),
+                    Self::Snippet(right_snippet),
+                )),
+                Self::Tokens(mut right_tokens) => {
+                    left_tokens.append(&mut right_tokens);
+                    DiscreteContentResult::One(Self::Tokens(right_tokens))
                 }
             },
         }
