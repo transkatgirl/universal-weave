@@ -1,37 +1,112 @@
 use std::{collections::HashMap, rc::Rc};
 
+use ulid::Ulid;
 use universal_weave::{
+    DeduplicatableContents, DiscreteContentResult, DiscreteContents, Node, Weave,
     dependent::DependentWeave,
     rkyv::{Archive, Deserialize, Serialize},
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct NodeContent {
     pub content: InnerNodeContent,
     pub metadata: Rc<HashMap<String, String>>,
     pub model: Option<Rc<Model>>,
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+impl DiscreteContents for NodeContent {
+    fn split(mut self, at: usize) -> DiscreteContentResult<Self> {
+        match self.content.split(at) {
+            DiscreteContentResult::Two((left, right)) => {
+                self.content = left;
+
+                let right_content = NodeContent {
+                    content: right,
+                    metadata: self.metadata.clone(),
+                    model: self.model.clone(),
+                };
+
+                DiscreteContentResult::Two((self, right_content))
+            }
+            DiscreteContentResult::One(center) => {
+                self.content = center;
+                DiscreteContentResult::One(self)
+            }
+        }
+    }
+    fn merge(mut self, mut value: Self) -> DiscreteContentResult<Self> {
+        if self.metadata != value.metadata || self.model != value.model {
+            return DiscreteContentResult::Two((self, value));
+        }
+
+        match self.content.merge(value.content) {
+            DiscreteContentResult::Two((left, right)) => {
+                self.content = left;
+                value.content = right;
+
+                DiscreteContentResult::Two((self, value))
+            }
+            DiscreteContentResult::One(center) => {
+                self.content = center;
+                DiscreteContentResult::One(self)
+            }
+        }
+    }
+}
+
+impl DeduplicatableContents for NodeContent {
+    fn is_duplicate_of(&self, value: &Self) -> bool {
+        self == value
+    }
+}
+
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum InnerNodeContent {
     Snippet(String),
     Tokens(Vec<(String, HashMap<String, String>)>),
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+impl InnerNodeContent {
+    fn split(self, at: usize) -> DiscreteContentResult<Self> {
+        todo!()
+    }
+    fn merge(self, value: Self) -> DiscreteContentResult<Self> {
+        todo!()
+    }
+}
+
+#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct Model {
     pub label: String,
     pub metadata: HashMap<String, String>,
 }
 
-pub struct Weave {
+pub struct TapestryWeave {
     pub weave: DependentWeave<NodeContent, HashMap<String, String>>,
 }
 
-impl Weave {
+impl TapestryWeave {
     pub fn with_capacity(capacity: usize, metadata: HashMap<String, String>) -> Self {
         Self {
             weave: DependentWeave::with_capacity(capacity, metadata),
         }
+    }
+    pub fn capacity(&self) -> usize {
+        self.weave.capacity()
+    }
+    pub fn reserve(&mut self, additional: usize) {
+        self.weave.reserve(additional);
+    }
+    pub fn shrink_to(&mut self, min_capacity: usize) {
+        self.weave.shrink_to(min_capacity);
+    }
+    pub fn len(&self) -> usize {
+        self.weave.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.weave.is_empty()
+    }
+    pub fn contains(&self, id: &Ulid) -> bool {
+        self.weave.contains(&id.0)
     }
 }
