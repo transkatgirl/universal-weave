@@ -58,7 +58,11 @@ impl DiscreteContents for NodeContent {
 
 impl NodeContent {
     fn is_mergeable_with(&self, value: &Self) -> bool {
-        todo!()
+        if self.metadata != value.metadata || self.model != value.model {
+            return false;
+        }
+
+        self.content.is_mergeable_with(&value.content)
     }
 }
 
@@ -149,6 +153,18 @@ impl InnerNodeContent {
                     left_tokens.append(&mut right_tokens);
                     DiscreteContentResult::One(Self::Tokens(right_tokens))
                 }
+            },
+        }
+    }
+    fn is_mergeable_with(&self, value: &Self) -> bool {
+        match self {
+            Self::Snippet(_) => match value {
+                Self::Snippet(_) => true,
+                Self::Tokens(_) => false,
+            },
+            Self::Tokens(_) => match value {
+                Self::Snippet(_) => false,
+                Self::Tokens(_) => true,
             },
         }
     }
