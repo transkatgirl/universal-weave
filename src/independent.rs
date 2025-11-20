@@ -691,9 +691,74 @@ impl<T: DeduplicatableContents + IndependentContents, M> DuplicatableWeave<Indep
 impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    //#[debug_ensures(self.verify())]
-    fn move_node(&mut self, target: &u128, parents: &[u128]) -> bool {
-        todo!()
+    #[debug_ensures(self.verify())]
+    fn move_node(&mut self, id: &u128, new_parents: &[u128]) -> bool {
+        let mut has_active_new_parents = false;
+
+        for new_parent in new_parents {
+            match self.nodes.get(new_parent) {
+                Some(new_parent) => {
+                    if new_parent.active {
+                        has_active_new_parents = true;
+                    }
+                }
+                None => {
+                    return false;
+                }
+            }
+        }
+
+        let new_parents = IndexSet::from_iter(new_parents.iter().copied());
+
+        if new_parents.contains(id) {
+            return false;
+        }
+
+        if let Some(node) = self.nodes.get(id) {
+            for child in &node.to {
+                if new_parents.contains(child) {
+                    return false;
+                }
+            }
+
+            let old_parents = node.from.clone();
+
+            for old_parent in &old_parents {
+                if !new_parents.contains(old_parent)
+                    && let Some(old_parent) = self.nodes.get_mut(old_parent)
+                {
+                    old_parent.to.shift_remove(id);
+                }
+            }
+
+            for new_parent in &new_parents {
+                if !old_parents.contains(new_parent)
+                    && let Some(new_parent) = self.nodes.get_mut(new_parent)
+                {
+                    new_parent.to.insert(*id);
+                }
+            }
+        } else {
+            return false;
+        }
+
+        let node = self.nodes.get_mut(id).unwrap();
+        node.from = new_parents;
+
+        if node.from.is_empty() {
+            self.roots.insert(node.id);
+        } else {
+            self.roots.shift_remove(&node.id);
+        }
+
+        if node.active
+            && !has_active_new_parents
+            && let Some(first_parent) = node.from.first().copied()
+        {
+            assert!(self.update_node_activity_in_place(&first_parent, true));
+        }
+
+        true
     }
 }
 
