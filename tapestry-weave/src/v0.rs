@@ -1,13 +1,12 @@
 use std::{collections::HashMap, rc::Rc};
 
+use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
-    DeduplicatableContents, DiscreteContentResult, DiscreteContents, Node, Weave,
+    DeduplicatableContents, DiscreteContentResult, DiscreteContents, Weave,
     dependent::{DependentNode, DependentWeave},
-    rkyv::{Archive, Deserialize, Serialize},
+    rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
 };
-
-const MAGIC_STRING: &[u8] = b"TapestryWeave_version=000000;";
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct NodeContent {
@@ -159,6 +158,14 @@ pub struct TapestryWeave {
 }
 
 impl TapestryWeave {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        Ok(Self {
+            weave: from_bytes::<_, Error>(bytes)?,
+        })
+    }
+    pub fn to_bytes(&self) -> Result<AlignedVec, Error> {
+        to_bytes::<Error>(&self.weave)
+    }
     pub fn with_capacity(capacity: usize, metadata: HashMap<String, String>) -> Self {
         Self {
             weave: DependentWeave::with_capacity(capacity, metadata),
@@ -198,5 +205,14 @@ impl TapestryWeave {
     }
     pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
         self.weave.add_node(node)
+    }
+    pub fn set_node_active_status(&mut self, id: &Ulid, value: bool) -> bool {
+        self.weave.set_node_active_status(&id.0, value)
+    }
+    pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
+        self.weave.set_node_bookmarked_status(&id.0, value)
+    }
+    pub fn remove_node(&mut self, id: &Ulid) -> Option<DependentNode<NodeContent>> {
+        self.weave.remove_node(&id.0)
     }
 }
