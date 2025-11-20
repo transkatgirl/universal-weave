@@ -115,6 +115,9 @@ impl<T, M> DependentWeave<T, M> {
             metadata,
         }
     }
+    pub fn capacity(&self) -> usize {
+        self.nodes.capacity()
+    }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
