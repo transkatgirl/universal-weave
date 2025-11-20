@@ -612,6 +612,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
+                self.nodes.insert(node.id, node);
                 return false;
             }
 
