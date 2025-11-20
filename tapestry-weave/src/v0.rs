@@ -64,8 +64,8 @@ impl DeduplicatableContents for NodeContent {
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum InnerNodeContent {
-    Snippet(String),
-    Tokens(Vec<(String, HashMap<String, String>)>),
+    Snippet(Vec<u8>),
+    Tokens(Vec<(Vec<u8>, HashMap<String, String>)>),
 }
 
 impl InnerNodeContent {
@@ -76,7 +76,7 @@ impl InnerNodeContent {
 
         match self {
             Self::Snippet(mut snippet) => {
-                if snippet.len() >= at || !snippet.is_char_boundary(at) {
+                if snippet.len() >= at {
                     return DiscreteContentResult::One(Self::Snippet(snippet));
                 }
 
@@ -91,12 +91,23 @@ impl InnerNodeContent {
     }
     fn merge(self, value: Self) -> DiscreteContentResult<Self> {
         match self {
-            Self::Snippet(snippet) => {
-                todo!()
-            }
-            Self::Tokens(tokens) => {
-                todo!()
-            }
+            Self::Snippet(mut left_snippet) => match value {
+                Self::Snippet(mut right_snippet) => {
+                    left_snippet.append(&mut right_snippet);
+                    DiscreteContentResult::One(Self::Snippet(left_snippet))
+                }
+                Self::Tokens(right_tokens) => {
+                    todo!()
+                }
+            },
+            Self::Tokens(left_tokens) => match value {
+                Self::Snippet(right_snippet) => {
+                    todo!()
+                }
+                Self::Tokens(right_tokens) => {
+                    todo!()
+                }
+            },
         }
     }
 }
