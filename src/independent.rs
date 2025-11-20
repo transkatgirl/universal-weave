@@ -588,6 +588,9 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
                         } else {
                             child.from.insert(node.id);
                         }
+                        if child.active {
+                            node.active = true;
+                        }
                     }
 
                     self.nodes.insert(left_node.id, left_node);
