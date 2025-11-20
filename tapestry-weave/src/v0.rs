@@ -227,9 +227,23 @@ impl TapestryWeave {
             .filter_map(|id| self.weave.get_node(&id))
     }
     pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
-        // TODO: Deduplication!
+        let identifier = node.id;
+        let last_active = if node.active {
+            self.weave.get_active_thread().last()
+        } else {
+            None
+        };
 
-        self.weave.add_node(node)
+        let status = self.weave.add_node(node);
+
+        if self.weave.find_duplicates(&identifier).next().is_some() {
+            if let Some(last_active) = last_active {
+                self.weave.set_node_active_status(&last_active, true);
+            }
+            self.weave.remove_node(&identifier);
+        }
+
+        status
     }
     pub fn set_node_active_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_active_status(&id.0, value)
@@ -238,8 +252,6 @@ impl TapestryWeave {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
     pub fn split_node(&mut self, id: &Ulid, at: usize, new_id: Ulid) -> bool {
-        // TODO: Deduplication!
-
         self.weave.split_node(&id.0, at, new_id.0)
     }
     pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
