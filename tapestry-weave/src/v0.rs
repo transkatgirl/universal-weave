@@ -7,6 +7,8 @@ use universal_weave::{
     rkyv::{Archive, Deserialize, Serialize},
 };
 
+const MAGIC_STRING: &[u8] = b"TapestryWeave_version=000000;";
+
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct NodeContent {
     pub content: InnerNodeContent,
@@ -68,10 +70,34 @@ pub enum InnerNodeContent {
 
 impl InnerNodeContent {
     fn split(self, at: usize) -> DiscreteContentResult<Self> {
-        todo!()
+        if at == 0 {
+            return DiscreteContentResult::One(self);
+        }
+
+        match self {
+            Self::Snippet(mut snippet) => {
+                if snippet.len() >= at || !snippet.is_char_boundary(at) {
+                    return DiscreteContentResult::One(Self::Snippet(snippet));
+                }
+
+                let right = snippet.split_off(at);
+
+                DiscreteContentResult::Two((Self::Snippet(snippet), Self::Snippet(right)))
+            }
+            Self::Tokens(tokens) => {
+                todo!()
+            }
+        }
     }
     fn merge(self, value: Self) -> DiscreteContentResult<Self> {
-        todo!()
+        match self {
+            Self::Snippet(snippet) => {
+                todo!()
+            }
+            Self::Tokens(tokens) => {
+                todo!()
+            }
+        }
     }
 }
 
