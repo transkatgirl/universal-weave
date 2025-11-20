@@ -43,6 +43,15 @@ where
     T: IndependentContents,
 {
     fn move_node(&mut self, id: &u128, new_parents: &[u128]) -> bool;
+    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T>;
+}
+
+pub trait SemiIndependentWeave<N, T>
+where
+    N: Node<T>,
+    T: IndependentContents,
+{
+    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T>;
 }
 
 pub trait DiscreteWeave<N, T>

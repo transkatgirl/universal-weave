@@ -760,6 +760,9 @@ impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
 
         true
     }
+    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T> {
+        self.nodes.get_mut(id).map(|node| &mut node.contents)
+    }
 }
 
 impl<T> ArchivedNode<T> for ArchivedIndependentNode<T>

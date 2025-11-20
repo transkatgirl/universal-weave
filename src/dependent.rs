@@ -8,7 +8,7 @@ use rkyv::{
 
 use crate::{
     ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
-    DiscreteWeave, DuplicatableWeave, Node, Weave,
+    DiscreteWeave, DuplicatableWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug)]
@@ -384,6 +384,12 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
         } else {
             false
         }
+    }
+}
+
+impl<T: IndependentContents, M> SemiIndependentWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T> {
+        self.nodes.get_mut(id).map(|node| &mut node.contents)
     }
 }
 
