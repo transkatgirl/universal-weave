@@ -27,7 +27,7 @@ impl VersionedWeave {
             None
         }
     }
-    pub fn to_latest(self) -> v0::TapestryWeave {
+    pub fn into_latest(self) -> v0::TapestryWeave {
         match self {
             Self::V0(weave) => weave,
         }

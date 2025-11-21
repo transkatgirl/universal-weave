@@ -152,7 +152,7 @@ impl Weave {
 
         if let Some(weave) = VersionedWeave::from_bytes(bytes) {
             let mut weave = weave
-                .map(|weave| weave.to_latest())
+                .map(|weave| weave.into_latest())
                 .map_err(|err| err.to_string())?;
 
             if weave.capacity() < 16384 {
