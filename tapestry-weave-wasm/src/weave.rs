@@ -8,7 +8,7 @@ use tapestry_weave::{
         dependent::DependentNode,
         indexmap::{IndexMap, IndexSet},
     },
-    v0::{NodeContent as TapestryNodeContent, TapestryWeave},
+    v0::{InnerNodeContent, NodeContent as TapestryNodeContent, TapestryWeave},
 };
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -28,7 +28,29 @@ pub struct Node {
 
 impl From<&DependentNode<TapestryNodeContent>> for Node {
     fn from(value: &DependentNode<TapestryNodeContent>) -> Self {
-        todo!()
+        let contents = value.contents.clone();
+
+        Self {
+            id: value.id,
+            from: value.from,
+            to: value.to.iter().copied().collect(),
+            active: value.active,
+            bookmarked: value.bookmarked,
+            content: match contents.content {
+                InnerNodeContent::Snippet(snippet) => NodeContent::Snippet(snippet),
+                InnerNodeContent::Tokens(tokens) => NodeContent::Tokens(
+                    tokens
+                        .into_iter()
+                        .map(|(token, metadata)| (token, HashMap::from_iter(metadata)))
+                        .collect(),
+                ),
+            },
+            metadata: HashMap::from_iter(contents.metadata),
+            model: contents.model.map(|model| Model {
+                label: model.label,
+                metadata: HashMap::from_iter(model.metadata),
+            }),
+        }
     }
 }
 
@@ -40,9 +62,20 @@ impl From<DependentNode<TapestryNodeContent>> for Node {
             to: value.to.into_iter().collect(),
             active: value.active,
             bookmarked: value.bookmarked,
-            content: todo!(),
-            metadata: HashMap::from_iter(value.contents.metadata.into_iter()),
-            model: todo!(),
+            content: match value.contents.content {
+                InnerNodeContent::Snippet(snippet) => NodeContent::Snippet(snippet),
+                InnerNodeContent::Tokens(tokens) => NodeContent::Tokens(
+                    tokens
+                        .into_iter()
+                        .map(|(token, metadata)| (token, HashMap::from_iter(metadata)))
+                        .collect(),
+                ),
+            },
+            metadata: HashMap::from_iter(value.contents.metadata),
+            model: value.contents.model.map(|model| Model {
+                label: model.label,
+                metadata: HashMap::from_iter(model.metadata),
+            }),
         }
     }
 }
