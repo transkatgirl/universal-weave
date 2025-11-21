@@ -18,9 +18,9 @@ use crate::shared::Identifier;
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Node {
-    pub id: u128,
-    pub from: Option<u128>,
-    pub to: Vec<u128>,
+    pub id: Identifier,
+    pub from: Option<Identifier>,
+    pub to: Vec<Identifier>,
     pub active: bool,
     pub bookmarked: bool,
     pub content: NodeContent,
@@ -33,9 +33,9 @@ impl From<&DependentNode<TapestryNodeContent>> for Node {
         let contents = value.contents.clone();
 
         Self {
-            id: value.id,
-            from: value.from,
-            to: value.to.iter().copied().collect(),
+            id: Identifier(value.id),
+            from: value.from.map(Identifier),
+            to: value.to.iter().copied().map(Identifier).collect(),
             active: value.active,
             bookmarked: value.bookmarked,
             content: match contents.content {
@@ -59,9 +59,9 @@ impl From<&DependentNode<TapestryNodeContent>> for Node {
 impl From<DependentNode<TapestryNodeContent>> for Node {
     fn from(value: DependentNode<TapestryNodeContent>) -> Self {
         Self {
-            id: value.id,
-            from: value.from,
-            to: value.to.into_iter().collect(),
+            id: Identifier(value.id),
+            from: value.from.map(Identifier),
+            to: value.to.into_iter().map(Identifier).collect(),
             active: value.active,
             bookmarked: value.bookmarked,
             content: match value.contents.content {
@@ -85,9 +85,9 @@ impl From<DependentNode<TapestryNodeContent>> for Node {
 impl From<Node> for DependentNode<TapestryNodeContent> {
     fn from(value: Node) -> Self {
         Self {
-            id: value.id,
-            from: value.from,
-            to: value.to.into_iter().collect(),
+            id: value.id.0,
+            from: value.from.map(|id| id.0),
+            to: value.to.into_iter().map(|id| id.0).collect(),
             active: value.active,
             bookmarked: value.bookmarked,
             contents: TapestryNodeContent {
@@ -183,8 +183,8 @@ impl Weave {
     pub fn set_metadata(&mut self, value: WeaveMetadata) {
         self.weave.weave.metadata = IndexMap::from_iter(value.0);
     }
-    pub fn get_node(&self, id: u128) -> Option<Node> {
-        self.weave.weave.get_node(&id).map(Node::from)
+    pub fn get_node(&self, id: Identifier) -> Option<Node> {
+        self.weave.weave.get_node(&id.0).map(Node::from)
     }
     pub fn get_roots(&self) -> Vec<Node> {
         self.weave
@@ -210,28 +210,28 @@ impl Weave {
     pub fn add_node(&mut self, node: Node) -> bool {
         self.weave.add_node(node.into())
     }
-    pub fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
-        self.weave.weave.set_node_active_status(&id, value)
+    pub fn set_node_active_status(&mut self, id: Identifier, value: bool) -> bool {
+        self.weave.weave.set_node_active_status(&id.0, value)
     }
-    pub fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
-        self.weave.weave.set_node_bookmarked_status(&id, value)
+    pub fn set_node_bookmarked_status(&mut self, id: Identifier, value: bool) -> bool {
+        self.weave.weave.set_node_bookmarked_status(&id.0, value)
     }
-    pub fn split_node(&mut self, id: u128, at: usize) -> Option<u128> {
-        let new_id = Identifier::new().0;
+    pub fn split_node(&mut self, id: Identifier, at: usize) -> Option<Identifier> {
+        let new_id = Identifier::new();
 
-        if self.weave.weave.split_node(&id, at, new_id) {
+        if self.weave.weave.split_node(&id.0, at, new_id.0) {
             Some(new_id)
         } else {
             None
         }
     }
-    pub fn merge_with_parent(&mut self, id: u128) -> bool {
-        self.weave.weave.merge_with_parent(&id)
+    pub fn merge_with_parent(&mut self, id: Identifier) -> bool {
+        self.weave.weave.merge_with_parent(&id.0)
     }
-    pub fn is_mergeable_with_parent(&mut self, id: u128) -> bool {
-        self.weave.is_mergeable_with_parent(&Ulid(id))
+    pub fn is_mergeable_with_parent(&mut self, id: Identifier) -> bool {
+        self.weave.is_mergeable_with_parent(&Ulid(id.0))
     }
-    pub fn remove_node(&mut self, id: u128) -> Option<Node> {
-        self.weave.weave.remove_node(&id).map(Node::from)
+    pub fn remove_node(&mut self, id: Identifier) -> Option<Node> {
+        self.weave.weave.remove_node(&id.0).map(Node::from)
     }
 }
