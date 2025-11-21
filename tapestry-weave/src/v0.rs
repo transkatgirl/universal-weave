@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc};
+use std::rc::Rc;
 
 use rkyv::util::AlignedVec;
 use ulid::Ulid;
@@ -6,13 +6,14 @@ use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     DuplicatableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
+    indexmap::IndexMap,
     rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct NodeContent {
     pub content: InnerNodeContent,
-    pub metadata: Rc<HashMap<String, String>>,
+    pub metadata: Rc<IndexMap<String, String>>,
     pub model: Option<Rc<Model>>,
 }
 
@@ -75,7 +76,7 @@ impl DeduplicatableContents for NodeContent {
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub enum InnerNodeContent {
     Snippet(Vec<u8>),
-    Tokens(Vec<(Vec<u8>, HashMap<String, String>)>),
+    Tokens(Vec<(Vec<u8>, IndexMap<String, String>)>),
 }
 
 impl InnerNodeContent {
@@ -173,11 +174,11 @@ impl InnerNodeContent {
 #[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
 pub struct Model {
     pub label: String,
-    pub metadata: HashMap<String, String>,
+    pub metadata: IndexMap<String, String>,
 }
 
 pub struct TapestryWeave {
-    pub weave: DependentWeave<NodeContent, HashMap<String, String>>,
+    pub weave: DependentWeave<NodeContent, IndexMap<String, String>>,
 }
 
 impl TapestryWeave {
@@ -189,7 +190,7 @@ impl TapestryWeave {
     pub fn to_bytes(&self) -> Result<AlignedVec, Error> {
         to_bytes::<Error>(&self.weave)
     }
-    pub fn with_capacity(capacity: usize, metadata: HashMap<String, String>) -> Self {
+    pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {
         Self {
             weave: DependentWeave::with_capacity(capacity, metadata),
         }
