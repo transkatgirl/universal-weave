@@ -27,4 +27,16 @@ impl<'a> VersionedBytes<'a> {
     pub fn to_bytes(self) -> (&'static [u8], [u8; 8], Cow<'a, [u8]>) {
         (FORMAT_IDENTIFIER, self.version.to_le_bytes(), self.data)
     }
+    pub fn to_byte_iterator(self) -> impl Iterator<Item = u8> {
+        let byte_set = self.to_bytes();
+
+        byte_set
+            .0
+            .iter()
+            .copied()
+            .chain(byte_set.1.into_iter().chain(match byte_set.2 {
+                Cow::Owned(b) => b,
+                Cow::Borrowed(b) => b.to_owned(),
+            }))
+    }
 }

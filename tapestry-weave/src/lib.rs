@@ -6,7 +6,7 @@ pub use ulid;
 pub use universal_weave;
 
 pub mod v0;
-mod versioning;
+pub mod versioning;
 
 use crate::versioning::VersionedBytes;
 
@@ -19,7 +19,7 @@ impl VersionedWeave {
     pub fn from_bytes(value: &[u8]) -> Option<Result<Self, Error>> {
         if let Some(versioned) = VersionedBytes::from_bytes(value) {
             match versioned.version {
-                0 => Some(v0::TapestryWeave::from_bytes(&versioned.data).map(Self::V0)),
+                0 => Some(v0::TapestryWeave::from_unversioned_bytes(&versioned.data).map(Self::V0)),
                 _ => None,
             }
         } else {
@@ -33,25 +33,14 @@ impl VersionedWeave {
     }
     pub fn to_bytes(self) -> Result<impl Iterator<Item = u8>, Error> {
         let (version, bytes) = match self {
-            Self::V0(weave) => (0, weave.to_bytes()?),
+            Self::V0(weave) => (0, weave.to_unversioned_bytes()?),
         };
 
-        let byte_set = VersionedBytes {
+        Ok(VersionedBytes {
             version,
             data: Cow::Owned(bytes.into_vec()),
         }
-        .to_bytes();
-
-        let bytes = match byte_set.2 {
-            Cow::Owned(b) => b,
-            Cow::Borrowed(_) => panic!(),
-        };
-
-        Ok(byte_set
-            .0
-            .iter()
-            .copied()
-            .chain(byte_set.1.into_iter().chain(bytes)))
+        .to_byte_iterator())
     }
 }
 

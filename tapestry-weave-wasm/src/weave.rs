@@ -2,6 +2,7 @@ use std::{collections::HashMap, str};
 
 use serde::{Deserialize, Serialize};
 use tapestry_weave::{
+    VersionedWeave,
     ulid::Ulid,
     universal_weave::{
         DiscreteWeave, Weave as UniversalWeave, dependent::DependentNode, indexmap::IndexMap,
@@ -145,22 +146,28 @@ impl Weave {
             weave: TapestryWeave::with_capacity(16384, IndexMap::new()),
         }
     }
-    pub fn v0_from_bytes(bytes: &[u8]) -> Result<Self, String> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
 
-        let mut weave = TapestryWeave::from_bytes(bytes).map_err(|err| err.to_string())?;
+        if let Some(weave) = VersionedWeave::from_bytes(bytes) {
+            let mut weave = weave
+                .map(|weave| weave.to_latest())
+                .map_err(|err| err.to_string())?;
 
-        if weave.capacity() < 16384 {
-            weave.reserve(16384 - weave.capacity());
+            if weave.capacity() < 16384 {
+                weave.reserve(16384 - weave.capacity());
+            }
+
+            Ok(Self { weave })
+        } else {
+            Err("Invalid header".to_string())
         }
-
-        Ok(Self { weave })
     }
-    pub fn v0_to_bytes(&self) -> Result<Vec<u8>, String> {
+    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
         self.weave
-            .to_bytes()
-            .map(|bytes| bytes.into_vec())
+            .to_versioned_bytes()
+            .map(|bytes| bytes.collect())
             .map_err(|err| err.to_string())
     }
     pub fn len(&self) -> usize {
