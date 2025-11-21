@@ -24,11 +24,11 @@ impl<'a> VersionedBytes<'a> {
             None
         }
     }
-    pub fn to_bytes(self) -> (&'static [u8], [u8; 8], Cow<'a, [u8]>) {
+    pub fn to_byte_set(self) -> (&'static [u8], [u8; 8], Cow<'a, [u8]>) {
         (FORMAT_IDENTIFIER, self.version.to_le_bytes(), self.data)
     }
-    pub fn to_byte_iterator(self) -> impl Iterator<Item = u8> {
-        let byte_set = self.to_bytes();
+    pub fn to_bytes(self) -> Vec<u8> {
+        let byte_set = self.to_byte_set();
 
         byte_set
             .0
@@ -38,5 +38,6 @@ impl<'a> VersionedBytes<'a> {
                 Cow::Owned(b) => b,
                 Cow::Borrowed(b) => b.to_owned(),
             }))
+            .collect()
     }
 }

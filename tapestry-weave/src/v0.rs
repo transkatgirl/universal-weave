@@ -198,12 +198,12 @@ impl TapestryWeave {
     pub fn to_unversioned_bytes(&self) -> Result<AlignedVec, Error> {
         to_bytes::<Error>(&self.weave)
     }
-    pub fn to_versioned_bytes(&self) -> Result<impl Iterator<Item = u8>, Error> {
+    pub fn to_versioned_bytes(&self) -> Result<Vec<u8>, Error> {
         Ok(VersionedBytes {
             version: 0,
             data: Cow::Owned(self.to_unversioned_bytes()?.into_vec()),
         }
-        .to_byte_iterator())
+        .to_bytes())
     }
     pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {
         Self {

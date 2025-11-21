@@ -167,7 +167,6 @@ impl Weave {
     pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
         self.weave
             .to_versioned_bytes()
-            .map(|bytes| bytes.collect())
             .map_err(|err| err.to_string())
     }
     pub fn len(&self) -> usize {

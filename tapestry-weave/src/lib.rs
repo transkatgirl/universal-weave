@@ -31,7 +31,7 @@ impl VersionedWeave {
             Self::V0(weave) => weave,
         }
     }
-    pub fn to_bytes(self) -> Result<impl Iterator<Item = u8>, Error> {
+    pub fn to_bytes(self) -> Result<Vec<u8>, Error> {
         let (version, bytes) = match self {
             Self::V0(weave) => (0, weave.to_unversioned_bytes()?),
         };
@@ -40,7 +40,7 @@ impl VersionedWeave {
             version,
             data: Cow::Owned(bytes.into_vec()),
         }
-        .to_byte_iterator())
+        .to_bytes())
     }
 }
 
