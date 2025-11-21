@@ -1,40 +1,50 @@
-use std::{borrow::Cow, collections::HashMap, str};
+use std::{collections::HashMap, str};
 
 use serde::{Deserialize, Serialize};
 use tapestry_weave::{
     ulid::Ulid,
-    universal_weave::indexmap::{IndexMap, IndexSet},
-    v0::TapestryWeave,
+    universal_weave::{
+        Weave as UniversalWeave,
+        dependent::DependentNode,
+        indexmap::{IndexMap, IndexSet},
+    },
+    v0::{NodeContent as TapestryNodeContent, TapestryWeave},
 };
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct Node<'a> {
+pub struct Node {
     pub id: u128,
     pub from: Vec<u128>,
     pub to: Vec<u128>,
     pub active: bool,
     pub bookmarked: bool,
-    pub content: NodeContent<'a>,
-    pub metadata: Cow<'a, HashMap<String, String>>,
-    pub model: Model<'a>,
+    pub content: NodeContent,
+    pub metadata: HashMap<String, String>,
+    pub model: Model,
+}
+
+impl Node {
+    fn from_weave_node(node: &DependentNode<TapestryNodeContent>) -> Self {
+        todo!()
+    }
 }
 
 #[allow(clippy::type_complexity)]
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum NodeContent<'a> {
-    Snippet(Cow<'a, [u8]>),
-    Tokens(Cow<'a, Vec<(Vec<u8>, HashMap<String, String>)>>),
+pub enum NodeContent {
+    Snippet(Vec<u8>),
+    Tokens(Vec<(Vec<u8>, HashMap<String, String>)>),
 }
 
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct Model<'a> {
-    pub label: Cow<'a, str>,
-    pub metadata: Cow<'a, HashMap<String, String>>,
+pub struct Model {
+    pub label: String,
+    pub metadata: HashMap<String, String>,
 }
 
 #[wasm_bindgen]
@@ -88,5 +98,8 @@ impl Weave {
     #[wasm_bindgen(setter = metadata)]
     pub fn set_metadata(&mut self, value: WeaveMetadata) {
         self.weave.weave.metadata = value.0;
+    }
+    pub fn get_node(&self, id: u128) -> Option<Node> {
+        self.weave.weave.get_node(&id).map(Node::from_weave_node)
     }
 }
