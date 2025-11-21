@@ -34,7 +34,7 @@ impl From<&DependentNode<TapestryNodeContent>> for Node {
 
 impl From<DependentNode<TapestryNodeContent>> for Node {
     fn from(value: DependentNode<TapestryNodeContent>) -> Self {
-        todo!()
+        Self::from(&value)
     }
 }
 
@@ -79,7 +79,7 @@ impl Weave {
             weave: TapestryWeave::with_capacity(16384, IndexMap::new()),
         }
     }
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+    pub fn v0_from_bytes(bytes: &[u8]) -> Result<Self, String> {
         #[cfg(feature = "console_error_panic_hook")]
         console_error_panic_hook::set_once();
 
@@ -91,7 +91,7 @@ impl Weave {
 
         Ok(Self { weave })
     }
-    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+    pub fn v0_to_bytes(&self) -> Result<Vec<u8>, String> {
         self.weave
             .to_bytes()
             .map(|bytes| bytes.into_vec())
