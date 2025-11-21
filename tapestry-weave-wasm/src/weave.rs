@@ -115,13 +115,25 @@ impl Weave {
         self.weave.weave.get_node(&id).map(Node::from)
     }
     pub fn get_roots(&self) -> Vec<Node> {
-        todo!()
+        self.weave
+            .weave
+            .get_roots()
+            .filter_map(|id| self.weave.weave.get_node(&id).map(Node::from))
+            .collect()
     }
     pub fn get_bookmarks(&self) -> Vec<Node> {
-        todo!()
+        self.weave
+            .weave
+            .get_bookmarks()
+            .filter_map(|id| self.weave.weave.get_node(&id).map(Node::from))
+            .collect()
     }
     pub fn get_active_thread(&self) -> Vec<Node> {
-        todo!()
+        self.weave
+            .weave
+            .get_active_thread()
+            .filter_map(|id| self.weave.weave.get_node(&id).map(Node::from))
+            .collect()
     }
     pub fn add_node(&mut self, node: Node) -> bool {
         self.weave.add_node(node.into())
