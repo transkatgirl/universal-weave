@@ -66,7 +66,7 @@ pub struct Weave {
 
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WeaveMetadata(IndexMap<String, String>);
+pub struct WeaveMetadata(HashMap<String, String>);
 
 #[wasm_bindgen]
 impl Weave {
@@ -105,11 +105,17 @@ impl Weave {
     }
     #[wasm_bindgen(getter = metadata)]
     pub fn get_metadata(&self) -> WeaveMetadata {
-        WeaveMetadata(self.weave.weave.metadata.to_owned())
+        WeaveMetadata(HashMap::from_iter(
+            self.weave
+                .weave
+                .metadata
+                .iter()
+                .map(|(k, v)| (k.to_owned(), v.to_owned())),
+        ))
     }
     #[wasm_bindgen(setter = metadata)]
     pub fn set_metadata(&mut self, value: WeaveMetadata) {
-        self.weave.weave.metadata = value.0;
+        self.weave.weave.metadata = IndexMap::from_iter(value.0);
     }
     pub fn get_node(&self, id: u128) -> Option<Node> {
         self.weave.weave.get_node(&id).map(Node::from)
