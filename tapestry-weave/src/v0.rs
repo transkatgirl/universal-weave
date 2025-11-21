@@ -186,12 +186,12 @@ pub struct TapestryWeave {
 }
 
 impl TapestryWeave {
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+    pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self {
             weave: from_bytes::<_, Error>(bytes)?,
         })
     }
-    pub fn to_bytes(&self) -> Result<AlignedVec, Error> {
+    pub(super) fn to_bytes(&self) -> Result<AlignedVec, Error> {
         to_bytes::<Error>(&self.weave)
     }
     pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {

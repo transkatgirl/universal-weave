@@ -1,10 +1,61 @@
+use std::borrow::Cow;
+
+use rkyv::rancor::Error;
+
 pub use ulid;
 pub use universal_weave;
 
 pub mod v0;
+mod versioning;
+
+use crate::versioning::VersionedBytes;
+
+#[non_exhaustive]
+pub enum VersionedWeave {
+    V0(v0::TapestryWeave),
+}
+
+impl VersionedWeave {
+    pub fn from_bytes(value: &[u8]) -> Option<Result<Self, Error>> {
+        if let Some(versioned) = VersionedBytes::from_bytes(value) {
+            match versioned.version {
+                0 => Some(v0::TapestryWeave::from_bytes(&versioned.data).map(Self::V0)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+    pub fn to_latest(self) -> v0::TapestryWeave {
+        match self {
+            Self::V0(weave) => weave,
+        }
+    }
+    pub fn to_bytes(self) -> Result<impl Iterator<Item = u8>, Error> {
+        let (version, bytes) = match self {
+            Self::V0(weave) => (0, weave.to_bytes()?),
+        };
+
+        let byte_set = VersionedBytes {
+            version,
+            data: Cow::Owned(bytes.into_vec()),
+        }
+        .to_bytes();
+
+        let bytes = match byte_set.2 {
+            Cow::Owned(b) => b,
+            Cow::Borrowed(_) => panic!(),
+        };
+
+        Ok(byte_set
+            .0
+            .iter()
+            .copied()
+            .chain(byte_set.1.into_iter().chain(bytes)))
+    }
+}
 
 // TODO:
-// - Implement format versioning
 // - [v0] Implement string-based tree updates
 // - Implement v1 format based on IndependentWeave
 //   - Implement diff-based tree updates
