@@ -29,8 +29,16 @@ getrandom = { version = "*", features = [
 serde = { version = "1.0.228", features = [
 	"derive",
 ] }
+ulid = { version = "*", features = [
+	"serde",
+] }
+web-time = { version = "1.1.0", features = [
+	"serde",
+] }
+rand = "*"
+serde-wasm-bindgen = "0.6.5"
 serde_json = { version = "1.0.145", features = [
-	"indexmap",
+	"preserve_order",
 ] }
 
 [dev-dependencies]
