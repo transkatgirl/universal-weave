@@ -4,7 +4,8 @@ pub use universal_weave;
 pub mod v0;
 
 // TODO:
-// - Implement file versioning
+// - Implement format versioning
+// - [v0] Implement string-based tree updates
 // - Implement v1 format based on IndependentWeave
 //   - Implement diff-based tree updates
 //   - Implement prefix-based deduplication?
