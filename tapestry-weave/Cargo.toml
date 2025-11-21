@@ -8,21 +8,7 @@ license = "Unlicense"
 description = "An implementation of Tapestry Loom's document format."
 edition = "2024"
 
-#[lib]
-#crate-type = [
-#	"cdylib",
-#	"rlib",
-#]
-
 [dependencies]
 ulid            = "1.2.1"
 rkyv            = "*"
 universal-weave = { path = ".." }
-#wasm-bindgen    = "0.2.84"
-
-#[dev-dependencies]
-#wasm-bindgen-test = "0.3.34"
-
-#[profile.release]
-#strip = "symbols"
-#panic = "abort"
