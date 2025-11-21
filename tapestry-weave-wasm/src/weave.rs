@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use tapestry_weave::{
     ulid::Ulid,
     universal_weave::{
-        DiscreteWeave, Weave as UniversalWeave,
-        dependent::DependentNode,
-        indexmap::{IndexMap, IndexSet},
+        DiscreteWeave, Weave as UniversalWeave, dependent::DependentNode, indexmap::IndexMap,
     },
-    v0::{InnerNodeContent, NodeContent as TapestryNodeContent, TapestryWeave},
+    v0::{
+        InnerNodeContent, Model as TapestryModel, NodeContent as TapestryNodeContent, TapestryWeave,
+    },
 };
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
@@ -82,7 +82,29 @@ impl From<DependentNode<TapestryNodeContent>> for Node {
 
 impl From<Node> for DependentNode<TapestryNodeContent> {
     fn from(value: Node) -> Self {
-        todo!()
+        Self {
+            id: value.id,
+            from: value.from,
+            to: value.to.into_iter().collect(),
+            active: value.active,
+            bookmarked: value.bookmarked,
+            contents: TapestryNodeContent {
+                content: match value.content {
+                    NodeContent::Snippet(snippet) => InnerNodeContent::Snippet(snippet),
+                    NodeContent::Tokens(tokens) => InnerNodeContent::Tokens(
+                        tokens
+                            .into_iter()
+                            .map(|(token, metadata)| (token, IndexMap::from_iter(metadata)))
+                            .collect(),
+                    ),
+                },
+                metadata: IndexMap::from_iter(value.metadata),
+                model: value.model.map(|model| TapestryModel {
+                    label: model.label,
+                    metadata: IndexMap::from_iter(model.metadata),
+                }),
+            },
+        }
     }
 }
 
