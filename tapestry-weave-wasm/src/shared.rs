@@ -1,12 +1,11 @@
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tapestry_weave::ulid::Ulid;
-use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 use web_time::{Duration, SystemTime};
 
 #[wasm_bindgen]
-#[derive(Tsify, Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Identifier(pub u128);
 
 #[wasm_bindgen]
