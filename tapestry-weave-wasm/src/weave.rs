@@ -1,6 +1,5 @@
 use std::{borrow::Cow, collections::HashMap, str};
 
-use js_sys::Map;
 use serde::{Deserialize, Serialize};
 use tapestry_weave::{
     ulid::Ulid,
@@ -87,9 +86,7 @@ impl Weave {
         WeaveMetadata(self.weave.weave.metadata.to_owned())
     }
     #[wasm_bindgen(setter = metadata)]
-    pub fn set_metadata(&mut self, value: WeaveMetadata) -> Result<(), String> {
+    pub fn set_metadata(&mut self, value: WeaveMetadata) {
         self.weave.weave.metadata = value.0;
-
-        Ok(())
     }
 }
