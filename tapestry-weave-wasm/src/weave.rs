@@ -13,6 +13,8 @@ use tapestry_weave::{
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
+use crate::shared::Identifier;
+
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Node {
@@ -130,7 +132,7 @@ pub struct Weave {
 
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WeaveMetadata(HashMap<String, String>);
+pub struct WeaveMetadata(pub HashMap<String, String>);
 
 #[wasm_bindgen]
 impl Weave {
@@ -215,7 +217,7 @@ impl Weave {
         self.weave.weave.set_node_bookmarked_status(&id, value)
     }
     pub fn split_node(&mut self, id: u128, at: usize) -> Option<u128> {
-        let new_id = super::identifiers::new_identifier();
+        let new_id = Identifier::new().0;
 
         if self.weave.weave.split_node(&id, at, new_id) {
             Some(new_id)
