@@ -1,6 +1,11 @@
 .DS_Store
 /target
+#Cargo.lock
 /verif
 /why3find.json
 /.why3find
 /reference
+**/*.rs.bk
+bin/
+pkg/
+wasm-pack.log

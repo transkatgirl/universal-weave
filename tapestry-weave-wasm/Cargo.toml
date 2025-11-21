@@ -1,0 +1,32 @@
+[package]
+name = "tapestry-weave-wasm"
+version = "0.0.0"
+authors = [
+	"transkatgirl",
+]
+license = "Unlicense"
+description = "A WebAssembly wrapper for Tapestry Loom's document format."
+edition = "2024"
+
+[lib]
+crate-type = [
+	"cdylib",
+	"rlib",
+]
+
+[features]
+default = [
+	"console_error_panic_hook",
+]
+
+[dependencies]
+wasm-bindgen             = "0.2.84"
+console_error_panic_hook = { version = "0.1.7", optional = true }
+tapestry-weave           = { path = "../tapestry-weave" }
+
+[dev-dependencies]
+wasm-bindgen-test = "0.3.34"
+
+[profile.release]
+strip = "symbols"
+panic = "abort"
