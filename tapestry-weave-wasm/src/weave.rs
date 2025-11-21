@@ -84,4 +84,10 @@ impl Weave {
 
         Ok(Self { weave })
     }
+    pub fn to_bytes(&self) -> Result<Vec<u8>, String> {
+        self.weave
+            .to_bytes()
+            .map(|bytes| bytes.into_vec())
+            .map_err(|err| err.to_string())
+    }
 }
