@@ -1,14 +1,17 @@
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, str};
 
+use js_sys::Map;
 use serde::{Deserialize, Serialize};
 use tapestry_weave::{
     ulid::Ulid,
     universal_weave::indexmap::{IndexMap, IndexSet},
     v0::TapestryWeave,
 };
+use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Node<'a> {
     pub id: u128,
     pub from: Vec<u128>,
@@ -20,23 +23,16 @@ pub struct Node<'a> {
     pub model: Model<'a>,
 }
 
-impl<'a> Node<'a> {
-    fn from_json(value: &str) -> Result<Self, String> {
-        serde_json::from_str(value).map_err(|err| err.to_string())
-    }
-    fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string(self).map_err(|err| err.to_string())
-    }
-}
-
 #[allow(clippy::type_complexity)]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum NodeContent<'a> {
     Snippet(Cow<'a, [u8]>),
     Tokens(Cow<'a, Vec<(Vec<u8>, HashMap<String, String>)>>),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Model<'a> {
     pub label: Cow<'a, str>,
     pub metadata: Cow<'a, HashMap<String, String>>,
@@ -46,6 +42,10 @@ pub struct Model<'a> {
 pub struct Weave {
     weave: TapestryWeave,
 }
+
+#[derive(Tsify, Serialize, Deserialize, Debug)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WeaveMetadata(IndexMap<String, String>);
 
 #[wasm_bindgen]
 impl Weave {
@@ -82,13 +82,13 @@ impl Weave {
     pub fn is_empty(&self) -> bool {
         self.weave.is_empty()
     }
-    #[wasm_bindgen(getter = metadata_json)]
-    pub fn get_metadata(&self) -> Result<String, String> {
-        serde_json::to_string(&self.weave.weave.metadata).map_err(|err| err.to_string())
+    #[wasm_bindgen(getter = metadata)]
+    pub fn get_metadata(&self) -> WeaveMetadata {
+        WeaveMetadata(self.weave.weave.metadata.to_owned())
     }
-    #[wasm_bindgen(setter = metadata_json)]
-    pub fn set_metadata(&mut self, value: &str) -> Result<(), String> {
-        self.weave.weave.metadata = serde_json::from_str(value).map_err(|err| err.to_string())?;
+    #[wasm_bindgen(setter = metadata)]
+    pub fn set_metadata(&mut self, value: WeaveMetadata) -> Result<(), String> {
+        self.weave.weave.metadata = value.0;
 
         Ok(())
     }
