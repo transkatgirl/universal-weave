@@ -133,8 +133,6 @@ checksum = "0ad4bb2b565bca0645f4d68c5c9af97fba094e9791da685bf83cb5f3ce74acf2"
 dependencies = [
  "equivalent",
  "hashbrown 0.16.1",
- "serde",
- "serde_core",
 ]
 
 [[package]]
@@ -455,13 +453,10 @@ version = "0.0.0"
 dependencies = [
  "console_error_panic_hook",
  "getrandom",
- "indexmap",
- "js-sys",
  "rand",
  "serde",
  "tapestry-weave",
  "tsify",
- "ulid",
  "wasm-bindgen",
  "wasm-bindgen-test",
  "web-time",
@@ -515,7 +510,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "470dbf6591da1b39d43c14523b2b469c86879a53e8b758c8e090a470fe7b1fbe"
 dependencies = [
  "rand",
- "serde",
  "web-time",
 ]
 
