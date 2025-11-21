@@ -9,12 +9,16 @@ use contracts::*;
 use indexmap::IndexSet;
 use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+
 use crate::{
     ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
     DiscreteWeave, DuplicatableWeave, IndependentContents, Node, Weave,
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentNode<T>
 where
     T: IndependentContents,
@@ -60,7 +64,8 @@ impl<T: IndependentContents> Node<T> for IndependentNode<T> {
     }
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentWeave<T, M>
 where
     T: IndependentContents,

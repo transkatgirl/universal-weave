@@ -8,7 +8,16 @@ license = "Unlicense"
 description = "An implementation of Tapestry Loom's document format."
 edition = "2024"
 
+[features]
+serde = [
+	"dep:serde",
+	"universal-weave/serde",
+]
+
 [dependencies]
-ulid            = "1.2.1"
-rkyv            = "*"
+ulid = "1.2.1"
+rkyv = "*"
 universal-weave = { path = ".." }
+serde = { version = "1.0.228", features = [
+	"derive",
+], optional = true }

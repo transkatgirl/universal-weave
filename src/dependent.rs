@@ -6,12 +6,16 @@ use rkyv::{
     Archive, Deserialize, Serialize, hash::FxHasher64, option::ArchivedOption, rend::u128_le,
 };
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+
 use crate::{
     ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
     DiscreteWeave, DuplicatableWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentNode<T> {
     pub id: u128,
     pub from: Option<u128>,
@@ -54,7 +58,8 @@ impl<T> Node<T> for DependentNode<T> {
     }
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentWeave<T, M> {
     nodes: HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
     roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,

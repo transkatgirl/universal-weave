@@ -17,13 +17,13 @@ use wasm_bindgen::prelude::*;
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct Node {
     pub id: u128,
-    pub from: Vec<u128>,
+    pub from: Option<u128>,
     pub to: Vec<u128>,
     pub active: bool,
     pub bookmarked: bool,
     pub content: NodeContent,
     pub metadata: HashMap<String, String>,
-    pub model: Model,
+    pub model: Option<Model>,
 }
 
 impl From<&DependentNode<TapestryNodeContent>> for Node {
@@ -34,7 +34,16 @@ impl From<&DependentNode<TapestryNodeContent>> for Node {
 
 impl From<DependentNode<TapestryNodeContent>> for Node {
     fn from(value: DependentNode<TapestryNodeContent>) -> Self {
-        Self::from(&value)
+        Self {
+            id: value.id,
+            from: value.from,
+            to: value.to.into_iter().collect(),
+            active: value.active,
+            bookmarked: value.bookmarked,
+            content: todo!(),
+            metadata: HashMap::from_iter(value.contents.metadata.into_iter()),
+            model: todo!(),
+        }
     }
 }
 

@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
@@ -10,11 +8,15 @@ use universal_weave::{
     rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[cfg(feature = "serde")]
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct NodeContent {
     pub content: InnerNodeContent,
-    pub metadata: Rc<IndexMap<String, String>>,
-    pub model: Option<Rc<Model>>,
+    pub metadata: IndexMap<String, String>,
+    pub model: Option<Model>,
 }
 
 impl DiscreteContents for NodeContent {
@@ -73,7 +75,8 @@ impl DeduplicatableContents for NodeContent {
     }
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub enum InnerNodeContent {
     Snippet(Vec<u8>),
     Tokens(Vec<(Vec<u8>, IndexMap<String, String>)>),
@@ -171,7 +174,8 @@ impl InnerNodeContent {
     }
 }
 
-#[derive(Archive, Deserialize, Serialize, Debug, PartialEq, Eq)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct Model {
     pub label: String,
     pub metadata: IndexMap<String, String>,

@@ -8,6 +8,12 @@ license = "Unlicense"
 description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
+[features]
+serde = [
+	"dep:serde",
+	"indexmap/serde",
+]
+
 [dependencies]
 contracts = "0.6.7"
 indexmap = "2.12.1"
@@ -17,6 +23,9 @@ rkyv = { version = "0.8.12", features = [
 	"pointer_width_32",
 	"indexmap-2",
 ] }
+serde = { version = "1.0.228", features = [
+	"derive",
+], optional = true }
 
 [workspace]
 members = [
