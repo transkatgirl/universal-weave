@@ -32,28 +32,14 @@ impl<'a> Node<'a> {
 #[allow(clippy::type_complexity)]
 #[derive(Serialize, Deserialize, Debug)]
 pub enum NodeContent<'a> {
-    Snippet(Cow<'a, Vec<u8>>),
+    Snippet(Cow<'a, [u8]>),
     Tokens(Cow<'a, Vec<(Vec<u8>, HashMap<String, String>)>>),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Model<'a> {
-    pub label: Cow<'a, String>,
+    pub label: Cow<'a, str>,
     pub metadata: Cow<'a, HashMap<String, String>>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct WeaveMetadata<'a> {
-    pub metadata: Cow<'a, HashMap<String, String>>,
-}
-
-impl<'a> WeaveMetadata<'a> {
-    fn from_json(value: &str) -> Result<Self, String> {
-        serde_json::from_str(value).map_err(|err| err.to_string())
-    }
-    fn to_json(&self) -> Result<String, String> {
-        serde_json::to_string(self).map_err(|err| err.to_string())
-    }
 }
 
 #[wasm_bindgen]
@@ -89,5 +75,21 @@ impl Weave {
             .to_bytes()
             .map(|bytes| bytes.into_vec())
             .map_err(|err| err.to_string())
+    }
+    pub fn len(&self) -> usize {
+        self.weave.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.weave.is_empty()
+    }
+    #[wasm_bindgen(getter = metadata_json)]
+    pub fn get_metadata(&self) -> Result<String, String> {
+        serde_json::to_string(&self.weave.weave.metadata).map_err(|err| err.to_string())
+    }
+    #[wasm_bindgen(setter = metadata_json)]
+    pub fn set_metadata(&mut self, value: &str) -> Result<(), String> {
+        self.weave.weave.metadata = serde_json::from_str(value).map_err(|err| err.to_string())?;
+
+        Ok(())
     }
 }
