@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tapestry_weave::{
     ulid::Ulid,
     universal_weave::{
-        Weave as UniversalWeave,
+        DiscreteWeave, Weave as UniversalWeave,
         dependent::DependentNode,
         indexmap::{IndexMap, IndexSet},
     },
@@ -26,8 +26,20 @@ pub struct Node {
     pub model: Model,
 }
 
-impl Node {
-    fn from_weave_node(node: &DependentNode<TapestryNodeContent>) -> Self {
+impl From<&DependentNode<TapestryNodeContent>> for Node {
+    fn from(value: &DependentNode<TapestryNodeContent>) -> Self {
+        todo!()
+    }
+}
+
+impl From<DependentNode<TapestryNodeContent>> for Node {
+    fn from(value: DependentNode<TapestryNodeContent>) -> Self {
+        todo!()
+    }
+}
+
+impl From<Node> for DependentNode<TapestryNodeContent> {
+    fn from(value: Node) -> Self {
         todo!()
     }
 }
@@ -100,6 +112,42 @@ impl Weave {
         self.weave.weave.metadata = value.0;
     }
     pub fn get_node(&self, id: u128) -> Option<Node> {
-        self.weave.weave.get_node(&id).map(Node::from_weave_node)
+        self.weave.weave.get_node(&id).map(Node::from)
+    }
+    pub fn get_roots(&self) -> Vec<Node> {
+        todo!()
+    }
+    pub fn get_bookmarks(&self) -> Vec<Node> {
+        todo!()
+    }
+    pub fn get_active_thread(&self) -> Vec<Node> {
+        todo!()
+    }
+    pub fn add_node(&mut self, node: Node) -> bool {
+        self.weave.add_node(node.into())
+    }
+    pub fn set_node_active_status(&mut self, id: u128, value: bool) -> bool {
+        self.weave.weave.set_node_active_status(&id, value)
+    }
+    pub fn set_node_bookmarked_status(&mut self, id: u128, value: bool) -> bool {
+        self.weave.weave.set_node_bookmarked_status(&id, value)
+    }
+    pub fn split_node(&mut self, id: u128, at: usize) -> Option<u128> {
+        let new_id = super::identifiers::new_identifier();
+
+        if self.weave.weave.split_node(&id, at, new_id) {
+            Some(new_id)
+        } else {
+            None
+        }
+    }
+    pub fn merge_with_parent(&mut self, id: u128) -> bool {
+        self.weave.weave.merge_with_parent(&id)
+    }
+    pub fn is_mergeable_with_parent(&mut self, id: u128) -> bool {
+        self.weave.is_mergeable_with_parent(&Ulid(id))
+    }
+    pub fn remove_node(&mut self, id: u128) -> Option<Node> {
+        self.weave.weave.remove_node(&id).map(Node::from)
     }
 }
