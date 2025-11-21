@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use rkyv::rancor::Error;
 
 pub use ulid;
@@ -8,7 +6,7 @@ pub use universal_weave;
 pub mod v0;
 pub mod versioning;
 
-use crate::versioning::VersionedBytes;
+use crate::versioning::{MixedData, VersionedBytes};
 
 #[non_exhaustive]
 pub enum VersionedWeave {
@@ -19,7 +17,10 @@ impl VersionedWeave {
     pub fn from_bytes(value: &[u8]) -> Option<Result<Self, Error>> {
         if let Some(versioned) = VersionedBytes::from_bytes(value) {
             match versioned.version {
-                0 => Some(v0::TapestryWeave::from_unversioned_bytes(&versioned.data).map(Self::V0)),
+                0 => Some(
+                    v0::TapestryWeave::from_unversioned_bytes(versioned.data.as_ref())
+                        .map(Self::V0),
+                ),
                 _ => None,
             }
         } else {
@@ -38,7 +39,7 @@ impl VersionedWeave {
 
         Ok(VersionedBytes {
             version,
-            data: Cow::Owned(bytes.into_vec()),
+            data: MixedData::Output(bytes),
         }
         .to_bytes())
     }

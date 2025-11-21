@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
@@ -13,7 +11,7 @@ use universal_weave::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-use crate::versioning::VersionedBytes;
+use crate::versioning::{MixedData, VersionedBytes};
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
@@ -201,7 +199,7 @@ impl TapestryWeave {
     pub fn to_versioned_bytes(&self) -> Result<Vec<u8>, Error> {
         Ok(VersionedBytes {
             version: 0,
-            data: Cow::Owned(self.to_unversioned_bytes()?.into_vec()),
+            data: MixedData::Output(self.to_unversioned_bytes()?),
         }
         .to_bytes())
     }

@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use rkyv::util::AlignedVec;
 
 const FORMAT_IDENTIFIER: &[u8] = b"VersionedTapestryWeave";
 const FORMAT_IDENTIFIER_LENGTH: usize = FORMAT_IDENTIFIER.len();
@@ -7,7 +7,21 @@ const DATA_OFFSET: usize = FORMAT_IDENTIFIER_LENGTH + VERSION_LENGTH;
 
 pub struct VersionedBytes<'a> {
     pub version: u64,
-    pub data: Cow<'a, [u8]>,
+    pub data: MixedData<'a>,
+}
+
+pub enum MixedData<'a> {
+    Input(&'a [u8]),
+    Output(AlignedVec),
+}
+
+impl AsRef<[u8]> for MixedData<'_> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            Self::Input(b) => b,
+            Self::Output(b) => b,
+        }
+    }
 }
 
 impl<'a> VersionedBytes<'a> {
@@ -18,13 +32,13 @@ impl<'a> VersionedBytes<'a> {
 
             Some(Self {
                 version: u64::from_le_bytes(version_bytes.try_into().unwrap()),
-                data: Cow::Borrowed(data),
+                data: MixedData::Input(data),
             })
         } else {
             None
         }
     }
-    pub fn to_byte_set(self) -> (&'static [u8], [u8; 8], Cow<'a, [u8]>) {
+    pub fn to_byte_set(self) -> (&'static [u8], [u8; 8], MixedData<'a>) {
         (FORMAT_IDENTIFIER, self.version.to_le_bytes(), self.data)
     }
     pub fn to_bytes(self) -> Vec<u8> {
@@ -35,8 +49,8 @@ impl<'a> VersionedBytes<'a> {
             .iter()
             .copied()
             .chain(byte_set.1.into_iter().chain(match byte_set.2 {
-                Cow::Owned(b) => b,
-                Cow::Borrowed(b) => b.to_owned(),
+                MixedData::Input(b) => b.to_owned(),
+                MixedData::Output(b) => b.to_vec(),
             }))
             .collect()
     }
