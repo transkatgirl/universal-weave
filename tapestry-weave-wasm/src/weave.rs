@@ -222,14 +222,19 @@ impl Weave {
     pub fn set_node_bookmarked_status(&mut self, id: Identifier, value: bool) -> bool {
         self.weave.weave.set_node_bookmarked_status(&id.0, value)
     }
+    pub fn set_active_content(&mut self, value: &str) -> bool {
+        self.weave
+            .set_active_content(value, |timestamp| match timestamp {
+                Some(timestamp) => Ulid(Identifier::new_from_unix_time(timestamp).0),
+                None => Ulid(Identifier::new().0),
+            })
+    }
     pub fn split_node(&mut self, id: Identifier, at: usize) -> Option<Identifier> {
-        let new_id = Identifier::new();
-
-        if self.weave.weave.split_node(&id.0, at, new_id.0) {
-            Some(new_id)
-        } else {
-            None
-        }
+        self.weave
+            .split_node(&Ulid(id.0), at, |timestamp| {
+                Ulid(Identifier::new_from_unix_time(timestamp).0)
+            })
+            .map(|id| Identifier(id.0))
     }
     pub fn merge_with_parent(&mut self, id: Identifier) -> bool {
         self.weave.weave.merge_with_parent(&id.0)

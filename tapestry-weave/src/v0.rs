@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
@@ -174,6 +176,14 @@ impl InnerNodeContent {
             },
         }
     }
+    pub fn as_bytes(&'_ self) -> Cow<'_, Vec<u8>> {
+        match self {
+            Self::Snippet(snippet) => Cow::Borrowed(snippet),
+            Self::Tokens(tokens) => {
+                Cow::Owned(tokens.iter().flat_map(|token| token.0.clone()).collect())
+            }
+        }
+    }
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -265,8 +275,41 @@ impl TapestryWeave {
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
-    pub fn split_node(&mut self, id: &Ulid, at: usize, new_id: Ulid) -> bool {
-        self.weave.split_node(&id.0, at, new_id.0)
+    pub fn set_active_content<F>(&mut self, value: &str, id_generator: F) -> bool
+    where
+        F: FnMut(Option<u64>) -> Ulid,
+    {
+        let mut modified = false;
+        let mut offset: usize = 0;
+
+        for node in self.get_active_thread() {
+            let content_bytes = node.contents.content.as_bytes();
+        }
+
+        if offset < value.len() {
+            /*self.add_node(DependentNode {
+                id: (),
+                from: (),
+                to: (),
+                active: (),
+                bookmarked: (),
+                contents: (),
+            })*/
+        }
+
+        todo!()
+    }
+    pub fn split_node<F>(&mut self, id: &Ulid, at: usize, id_generator: F) -> Option<Ulid>
+    where
+        F: FnOnce(u64) -> Ulid,
+    {
+        let new_id = id_generator(id.timestamp_ms());
+
+        if self.weave.split_node(&id.0, at, new_id.0) {
+            Some(new_id)
+        } else {
+            None
+        }
     }
     pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
         self.weave.merge_with_parent(&id.0)

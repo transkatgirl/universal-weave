@@ -20,6 +20,11 @@ impl Identifier {
 
         Identifier(Ulid::from_parts(timestamp_ms as u64, rng.random()).0)
     }
+    pub fn new_from_unix_time(timestamp_ms: u64) -> Self {
+        let rng = &mut rand::rng();
+
+        Identifier(Ulid::from_parts(timestamp_ms, rng.random()).0)
+    }
     pub fn from_uint(value: u128) -> Self {
         Identifier(value)
     }
