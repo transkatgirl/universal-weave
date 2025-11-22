@@ -1,6 +1,6 @@
-use std::{borrow::Cow, hash::BuildHasherDefault};
+use std::borrow::Cow;
 
-use rkyv::{hash::FxHasher64, util::AlignedVec};
+use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, DiscreteWeave,
@@ -328,14 +328,24 @@ impl TapestryWeave {
                     ));
 
                     last_node = Some(split_identifier.0);
-                } else {
-                    todo!();
                 }
 
                 modified = true;
 
                 break;
             }
+        }
+
+        if let Some(node) = last_node.and_then(|id| self.weave.get_node(&id))
+            && node.to.len() <= 1
+            && !node.bookmarked
+            && node.contents.model.is_none()
+            && node.contents.metadata == metadata
+        {
+            last_node = node.from;
+
+            let identifier = node.id;
+            self.weave.remove_node(&identifier);
         }
 
         if offset < value.len() {

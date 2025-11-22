@@ -46,7 +46,6 @@ impl VersionedWeave {
 }
 
 // TODO:
-// - [v0] Implement string-based tree updates
 // - Implement v1 format based on IndependentWeave
 //   - Implement diff-based tree updates
 //   - Implement prefix-based deduplication?
