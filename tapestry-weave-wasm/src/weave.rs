@@ -133,7 +133,7 @@ pub struct Weave {
 
 #[derive(Tsify, Serialize, Deserialize, Debug)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct WeaveMetadata(pub HashMap<String, String>);
+pub struct Metadata(pub HashMap<String, String>);
 
 #[wasm_bindgen]
 impl Weave {
@@ -176,8 +176,8 @@ impl Weave {
         self.weave.is_empty()
     }
     #[wasm_bindgen(getter = metadata)]
-    pub fn get_metadata(&self) -> WeaveMetadata {
-        WeaveMetadata(HashMap::from_iter(
+    pub fn get_metadata(&self) -> Metadata {
+        Metadata(HashMap::from_iter(
             self.weave
                 .weave
                 .metadata
@@ -186,7 +186,7 @@ impl Weave {
         ))
     }
     #[wasm_bindgen(setter = metadata)]
-    pub fn set_metadata(&mut self, value: WeaveMetadata) {
+    pub fn set_metadata(&mut self, value: Metadata) {
         self.weave.weave.metadata = IndexMap::from_iter(value.0);
     }
     pub fn get_node(&self, id: Identifier) -> Option<Node> {
@@ -222,12 +222,16 @@ impl Weave {
     pub fn set_node_bookmarked_status(&mut self, id: Identifier, value: bool) -> bool {
         self.weave.weave.set_node_bookmarked_status(&id.0, value)
     }
-    pub fn set_active_content(&mut self, value: &str) -> bool {
+    pub fn set_active_content(&mut self, value: &str, metadata: Metadata) -> bool {
         self.weave
-            .set_active_content(value, |timestamp| match timestamp {
-                Some(timestamp) => Ulid(Identifier::new_from_unix_time(timestamp).0),
-                None => Ulid(Identifier::new().0),
-            })
+            .set_active_content(
+                value,
+                IndexMap::from_iter(metadata.0),
+                |timestamp| match timestamp {
+                    Some(timestamp) => Ulid(Identifier::new_from_unix_time(timestamp).0),
+                    None => Ulid(Identifier::new().0),
+                },
+            )
     }
     pub fn split_node(&mut self, id: Identifier, at: usize) -> Option<Identifier> {
         self.weave
