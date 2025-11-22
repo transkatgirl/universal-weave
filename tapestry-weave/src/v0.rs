@@ -275,15 +275,49 @@ impl TapestryWeave {
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
-    pub fn set_active_content<F>(&mut self, value: &str, id_generator: F) -> bool
+    pub fn set_active_content<F>(&mut self, value: &str, mut id_generator: F) -> bool
     where
         F: FnMut(Option<u64>) -> Ulid,
     {
         let mut modified = false;
         let mut offset: usize = 0;
 
+        let value_bytes = value.as_bytes();
+        let value_len = value_bytes.len();
+
         for node in self.get_active_thread() {
             let content_bytes = node.contents.content.as_bytes();
+
+            let content_len = content_bytes.len();
+
+            if value_len >= offset + content_len
+                && value_bytes[offset..(offset + content_len)] == *content_bytes
+            {
+                offset += content_len;
+            } else {
+                let start_offset = offset;
+
+                while offset < value_len
+                    && offset < content_len
+                    && value_bytes[offset] == content_bytes[offset]
+                {
+                    offset += 1;
+                }
+
+                if offset > start_offset {
+                    let split_identifier = id_generator(Some(Ulid(node.id).timestamp_ms()));
+
+                    todo!();
+                } else {
+                    let identifier = id_generator(None);
+
+                    todo!();
+                }
+
+                modified = true;
+
+                break;
+            }
         }
 
         if offset < value.len() {
@@ -295,9 +329,13 @@ impl TapestryWeave {
                 bookmarked: (),
                 contents: (),
             })*/
+
+            todo!();
+
+            modified = true;
         }
 
-        todo!()
+        modified
     }
     pub fn split_node<F>(&mut self, id: &Ulid, at: usize, id_generator: F) -> Option<Ulid>
     where
