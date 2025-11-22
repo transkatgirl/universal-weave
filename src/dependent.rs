@@ -233,6 +233,8 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                 }
                 None => return false,
             }
+        } else {
+            self.roots.insert(node.id);
         }
 
         if node.active {
