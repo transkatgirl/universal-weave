@@ -11,6 +11,7 @@ edition = "2024"
 [features]
 serde = [
 	"dep:serde",
+	"ulid/serde",
 	"universal-weave/serde",
 ]
 
