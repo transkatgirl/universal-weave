@@ -1,6 +1,6 @@
 use rkyv::util::AlignedVec;
 
-const FORMAT_IDENTIFIER: &[u8] = b"VersionedTapestryWeave";
+const FORMAT_IDENTIFIER: &[u8] = b"VersionedTapestryWeave__";
 const FORMAT_IDENTIFIER_LENGTH: usize = FORMAT_IDENTIFIER.len();
 const VERSION_LENGTH: usize = 8;
 const DATA_OFFSET: usize = FORMAT_IDENTIFIER_LENGTH + VERSION_LENGTH;
