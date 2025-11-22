@@ -1,12 +1,12 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, hash::BuildHasherDefault};
 
-use rkyv::util::AlignedVec;
+use rkyv::{hash::FxHasher64, util::AlignedVec};
 use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     DuplicatableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
-    indexmap::IndexMap,
+    indexmap::{IndexMap, IndexSet},
     rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
 };
 
@@ -275,7 +275,12 @@ impl TapestryWeave {
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
-    pub fn set_active_content<F>(&mut self, value: &str, mut id_generator: F) -> bool
+    pub fn set_active_content<F>(
+        &mut self,
+        value: &str,
+        metadata: IndexMap<String, String>,
+        mut id_generator: F,
+    ) -> bool
     where
         F: FnMut(Option<u64>) -> Ulid,
     {
@@ -285,10 +290,17 @@ impl TapestryWeave {
         let value_bytes = value.as_bytes();
         let value_len = value_bytes.len();
 
-        for node in self.get_active_thread() {
+        let active_thread: Vec<u128> = self.weave.get_active_thread().collect();
+
+        let mut last_node = None;
+
+        for active_identifier in active_thread {
+            let node = self.weave.get_node(&active_identifier).unwrap();
             let content_bytes = node.contents.content.as_bytes();
 
             let content_len = content_bytes.len();
+
+            last_node = Some(node.id);
 
             if value_len >= offset + content_len
                 && value_bytes[offset..(offset + content_len)] == *content_bytes
@@ -304,13 +316,19 @@ impl TapestryWeave {
                     offset += 1;
                 }
 
+                let target = node.id;
+
                 if offset > start_offset {
-                    let split_identifier = id_generator(Some(Ulid(node.id).timestamp_ms()));
+                    let split_identifier = id_generator(Some(Ulid(target).timestamp_ms()));
 
-                    todo!();
+                    assert!(self.weave.split_node(
+                        &target,
+                        offset - start_offset,
+                        split_identifier.0
+                    ));
+
+                    last_node = Some(split_identifier.0);
                 } else {
-                    let identifier = id_generator(None);
-
                     todo!();
                 }
 
@@ -321,16 +339,18 @@ impl TapestryWeave {
         }
 
         if offset < value.len() {
-            /*self.add_node(DependentNode {
-                id: (),
-                from: (),
-                to: (),
-                active: (),
-                bookmarked: (),
-                contents: (),
-            })*/
-
-            todo!();
+            assert!(self.add_node(DependentNode {
+                id: id_generator(None).0,
+                from: last_node,
+                to: IndexSet::default(),
+                active: true,
+                bookmarked: false,
+                contents: NodeContent {
+                    content: InnerNodeContent::Snippet(value_bytes[offset..].to_vec()),
+                    metadata: metadata.clone(),
+                    model: None,
+                },
+            }));
 
             modified = true;
         }
