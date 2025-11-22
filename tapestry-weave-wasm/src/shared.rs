@@ -1,3 +1,5 @@
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use lz4_flex::block::{compress_prepend_size, decompress_size_prepended};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use tapestry_weave::ulid::Ulid;
@@ -49,4 +51,15 @@ pub fn bytes_to_string_lossy(value: &[u8]) -> String {
 #[wasm_bindgen]
 pub fn string_to_bytes(value: &str) -> Vec<u8> {
     value.as_bytes().to_vec()
+}
+
+#[wasm_bindgen]
+pub fn bytes_to_lz4_base64_url(value: &[u8]) -> String {
+    URL_SAFE.encode(compress_prepend_size(value))
+}
+
+#[wasm_bindgen]
+pub fn bytes_from_lz4_base64_url(value: &str) -> Result<Vec<u8>, String> {
+    let compressed = URL_SAFE.decode(value).map_err(|e| e.to_string())?;
+    decompress_size_prepended(&compressed).map_err(|e| e.to_string())
 }
