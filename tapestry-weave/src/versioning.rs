@@ -1,4 +1,4 @@
-use rkyv::util::AlignedVec;
+use universal_weave::rkyv::util::AlignedVec;
 
 const FORMAT_IDENTIFIER: &[u8] = b"VersionedTapestryWeave__";
 const FORMAT_IDENTIFIER_LENGTH: usize = FORMAT_IDENTIFIER.len();

@@ -1,13 +1,14 @@
 use std::borrow::Cow;
 
-use rkyv::util::AlignedVec;
 use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     DuplicatableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
     indexmap::{IndexMap, IndexSet},
-    rkyv::{Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes},
+    rkyv::{
+        Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes, util::AlignedVec,
+    },
 };
 
 #[cfg(feature = "serde")]
