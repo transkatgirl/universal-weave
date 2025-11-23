@@ -94,7 +94,7 @@ impl InnerNodeContent {
 
         match self {
             Self::Snippet(mut snippet) => {
-                if snippet.len() >= at {
+                if snippet.len() <= at {
                     return DiscreteContentResult::One(Self::Snippet(snippet));
                 }
 
@@ -104,7 +104,7 @@ impl InnerNodeContent {
                 DiscreteContentResult::Two((Self::Snippet(snippet), Self::Snippet(right)))
             }
             Self::Tokens(tokens) => {
-                if tokens.iter().map(|token| token.0.len()).sum::<usize>() >= at {
+                if tokens.iter().map(|token| token.0.len()).sum::<usize>() <= at {
                     return DiscreteContentResult::One(Self::Tokens(tokens));
                 }
 
