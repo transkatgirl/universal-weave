@@ -7,6 +7,8 @@ pub mod treeless;
 pub mod v0;
 pub mod versioning;
 
+pub const VERSIONED_WEAVE_FILE_EXTENSION: &str = "tapestry";
+
 use crate::versioning::{MixedData, VersionedBytes};
 
 #[non_exhaustive]

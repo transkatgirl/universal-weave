@@ -5,6 +5,8 @@ use universal_weave::{
     },
 };
 
+pub const FILE_EXTENSION: &str = "tapestrytext";
+
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct TextOnlyDocument {
     pub content: Vec<u8>,
