@@ -386,7 +386,7 @@ impl TapestryWeave {
     pub fn is_mergeable_with_parent(&mut self, id: &Ulid) -> bool {
         if let Some(node) = self.weave.get_node(&id.0) {
             if let Some(parent) = node.from.and_then(|id| self.weave.get_node(&id)) {
-                parent.contents.is_mergeable_with(&node.contents)
+                parent.to.len() == 1 && parent.contents.is_mergeable_with(&node.contents)
             } else {
                 false
             }
