@@ -347,8 +347,8 @@ impl TapestryWeave {
                 let start_offset = offset;
 
                 while offset < value_len
-                    && offset < content_len
-                    && value[offset] == content_bytes[offset]
+                    && offset < content_len + start_offset
+                    && value[offset] == content_bytes[offset - start_offset]
                 {
                     offset += 1;
                 }
