@@ -30,5 +30,4 @@ serde = { version = "1.0.228", features = [
 [workspace]
 members = [
 	"tapestry-weave",
-	"tapestry-weave-wasm",
 ]
