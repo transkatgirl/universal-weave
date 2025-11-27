@@ -185,6 +185,18 @@ impl InnerNodeContent {
             }
         }
     }
+    pub fn len(&self) -> usize {
+        match self {
+            Self::Snippet(snippet) => snippet.len(),
+            Self::Tokens(tokens) => tokens.iter().map(|token| token.0.len()).sum(),
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Snippet(snippet) => snippet.is_empty(),
+            Self::Tokens(tokens) => tokens.iter().all(|token| token.0.is_empty()),
+        }
+    }
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -291,7 +303,13 @@ impl TapestryWeave {
 
         let value_len = value.len();
 
-        let active_thread: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
+        let active_thread: Vec<u128> = self
+            .weave
+            .get_active_thread()
+            .iter()
+            .rev()
+            .copied()
+            .collect();
 
         let mut last_node = None;
 
@@ -346,7 +364,9 @@ impl TapestryWeave {
             last_node = node.from;
 
             let identifier = node.id;
-            self.weave.remove_node(&identifier);
+            if let Some(node) = self.weave.remove_node(&identifier) {
+                offset -= node.contents.content.len();
+            }
         }
 
         if offset < value.len() {
