@@ -385,6 +385,11 @@ impl TapestryWeave {
 
         if let Some(node) = last_node.and_then(|id| self.weave.get_node(&id))
             && node.to.len() <= 1
+            && node
+                .to
+                .iter()
+                .filter_map(|id| self.weave.get_node(id))
+                .all(|child| child.to.is_empty())
             && !node.bookmarked
             && node.contents.model.is_none()
             && node.contents.metadata == metadata
