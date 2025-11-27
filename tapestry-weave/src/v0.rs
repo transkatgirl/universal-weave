@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use contracts::ensures;
 use ulid::Ulid;
@@ -267,17 +267,33 @@ impl TapestryWeave {
 
     pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
         let identifier = node.id;
-        let last_active = if node.active {
-            self.weave.get_active_thread().front().copied()
+        let last_active_set: HashSet<u128> = if node.active {
+            HashSet::from_iter(self.weave.get_active_thread().iter().copied())
         } else {
-            None
+            HashSet::default()
         };
+        let is_active = node.active;
 
         let status = self.weave.add_node(node);
 
-        if self.weave.find_duplicates(&identifier).next().is_some() {
-            if let Some(last_active) = last_active {
-                self.weave.set_node_active_status(&last_active, true);
+        let duplicates: Vec<u128> = self.weave.find_duplicates(&identifier).collect();
+
+        if !duplicates.is_empty() {
+            if is_active {
+                let mut has_active = false;
+
+                for duplicate in &duplicates {
+                    if last_active_set.contains(duplicate) {
+                        self.weave.set_node_active_status(duplicate, true);
+                        has_active = true;
+                        break;
+                    }
+                }
+
+                if !has_active {
+                    self.weave
+                        .set_node_active_status(duplicates.first().unwrap(), true);
+                }
             }
             self.weave.remove_node(&identifier);
         }
@@ -312,6 +328,7 @@ impl TapestryWeave {
             .rev()
             .copied()
             .collect();
+        let active_node = active_thread.iter().copied().last();
 
         let mut last_node = None;
 
@@ -338,16 +355,20 @@ impl TapestryWeave {
 
                 let target = node.id;
 
-                if offset > start_offset && offset > 1 {
-                    let split_identifier = id_generator(Some(Ulid(target).timestamp_ms()));
+                if offset > start_offset {
+                    if offset > 0 {
+                        let split_identifier = id_generator(Some(Ulid(target).timestamp_ms()));
 
-                    assert!(self.weave.split_node(
-                        &target,
-                        offset - start_offset,
-                        split_identifier.0
-                    ));
+                        assert!(self.weave.split_node(
+                            &target,
+                            offset - start_offset,
+                            split_identifier.0
+                        ));
 
-                    last_node = Some(target);
+                        last_node = Some(target);
+                    } else {
+                        last_node = None;
+                    }
                 }
 
                 modified = true;
@@ -358,6 +379,8 @@ impl TapestryWeave {
 
         if let Some(last_node) = last_node {
             self.weave.set_node_active_status(&last_node, true);
+        } else if let Some(active_node) = active_node {
+            self.weave.set_node_active_status(&active_node, false);
         }
 
         if let Some(node) = last_node.and_then(|id| self.weave.get_node(&id))
