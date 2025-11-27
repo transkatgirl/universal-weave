@@ -171,17 +171,19 @@ impl<T, M> DependentWeave<T, M> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
+            for child in node.to.iter() {
+                self.remove_node_unverified(child);
+            }
             if node.active {
                 self.active = node.from;
                 if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
                     parent.active = true;
+                } else {
+                    self.active = None;
                 }
             }
             if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
                 parent.to.shift_remove(id);
-            }
-            for child in node.to.iter() {
-                self.remove_node_unverified(child);
             }
 
             Some(node)
