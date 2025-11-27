@@ -1,9 +1,16 @@
-use std::{collections::HashMap, hash::BuildHasherDefault};
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::BuildHasherDefault,
+};
 
 use contracts::*;
 use indexmap::IndexSet;
 use rkyv::{
-    Archive, Deserialize, Serialize, hash::FxHasher64, option::ArchivedOption, rend::u128_le,
+    Archive, Deserialize, Serialize,
+    collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
+    hash::FxHasher64,
+    option::ArchivedOption,
+    rend::u128_le,
 };
 
 #[cfg(feature = "serde")]
@@ -65,6 +72,7 @@ pub struct DependentWeave<T, M> {
     roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
     active: Option<u128>,
     bookmarked: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
+    thread: VecDeque<u128>,
 
     pub metadata: M,
 }
@@ -117,6 +125,7 @@ impl<T, M> DependentWeave<T, M> {
             roots: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            thread: VecDeque::with_capacity(capacity),
             metadata,
         }
     }
@@ -127,11 +136,13 @@ impl<T, M> DependentWeave<T, M> {
         self.nodes.reserve(additional);
         self.roots.reserve(additional);
         self.bookmarked.reserve(additional);
+        self.thread.reserve(additional);
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
+        self.thread.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -178,14 +189,6 @@ impl<T, M> DependentWeave<T, M> {
             None
         }
     }
-    fn build_thread(&self, id: &u128, thread: &mut Vec<u128>) {
-        if let Some(node) = self.nodes.get(id) {
-            thread.push(*id);
-            if let Some(parent) = node.from {
-                self.build_thread(&parent, thread);
-            }
-        }
-    }
 }
 
 impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
@@ -201,21 +204,27 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn get_node(&self, id: &u128) -> Option<&DependentNode<T>> {
         self.nodes.get(id)
     }
-    fn get_roots(&self) -> impl Iterator<Item = u128> {
-        self.roots.iter().copied()
+    fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+        &self.roots
     }
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
-        self.bookmarked.iter().copied()
+    fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+        &self.bookmarked
     }
-    fn get_active_thread(&self) -> impl Iterator<Item = u128> {
-        let mut thread =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+    fn get_active_thread(&mut self) -> &VecDeque<u128> {
+        self.thread.clear();
 
         if let Some(active) = self.active {
-            self.build_thread(&active, &mut thread);
+            build_thread(&self.nodes, &active, &mut self.thread);
         }
 
-        thread.into_iter()
+        &self.thread
+    }
+    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128> {
+        self.thread.clear();
+
+        build_thread(&self.nodes, id, &mut self.thread);
+
+        &self.thread
     }
     #[debug_ensures(self.verify())]
     #[requires(self.under_max_size())]
@@ -438,21 +447,6 @@ where
     }
 }
 
-impl<T, M> ArchivedDependentWeave<T, M>
-where
-    T: Archive<Archived = T>,
-    M: Archive<Archived = T>,
-{
-    fn build_thread(&self, id: &u128_le, thread: &mut Vec<u128_le>) {
-        if let Some(node) = self.nodes.get(id) {
-            thread.push(*id);
-            if let ArchivedOption::Some(parent) = node.from {
-                self.build_thread(&parent, thread);
-            }
-        }
-    }
-}
-
 impl<T, M> ArchivedWeave<ArchivedDependentNode<T>, T> for ArchivedDependentWeave<T, M>
 where
     T: Archive<Archived = T>,
@@ -470,20 +464,56 @@ where
     fn get_node(&self, id: &u128_le) -> Option<&ArchivedDependentNode<T>> {
         self.nodes.get(id)
     }
-    fn get_roots(&self) -> impl Iterator<Item = u128_le> {
-        self.roots.iter().copied()
+    fn get_roots(&self) -> &ArchivedIndexSet<u128_le> {
+        &self.roots
     }
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
-        self.bookmarked.iter().copied()
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le> {
+        &self.bookmarked
     }
-    fn get_active_thread(&self) -> impl Iterator<Item = u128_le> {
+    fn get_active_thread(&self) -> VecDeque<u128_le> {
         let mut thread =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
         if let ArchivedOption::Some(active) = self.active {
-            self.build_thread(&active, &mut thread);
+            build_thread_archived(&self.nodes, &active, &mut thread);
         }
 
-        thread.into_iter()
+        thread
+    }
+    fn get_thread_from(&self, id: &u128_le) -> VecDeque<u128_le> {
+        let mut thread =
+            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+
+        build_thread_archived(&self.nodes, id, &mut thread);
+
+        thread
+    }
+}
+
+fn build_thread<T>(
+    nodes: &HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    id: &u128,
+    thread: &mut VecDeque<u128>,
+) {
+    if let Some(node) = nodes.get(id) {
+        thread.push_back(*id);
+        if let Some(parent) = node.from {
+            build_thread(nodes, &parent, thread);
+        }
+    }
+}
+
+fn build_thread_archived<T>(
+    nodes: &ArchivedHashMap<u128_le, ArchivedDependentNode<T>>,
+    id: &u128_le,
+    thread: &mut VecDeque<u128_le>,
+) where
+    T: Archive,
+{
+    if let Some(node) = nodes.get(id) {
+        thread.push_back(*id);
+        if let ArchivedOption::Some(parent) = node.from {
+            build_thread_archived(nodes, &parent, thread);
+        }
     }
 }

@@ -7,7 +7,12 @@ use std::{
 
 use contracts::*;
 use indexmap::IndexSet;
-use rkyv::{Archive, Deserialize, Serialize, hash::FxHasher64, rend::u128_le};
+use rkyv::{
+    Archive, Deserialize, Serialize,
+    collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
+    hash::FxHasher64,
+    rend::u128_le,
+};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
@@ -74,6 +79,7 @@ where
     roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
     active: HashSet<u128, BuildHasherDefault<FxHasher64>>,
     bookmarked: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
+    thread: VecDeque<u128>,
 
     pub metadata: M,
 }
@@ -158,6 +164,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             roots: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             active: HashSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            thread: VecDeque::with_capacity(capacity),
             metadata,
         }
     }
@@ -169,12 +176,14 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         self.roots.reserve(additional);
         self.active.reserve(additional);
         self.bookmarked.reserve(additional);
+        self.thread.reserve(additional);
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
+        self.thread.shrink_to(min_capacity);
     }
     fn active_parents(
         &self,
@@ -325,43 +334,6 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             false
         }
     }
-    fn build_thread(&self, id: &u128, thread: &mut VecDeque<u128>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_back(*id);
-
-            for child in &node.from {
-                self.build_thread_children(child, thread);
-            }
-
-            for parent in &node.to {
-                self.build_thread_parents(parent, thread);
-            }
-        }
-    }
-    fn build_thread_children(&self, id: &u128, thread: &mut VecDeque<u128>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_back(*id);
-
-            for child in &node.from {
-                self.build_thread_children(child, thread);
-            }
-        }
-    }
-    fn build_thread_parents(&self, id: &u128, thread: &mut VecDeque<u128>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_front(*id);
-
-            for parent in &node.to {
-                self.build_thread_parents(parent, thread);
-            }
-        }
-    }
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &u128) -> Option<IndependentNode<T>> {
         if let Some(node) = self.nodes.remove(id) {
@@ -405,21 +377,27 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     fn get_node(&self, id: &u128) -> Option<&IndependentNode<T>> {
         self.nodes.get(id)
     }
-    fn get_roots(&self) -> impl Iterator<Item = u128> {
-        self.roots.iter().copied()
+    fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+        &self.roots
     }
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128> {
-        self.bookmarked.iter().copied()
+    fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+        &self.bookmarked
     }
-    fn get_active_thread(&self) -> impl Iterator<Item = u128> {
-        let mut thread =
-            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+    fn get_active_thread(&mut self) -> &VecDeque<u128> {
+        self.thread.clear();
 
         if let Some(active) = self.active.iter().last() {
-            self.build_thread(active, &mut thread);
+            build_thread(&self.nodes, active, &mut self.thread);
         }
 
-        thread.into_iter()
+        &self.thread
+    }
+    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128> {
+        self.thread.clear();
+
+        build_thread_from(&self.nodes, &self.active, id, &mut self.thread);
+
+        &self.thread
     }
     #[debug_ensures(self.verify())]
     #[requires(self.under_max_size())]
@@ -794,50 +772,6 @@ where
     }
 }
 
-impl<T, M> ArchivedIndependentWeave<T, M>
-where
-    T: Archive<Archived = T> + IndependentContents,
-    M: Archive<Archived = T>,
-{
-    fn build_thread(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_back(*id);
-
-            for child in node.from.iter() {
-                self.build_thread_children(child, thread);
-            }
-
-            for parent in node.to.iter() {
-                self.build_thread_parents(parent, thread);
-            }
-        }
-    }
-    fn build_thread_children(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_back(*id);
-
-            for child in node.from.iter() {
-                self.build_thread_children(child, thread);
-            }
-        }
-    }
-    fn build_thread_parents(&self, id: &u128_le, thread: &mut VecDeque<u128_le>) {
-        if let Some(node) = self.nodes.get(id)
-            && node.active
-        {
-            thread.push_front(*id);
-
-            for parent in node.to.iter() {
-                self.build_thread_parents(parent, thread);
-            }
-        }
-    }
-}
-
 impl<T, M> ArchivedWeave<ArchivedIndependentNode<T>, T> for ArchivedIndependentWeave<T, M>
 where
     T: Archive<Archived = T> + IndependentContents,
@@ -855,20 +789,196 @@ where
     fn get_node(&self, id: &u128_le) -> Option<&ArchivedIndependentNode<T>> {
         self.nodes.get(id)
     }
-    fn get_roots(&self) -> impl Iterator<Item = u128_le> {
-        self.roots.iter().copied()
+    fn get_roots(&self) -> &ArchivedIndexSet<u128_le> {
+        &self.roots
     }
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le> {
-        self.bookmarked.iter().copied()
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le> {
+        &self.bookmarked
     }
-    fn get_active_thread(&self) -> impl Iterator<Item = u128_le> {
+    fn get_active_thread(&self) -> VecDeque<u128_le> {
         let mut thread =
             VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
         if let Some(active) = self.active.iter().last() {
-            self.build_thread(active, &mut thread);
+            build_thread_archived(&self.nodes, active, &mut thread);
         }
 
-        thread.into_iter()
+        thread
+    }
+    fn get_thread_from(&self, id: &u128_le) -> VecDeque<u128_le> {
+        let mut thread =
+            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+
+        build_thread_from_archived(&self.nodes, &self.active, id, &mut thread);
+
+        thread
+    }
+}
+
+fn build_thread<T>(
+    nodes: &HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    id: &u128,
+    thread: &mut VecDeque<u128>,
+) where
+    T: IndependentContents,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_back(*id);
+
+        for child in &node.from {
+            build_thread_children(nodes, child, thread);
+        }
+
+        for parent in &node.to {
+            build_thread_parents(nodes, parent, thread);
+        }
+    }
+}
+
+fn build_thread_from<T>(
+    nodes: &HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    active: &HashSet<u128, BuildHasherDefault<FxHasher64>>,
+    id: &u128,
+    thread: &mut VecDeque<u128>,
+) where
+    T: IndependentContents,
+{
+    if let Some(node) = nodes.get(id) {
+        thread.push_back(*id);
+
+        let mut has_child = false;
+
+        for child in &node.from {
+            if active.contains(child) {
+                has_child = true;
+                build_thread_from(nodes, active, child, thread);
+            }
+        }
+
+        if !has_child && let Some(child) = node.from.first() {
+            build_thread_from(nodes, active, child, thread);
+        }
+    }
+}
+
+fn build_thread_children<T>(
+    nodes: &HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    id: &u128,
+    thread: &mut VecDeque<u128>,
+) where
+    T: IndependentContents,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_back(*id);
+
+        for child in &node.from {
+            build_thread_children(nodes, child, thread);
+        }
+    }
+}
+
+fn build_thread_parents<T>(
+    nodes: &HashMap<u128, IndependentNode<T>, BuildHasherDefault<FxHasher64>>,
+    id: &u128,
+    thread: &mut VecDeque<u128>,
+) where
+    T: IndependentContents,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_front(*id);
+
+        for parent in &node.to {
+            build_thread_parents(nodes, parent, thread);
+        }
+    }
+}
+
+fn build_thread_archived<T>(
+    nodes: &ArchivedHashMap<u128_le, ArchivedIndependentNode<T>>,
+    id: &u128_le,
+    thread: &mut VecDeque<u128_le>,
+) where
+    T: IndependentContents + Archive,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_back(*id);
+
+        for child in node.from.iter() {
+            build_thread_children_archived(nodes, child, thread);
+        }
+
+        for parent in node.to.iter() {
+            build_thread_parents_archived(nodes, parent, thread);
+        }
+    }
+}
+
+fn build_thread_from_archived<T>(
+    nodes: &ArchivedHashMap<u128_le, ArchivedIndependentNode<T>>,
+    active: &ArchivedHashSet<u128_le>,
+    id: &u128_le,
+    thread: &mut VecDeque<u128_le>,
+) where
+    T: IndependentContents + Archive,
+{
+    if let Some(node) = nodes.get(id) {
+        thread.push_back(*id);
+
+        let mut has_child = false;
+
+        for child in node.from.iter() {
+            if active.contains(child) {
+                has_child = true;
+                build_thread_from_archived(nodes, active, child, thread);
+            }
+        }
+
+        if !has_child && let Some(child) = node.from.get_index(0) {
+            build_thread_from_archived(nodes, active, child, thread);
+        }
+    }
+}
+
+fn build_thread_children_archived<T>(
+    nodes: &ArchivedHashMap<u128_le, ArchivedIndependentNode<T>>,
+    id: &u128_le,
+    thread: &mut VecDeque<u128_le>,
+) where
+    T: IndependentContents + Archive,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_back(*id);
+
+        for child in node.from.iter() {
+            build_thread_children_archived(nodes, child, thread);
+        }
+    }
+}
+
+fn build_thread_parents_archived<T>(
+    nodes: &ArchivedHashMap<u128_le, ArchivedIndependentNode<T>>,
+    id: &u128_le,
+    thread: &mut VecDeque<u128_le>,
+) where
+    T: IndependentContents + Archive,
+{
+    if let Some(node) = nodes.get(id)
+        && node.active
+    {
+        thread.push_front(*id);
+
+        for parent in node.to.iter() {
+            build_thread_parents_archived(nodes, parent, thread);
+        }
     }
 }

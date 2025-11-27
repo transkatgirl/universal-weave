@@ -241,20 +241,21 @@ impl TapestryWeave {
         self.weave.get_node(&id.0)
     }
     pub fn get_roots(&self) -> impl Iterator<Item = Ulid> {
-        self.weave.get_roots().map(Ulid)
+        self.weave.get_roots().iter().copied().map(Ulid)
     }
     pub fn get_bookmarks(&self) -> impl Iterator<Item = Ulid> {
-        self.weave.get_bookmarks().map(Ulid)
+        self.weave.get_bookmarks().iter().copied().map(Ulid)
     }
-    pub fn get_active_thread(&self) -> impl Iterator<Item = &DependentNode<NodeContent>> {
-        self.weave
-            .get_active_thread()
-            .filter_map(|id| self.weave.get_node(&id))
+    pub fn get_active_thread(&mut self) -> impl Iterator<Item = &DependentNode<NodeContent>> {
+        let active: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
+
+        active.into_iter().filter_map(|id| self.weave.get_node(&id))
     }
+
     pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
         let identifier = node.id;
         let last_active = if node.active {
-            self.weave.get_active_thread().last()
+            self.weave.get_active_thread().front().copied()
         } else {
             None
         };
@@ -291,7 +292,7 @@ impl TapestryWeave {
         let value_bytes = value.as_bytes();
         let value_len = value_bytes.len();
 
-        let active_thread: Vec<u128> = self.weave.get_active_thread().collect();
+        let active_thread: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
 
         let mut last_node = None;
 

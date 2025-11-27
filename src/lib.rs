@@ -3,12 +3,12 @@
 pub mod dependent;
 pub mod independent;
 
-use std::hash::BuildHasherDefault;
+use std::{collections::VecDeque, hash::BuildHasherDefault};
 
 pub use indexmap;
 use indexmap::IndexSet;
 pub use rkyv;
-use rkyv::{hash::FxHasher64, rend::u128_le};
+use rkyv::{collections::swiss_table::ArchivedIndexSet, hash::FxHasher64, rend::u128_le};
 
 pub type IdentifierSet = IndexSet<u128, BuildHasherDefault<FxHasher64>>;
 
@@ -29,9 +29,10 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &u128) -> bool;
     fn get_node(&self, id: &u128) -> Option<&N>;
-    fn get_roots(&self) -> impl Iterator<Item = u128>;
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128>;
-    fn get_active_thread(&self) -> impl Iterator<Item = u128>;
+    fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
+    fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
+    fn get_active_thread(&mut self) -> &VecDeque<u128>;
+    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128>;
     fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;
@@ -105,7 +106,8 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &u128_le) -> bool;
     fn get_node(&self, id: &u128_le) -> Option<&N>;
-    fn get_roots(&self) -> impl Iterator<Item = u128_le>;
-    fn get_bookmarks(&self) -> impl Iterator<Item = u128_le>;
-    fn get_active_thread(&self) -> impl Iterator<Item = u128_le>;
+    fn get_roots(&self) -> &ArchivedIndexSet<u128_le>;
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le>;
+    fn get_active_thread(&self) -> VecDeque<u128_le>;
+    fn get_thread_from(&self, id: &u128_le) -> VecDeque<u128_le>;
 }
