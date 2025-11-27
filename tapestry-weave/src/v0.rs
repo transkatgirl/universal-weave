@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use contracts::ensures;
 use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DiscreteContentResult, DiscreteContents, DiscreteWeave,
@@ -289,6 +290,7 @@ impl TapestryWeave {
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_bookmarked_status(&id.0, value)
     }
+    #[ensures(self.get_active_content() == value)]
     pub fn set_active_content<F>(
         &mut self,
         value: &[u8],
@@ -337,7 +339,7 @@ impl TapestryWeave {
 
                 let target = node.id;
 
-                if offset > start_offset {
+                if offset > start_offset && offset > 1 {
                     let split_identifier = id_generator(Some(Ulid(target).timestamp_ms()));
 
                     assert!(self.weave.split_node(
@@ -346,7 +348,7 @@ impl TapestryWeave {
                         split_identifier.0
                     ));
 
-                    last_node = Some(split_identifier.0);
+                    last_node = Some(target);
                 }
 
                 modified = true;
@@ -387,6 +389,21 @@ impl TapestryWeave {
         }
 
         modified
+    }
+    pub fn get_active_content(&mut self) -> Vec<u8> {
+        let active_thread: Vec<u128> = self
+            .weave
+            .get_active_thread()
+            .iter()
+            .rev()
+            .copied()
+            .collect();
+
+        active_thread
+            .into_iter()
+            .filter_map(|id| self.weave.get_node(&id))
+            .flat_map(|node| node.contents.content.as_bytes().to_vec())
+            .collect()
     }
     pub fn split_node<F>(&mut self, id: &Ulid, at: usize, id_generator: F) -> Option<Ulid>
     where

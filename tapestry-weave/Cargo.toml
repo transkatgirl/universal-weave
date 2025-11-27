@@ -16,6 +16,7 @@ serde = [
 ]
 
 [dependencies]
+contracts = "0.6.7"
 ulid = "1.2.1"
 rkyv = "*"
 universal-weave = { path = ".." }
