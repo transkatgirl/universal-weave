@@ -279,7 +279,7 @@ impl TapestryWeave {
     }
     pub fn set_active_content<F>(
         &mut self,
-        value: &str,
+        value: &[u8],
         metadata: IndexMap<String, String>,
         mut id_generator: F,
     ) -> bool
@@ -289,8 +289,7 @@ impl TapestryWeave {
         let mut modified = false;
         let mut offset: usize = 0;
 
-        let value_bytes = value.as_bytes();
-        let value_len = value_bytes.len();
+        let value_len = value.len();
 
         let active_thread: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
 
@@ -305,7 +304,7 @@ impl TapestryWeave {
             last_node = Some(node.id);
 
             if value_len >= offset + content_len
-                && value_bytes[offset..(offset + content_len)] == *content_bytes
+                && value[offset..(offset + content_len)] == *content_bytes
             {
                 offset += content_len;
             } else {
@@ -313,7 +312,7 @@ impl TapestryWeave {
 
                 while offset < value_len
                     && offset < content_len
-                    && value_bytes[offset] == content_bytes[offset]
+                    && value[offset] == content_bytes[offset]
                 {
                     offset += 1;
                 }
@@ -358,7 +357,7 @@ impl TapestryWeave {
                 active: true,
                 bookmarked: false,
                 contents: NodeContent {
-                    content: InnerNodeContent::Snippet(value_bytes[offset..].to_vec()),
+                    content: InnerNodeContent::Snippet(value[offset..].to_vec()),
                     metadata: metadata.clone(),
                     model: None,
                 },
