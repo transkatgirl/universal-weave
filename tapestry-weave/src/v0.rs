@@ -321,12 +321,11 @@ impl TapestryWeave {
 
             let content_len = content_bytes.len();
 
-            last_node = Some(node.id);
-
             if value_len >= offset + content_len
                 && value[offset..(offset + content_len)] == *content_bytes
             {
                 offset += content_len;
+                last_node = Some(node.id);
             } else {
                 let start_offset = offset;
 
@@ -355,6 +354,10 @@ impl TapestryWeave {
 
                 break;
             }
+        }
+
+        if let Some(last_node) = last_node {
+            self.weave.set_node_active_status(&last_node, true);
         }
 
         if let Some(node) = last_node.and_then(|id| self.weave.get_node(&id))

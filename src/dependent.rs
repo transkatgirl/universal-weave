@@ -272,7 +272,9 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
                 node.active = value;
 
                 if value {
-                    if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                    if self.active != Some(node.id)
+                        && let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id))
+                    {
                         active.active = false;
                     }
 
