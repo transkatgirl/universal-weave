@@ -34,7 +34,7 @@ pub struct DependentNode<T> {
 }
 
 impl<T> DependentNode<T> {
-    fn verify(&self) -> bool {
+    fn validate(&self) -> bool {
         (if let Some(from) = self.from {
             !self.to.contains(&from)
         } else {
@@ -78,7 +78,7 @@ pub struct DependentWeave<T, M> {
 }
 
 impl<T, M> DependentWeave<T, M> {
-    fn verify(&self) -> bool {
+    pub fn validate(&self) -> bool {
         let nodes: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
 
@@ -90,7 +90,7 @@ impl<T, M> DependentWeave<T, M> {
             }
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
-                value.verify()
+                value.validate()
                     && value.id == *key
                     && if let Some(from) = value.from {
                         self.nodes.contains_key(&from)
@@ -228,10 +228,11 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
 
         &self.thread
     }
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
     fn add_node(&mut self, node: DependentNode<T>) -> bool {
-        let is_invalid = self.nodes.contains_key(&node.id) || !node.verify() || !node.to.is_empty();
+        let is_invalid =
+            self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty();
 
         if is_invalid {
             return false;
@@ -265,7 +266,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         true
     }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -289,7 +290,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         }
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -306,14 +307,14 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
         }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn remove_node(&mut self, id: &u128) -> Option<DependentNode<T>> {
         self.remove_node_unverified(id)
     }
 }
 
 impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
@@ -358,7 +359,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
             false
         }
     }
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {

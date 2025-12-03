@@ -41,7 +41,7 @@ impl<T> IndependentNode<T>
 where
     T: IndependentContents,
 {
-    fn verify(&self) -> bool {
+    fn validate(&self) -> bool {
         self.from.is_disjoint(&self.to)
             && !self.from.contains(&self.id)
             && !self.to.contains(&self.id)
@@ -88,7 +88,7 @@ impl<T, M> IndependentWeave<T, M>
 where
     T: IndependentContents,
 {
-    fn verify(&self) -> bool {
+    pub fn validate(&self) -> bool {
         let nodes: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
             self.nodes.keys().copied().collect();
         let nodes_std: HashSet<u128, BuildHasherDefault<FxHasher64>> =
@@ -98,11 +98,11 @@ where
         let roots: Vec<u128> = self.roots.iter().copied().collect();
 
         //self.roots.is_subset(&nodes)
-        self.verify_layer(&roots)
+        self.validate_layer(&roots)
             && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
-                value.verify()
+                value.validate()
                     && value.id == *key
                     && value.from.is_subset(&nodes)
                     && value.to.is_subset(&nodes)
@@ -126,7 +126,7 @@ where
                     }
             })
     }
-    fn verify_layer(&self, layer: &[u128]) -> bool {
+    fn validate_layer(&self, layer: &[u128]) -> bool {
         let mut next_layer = Vec::new();
         let mut has_active = false;
 
@@ -147,7 +147,7 @@ where
         }
 
         if !next_layer.is_empty() {
-            self.verify_layer(&next_layer)
+            self.validate_layer(&next_layer)
         } else {
             true
         }
@@ -229,7 +229,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             )
         }
     }
-    //#[debug_ensures(self.verify())]
+    //#[debug_ensures(self.validate())]
     fn update_node_activity_in_place(&mut self, id: &u128, value: bool) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
@@ -399,11 +399,11 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 
         &self.thread
     }
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
     fn add_node(&mut self, mut node: IndependentNode<T>) -> bool {
         let is_invalid = self.nodes.contains_key(&node.id)
-            || !node.verify()
+            || !node.validate()
             || !node.from.iter().all(|id| self.nodes.contains_key(id))
             || !node.to.iter().all(|id| self.nodes.contains_key(id));
 
@@ -485,7 +485,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         true
     }
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
         let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
             if node.active {
@@ -510,7 +510,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         }
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -527,7 +527,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
         }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn remove_node(&mut self, id: &u128) -> Option<IndependentNode<T>> {
         self.remove_node_unverified(id)
     }
@@ -536,7 +536,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
 impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
     fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
@@ -591,7 +591,7 @@ impl<T: DiscreteContents + IndependentContents, M> DiscreteWeave<IndependentNode
             false
         }
     }
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn merge_with_parent(&mut self, id: &u128) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
@@ -674,7 +674,7 @@ impl<T: DeduplicatableContents + IndependentContents, M> DuplicatableWeave<Indep
 impl<T: IndependentContents, M> crate::IndependentWeave<IndependentNode<T>, T>
     for IndependentWeave<T, M>
 {
-    #[debug_ensures(self.verify())]
+    #[debug_ensures(self.validate())]
     fn move_node(&mut self, id: &u128, new_parents: &[u128]) -> bool {
         let mut has_active_new_parents = false;
 

@@ -218,6 +218,7 @@ impl TapestryWeave {
         })
     }
     pub fn to_unversioned_bytes(&self) -> Result<AlignedVec, Error> {
+        assert!(self.weave.validate());
         to_bytes::<Error>(&self.weave)
     }
     pub fn to_versioned_bytes(&self) -> Result<Vec<u8>, Error> {
