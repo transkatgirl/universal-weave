@@ -161,7 +161,7 @@ impl InnerNodeContent {
                 )),
                 Self::Tokens(mut right_tokens) => {
                     left_tokens.append(&mut right_tokens);
-                    DiscreteContentResult::One(Self::Tokens(right_tokens))
+                    DiscreteContentResult::One(Self::Tokens(left_tokens))
                 }
             },
         }
