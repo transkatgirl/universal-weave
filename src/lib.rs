@@ -29,6 +29,7 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &u128) -> bool;
     fn get_node(&self, id: &u128) -> Option<&N>;
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128>;
     fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
     fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
     fn get_active_thread(&mut self) -> &VecDeque<u128>;
@@ -106,6 +107,7 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &u128_le) -> bool;
     fn get_node(&self, id: &u128_le) -> Option<&N>;
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128_le>;
     fn get_roots(&self) -> &ArchivedIndexSet<u128_le>;
     fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le>;
     fn get_active_thread(&self) -> VecDeque<u128_le>;

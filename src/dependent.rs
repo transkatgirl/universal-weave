@@ -212,6 +212,9 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     fn get_node(&self, id: &u128) -> Option<&DependentNode<T>> {
         self.nodes.get(id)
     }
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128> {
+        self.nodes.keys().copied()
+    }
     fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
         &self.roots
     }
@@ -474,6 +477,9 @@ where
     }
     fn get_node(&self, id: &u128_le) -> Option<&ArchivedDependentNode<T>> {
         self.nodes.get(id)
+    }
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128_le> {
+        self.nodes.keys().copied()
     }
     fn get_roots(&self) -> &ArchivedIndexSet<u128_le> {
         &self.roots

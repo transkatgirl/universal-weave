@@ -254,13 +254,15 @@ impl TapestryWeave {
     pub fn get_node(&self, id: &Ulid) -> Option<&DependentNode<NodeContent>> {
         self.weave.get_node(&id.0)
     }
-    pub fn get_roots(&self) -> impl Iterator<Item = Ulid> {
+    pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
     }
-    pub fn get_bookmarks(&self) -> impl Iterator<Item = Ulid> {
+    pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_bookmarks().iter().copied().map(Ulid)
     }
-    pub fn get_active_thread(&mut self) -> impl Iterator<Item = &DependentNode<NodeContent>> {
+    pub fn get_active_thread(
+        &mut self,
+    ) -> impl DoubleEndedIterator<Item = &DependentNode<NodeContent>> {
         let active: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
 
         active.into_iter().filter_map(|id| self.weave.get_node(&id))
