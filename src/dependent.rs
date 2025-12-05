@@ -134,9 +134,15 @@ impl<T, M> DependentWeave<T, M> {
     }
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
-        self.roots.reserve(additional);
-        self.bookmarked.reserve(additional);
-        self.thread.reserve(additional);
+        self.roots
+            .reserve(self.nodes.capacity().saturating_sub(self.roots.capacity()));
+        self.bookmarked.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.bookmarked.capacity()),
+        );
+        self.thread
+            .reserve(self.nodes.capacity().saturating_sub(self.thread.capacity()));
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
