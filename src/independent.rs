@@ -1,6 +1,7 @@
 //! Experimental & untested; likely contains serious bugs
 
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
     hash::BuildHasherDefault,
 };
@@ -535,6 +536,45 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             }
             None => false,
         }
+    }
+    #[debug_ensures(ret == self.contains(id))]
+    #[debug_ensures(self.validate())]
+    fn sort_node_children_by(
+        &mut self,
+        id: &u128,
+        mut compare: impl FnMut(&IndependentNode<T>, &IndependentNode<T>) -> Ordering,
+    ) -> bool {
+        if let Some(node) = self.nodes.get(id) {
+            let mut children: Vec<_> = node.to.iter().filter_map(|id| self.nodes.get(id)).collect();
+            children.sort_by(|a, b| compare(a, b));
+
+            let children: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
+                children.into_iter().map(|node| node.id).collect();
+
+            if let Some(node) = self.nodes.get_mut(id) {
+                node.to = children;
+
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+    #[debug_ensures(self.validate())]
+    fn sort_roots_by(
+        &mut self,
+        mut compare: impl FnMut(&IndependentNode<T>, &IndependentNode<T>) -> Ordering,
+    ) {
+        let mut roots: Vec<_> = self
+            .roots
+            .iter()
+            .filter_map(|id| self.nodes.get(id))
+            .collect();
+        roots.sort_by(|a, b| compare(a, b));
+
+        self.roots = roots.into_iter().map(|node| node.id).collect();
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]

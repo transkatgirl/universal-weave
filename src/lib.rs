@@ -3,7 +3,7 @@
 pub mod dependent;
 pub mod independent;
 
-use std::{collections::VecDeque, hash::BuildHasherDefault};
+use std::{cmp::Ordering, collections::VecDeque, hash::BuildHasherDefault};
 
 pub use indexmap;
 use indexmap::IndexSet;
@@ -37,6 +37,9 @@ where
     fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;
+    fn sort_node_children_by(&mut self, id: &u128, compare: impl FnMut(&N, &N) -> Ordering)
+    -> bool;
+    fn sort_roots_by(&mut self, compare: impl FnMut(&N, &N) -> Ordering);
     fn remove_node(&mut self, id: &u128) -> Option<N>;
 }
 
