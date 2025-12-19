@@ -287,7 +287,7 @@ impl TapestryWeave {
 
                 for duplicate in &duplicates {
                     if last_active_set.contains(duplicate) {
-                        self.weave.set_node_active_status(duplicate, true);
+                        self.weave.set_node_active_status(duplicate, true, false);
                         has_active = true;
                         break;
                     }
@@ -295,7 +295,7 @@ impl TapestryWeave {
 
                 if !has_active {
                     self.weave
-                        .set_node_active_status(duplicates.first().unwrap(), true);
+                        .set_node_active_status(duplicates.first().unwrap(), true, false);
                 }
             }
             self.weave.remove_node(&identifier);
@@ -304,7 +304,7 @@ impl TapestryWeave {
         status
     }
     pub fn set_node_active_status(&mut self, id: &Ulid, value: bool) -> bool {
-        self.weave.set_node_active_status(&id.0, value)
+        self.weave.set_node_active_status(&id.0, value, false)
     }
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
         self.weave.set_node_bookmarked_status(&id.0, value)
@@ -381,9 +381,10 @@ impl TapestryWeave {
         }
 
         if let Some(last_node) = last_node {
-            self.weave.set_node_active_status(&last_node, true);
+            self.weave.set_node_active_status(&last_node, true, false);
         } else if let Some(active_node) = active_node {
-            self.weave.set_node_active_status(&active_node, false);
+            self.weave
+                .set_node_active_status(&active_node, false, false);
         }
 
         if let Some(node) = last_node.and_then(|id| self.weave.get_node(&id))

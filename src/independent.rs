@@ -293,7 +293,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
             None => false,
         }
     }
-    fn deactivate_top_level_node_recursive(&mut self, id: &u128) -> bool {
+    /*fn deactivate_top_level_node_recursive(&mut self, id: &u128) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             if !node.active {
                 return true;
@@ -311,7 +311,7 @@ impl<T: IndependentContents, M> IndependentWeave<T, M> {
         } else {
             false
         }
-    }
+    }*/
     fn update_removed_child_activity(&mut self, id: &u128) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if !node.active {
@@ -497,8 +497,25 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     }
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
-    fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
-        let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
+    fn set_node_active_status(&mut self, id: &u128, value: bool, alternate: bool) -> bool {
+        if value
+            && alternate
+            && let Some(node) = self.nodes.get(id)
+            && let Some(active_multiparent_child) = node
+                .to
+                .iter()
+                .filter_map(|child| self.nodes.get(child))
+                .find(|child| child.active && child.from.len() > 1)
+        {
+            let child_id = active_multiparent_child.id;
+
+            self.update_node_activity_in_place(id, true);
+            self.update_node_activity_in_place(&child_id, false)
+        } else {
+            self.update_node_activity_in_place(id, value)
+        }
+
+        /*let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
             if node.active {
                 let has_active_children = node
                     .to
@@ -518,7 +535,7 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
             self.deactivate_top_level_node_recursive(id)
         } else {
             self.update_node_activity_in_place(id, value)
-        }
+        }*/
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]

@@ -277,7 +277,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]
-    fn set_node_active_status(&mut self, id: &u128, value: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &u128, value: bool, _alternate: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
