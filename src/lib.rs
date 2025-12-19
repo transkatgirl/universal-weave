@@ -34,8 +34,8 @@ where
     fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128>;
     fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
     fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
-    fn get_active_thread(&mut self) -> &VecDeque<u128>;
-    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128>;
+    fn get_active_thread(&mut self) -> &VecDeque<u128>; // TODO: Rewrite this to use Vec<T>
+    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128>; // TODO: Rewrite this to use Vec<T>
     fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: &u128, value: bool, alternate: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;
