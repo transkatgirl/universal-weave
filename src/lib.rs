@@ -6,7 +6,7 @@
 // - TODO: Implement efficient ULID hashing (use existing random bytes)
 // - TODO: Keep track of weave modifications
 // - TODO: Remove ability to perform inner accesses
-// - TODO: Duplicate nodes before splitting
+// - TODO: Duplicate nodes before splitting/merging/moving
 pub mod dependent;
 pub mod independent;
 
