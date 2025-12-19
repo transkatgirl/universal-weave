@@ -499,18 +499,25 @@ impl<T: IndependentContents, M> Weave<IndependentNode<T>, T> for IndependentWeav
     #[debug_ensures(self.validate())]
     fn set_node_active_status(&mut self, id: &u128, value: bool, alternate: bool) -> bool {
         if value
-            && alternate
             && let Some(node) = self.nodes.get(id)
-            && let Some(active_multiparent_child) = node
+            && let Some(active_child) = node
                 .to
                 .iter()
                 .filter_map(|child| self.nodes.get(child))
-                .find(|child| child.active && child.from.len() > 1)
+                .find(|child| child.active)
         {
-            let child_id = active_multiparent_child.id;
+            let child_id = active_child.id;
 
-            self.update_node_activity_in_place(id, true);
-            self.update_node_activity_in_place(&child_id, false)
+            if (!alternate && active_child.from.len() == 1)
+                || (alternate && active_child.from.len() > 1)
+            {
+                let result = self.update_node_activity_in_place(id, true);
+                self.update_node_activity_in_place(&child_id, false);
+
+                result
+            } else {
+                self.update_node_activity_in_place(id, value)
+            }
         } else {
             self.update_node_activity_in_place(id, value)
         }
