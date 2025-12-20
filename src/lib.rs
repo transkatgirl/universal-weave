@@ -1,12 +1,7 @@
-// TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
-// TODO: Unit tests
 // TODO: Make key and hashing algo generic
-// Tapestry Weave:
-// - TODO: v1 format using IndependentWeave
-// - TODO: Implement efficient ULID hashing (use existing random bytes)
-// - TODO: Keep track of weave modifications
-// - TODO: Remove ability to perform inner accesses
-// - TODO: Duplicate nodes before splitting/merging/moving
+// TODO: Unit tests
+// TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+
 pub mod dependent;
 pub mod independent;
 

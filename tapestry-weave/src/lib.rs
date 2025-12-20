@@ -1,3 +1,11 @@
+// TODO: v1 format using IndependentWeave
+// TODO: Implement efficient ULID hashing (use existing random bytes)
+// TODO: Keep track of weave modifications
+// TODO: Remove ability to perform inner accesses
+// TODO: Duplicate nodes before splitting/merging/moving
+// TODO: Implement a "link" node to allow linking between weaves
+// TODO: Add temporary nodes which are not actually stored in the IndependentWeave?
+
 use universal_weave::rkyv::rancor::Error;
 
 pub use ulid;
