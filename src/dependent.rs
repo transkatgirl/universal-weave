@@ -1,7 +1,7 @@
 use std::{
     cmp::Ordering,
-    collections::{HashMap, VecDeque},
-    hash::BuildHasherDefault,
+    collections::HashMap,
+    hash::{BuildHasher, Hash},
 };
 
 use contracts::*;
@@ -9,9 +9,7 @@ use indexmap::IndexSet;
 use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
-    hash::FxHasher64,
     option::ArchivedOption,
-    rend::u128_le,
 };
 
 #[cfg(feature = "serde")]
@@ -24,17 +22,25 @@ use crate::{
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-pub struct DependentNode<T> {
-    pub id: u128,
-    pub from: Option<u128>,
-    pub to: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
+pub struct DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    pub id: K,
+    pub from: Option<K>,
+    pub to: IndexSet<K, S>,
 
     pub active: bool,
     pub bookmarked: bool,
     pub contents: T,
 }
 
-impl<T> DependentNode<T> {
+impl<K, T, S> DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     fn validate(&self) -> bool {
         (if let Some(from) = self.from {
             !self.to.contains(&from)
@@ -45,14 +51,18 @@ impl<T> DependentNode<T> {
     }
 }
 
-impl<T> Node<T> for DependentNode<T> {
-    fn id(&self) -> u128 {
+impl<K, T, S> Node<K, T, S> for DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn id(&self) -> K {
         self.id
     }
-    fn from(&self) -> impl Iterator<Item = u128> {
+    fn from(&self) -> impl ExactSizeIterator<Item = K> {
         self.from.into_iter()
     }
-    fn to(&self) -> impl Iterator<Item = u128> {
+    fn to(&self) -> impl ExactSizeIterator<Item = K> {
         self.to.iter().copied()
     }
     fn is_active(&self) -> bool {
@@ -68,22 +78,29 @@ impl<T> Node<T> for DependentNode<T> {
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-pub struct DependentWeave<T, M> {
-    nodes: HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
-    roots: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
-    active: Option<u128>,
-    bookmarked: IndexSet<u128, BuildHasherDefault<FxHasher64>>,
-    thread: VecDeque<u128>,
+pub struct DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    nodes: HashMap<K, DependentNode<K, T, S>, S>,
+    roots: IndexSet<K, S>,
+    active: Option<K>,
+    bookmarked: IndexSet<K, S>,
+    thread: Vec<K>,
 
     pub metadata: M,
 }
 
-impl<T, M> DependentWeave<T, M> {
+impl<K, T, M, S> DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     pub fn validate(&self) -> bool {
-        let nodes: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
-            self.nodes.keys().copied().collect();
+        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
-        self.roots.is_subset(&nodes)
+        self.roots.is_subset::<S>(&nodes)
             && if let Some(active) = self.active {
                 self.nodes.contains_key(&active)
             } else {
@@ -119,14 +136,18 @@ impl<T, M> DependentWeave<T, M> {
     }
 }
 
-impl<T, M> DependentWeave<T, M> {
+impl<K, T, M, S> DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
-            nodes: HashMap::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
-            roots: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
+            nodes: HashMap::with_capacity_and_hasher(capacity, S::default()),
+            roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
-            bookmarked: IndexSet::with_capacity_and_hasher(capacity, BuildHasherDefault::default()),
-            thread: VecDeque::with_capacity(capacity),
+            bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
+            thread: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -153,8 +174,8 @@ impl<T, M> DependentWeave<T, M> {
     }
     fn siblings<'a>(
         &'a self,
-        node: &'a DependentNode<T>,
-    ) -> Box<dyn Iterator<Item = &'a DependentNode<T>> + 'a> {
+        node: &'a DependentNode<K, T, S>,
+    ) -> Box<dyn Iterator<Item = &'a DependentNode<K, T, S>> + 'a> {
         match &node.from {
             Some(parent) => Box::new(self.nodes.get(parent).into_iter().flat_map(|parent| {
                 parent
@@ -174,7 +195,7 @@ impl<T, M> DependentWeave<T, M> {
         }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
-    fn remove_node_unverified(&mut self, id: &u128) -> Option<DependentNode<T>> {
+    fn remove_node_unverified(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
@@ -200,47 +221,56 @@ impl<T, M> DependentWeave<T, M> {
     }
 }
 
-impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
+impl<K, T, M, S> Weave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     fn len(&self) -> usize {
         self.nodes.len()
     }
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
-    fn contains(&self, id: &u128) -> bool {
+    fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
-    fn get_node(&self, id: &u128) -> Option<&DependentNode<T>> {
+    fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128> {
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K> {
         self.nodes.keys().copied()
     }
-    fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+    fn get_roots(&self) -> &IndexSet<K, S> {
         &self.roots
     }
-    fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>> {
+    fn get_bookmarks(&self) -> &IndexSet<K, S> {
         &self.bookmarked
     }
-    fn get_active_thread(&mut self) -> &VecDeque<u128> {
+    fn get_active_thread(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.thread.clear();
 
         if let Some(active) = self.active {
             build_thread(&self.nodes, &active, &mut self.thread);
         }
 
-        &self.thread
+        self.thread.iter().copied()
     }
-    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128> {
+    fn get_thread_from(
+        &mut self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.thread.clear();
 
         build_thread(&self.nodes, id, &mut self.thread);
 
-        &self.thread
+        self.thread.iter().copied()
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
-    fn add_node(&mut self, node: DependentNode<T>) -> bool {
+    fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         let is_invalid =
             self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty();
 
@@ -277,7 +307,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]
-    fn set_node_active_status(&mut self, id: &u128, value: bool, _alternate: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
@@ -301,7 +331,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
-    fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool {
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.bookmarked = value;
@@ -320,15 +350,14 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(self.validate())]
     fn sort_node_children_by(
         &mut self,
-        id: &u128,
-        mut compare: impl FnMut(&DependentNode<T>, &DependentNode<T>) -> Ordering,
+        id: &K,
+        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
         if let Some(node) = self.nodes.get(id) {
             let mut children: Vec<_> = node.to.iter().filter_map(|id| self.nodes.get(id)).collect();
             children.sort_by(|a, b| compare(a, b));
 
-            let children: IndexSet<u128, BuildHasherDefault<FxHasher64>> =
-                children.into_iter().map(|node| node.id).collect();
+            let children: IndexSet<_, _> = children.into_iter().map(|node| node.id).collect();
 
             if let Some(node) = self.nodes.get_mut(id) {
                 node.to = children;
@@ -344,7 +373,7 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     #[debug_ensures(self.validate())]
     fn sort_roots_by(
         &mut self,
-        mut compare: impl FnMut(&DependentNode<T>, &DependentNode<T>) -> Ordering,
+        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         let mut roots: Vec<_> = self
             .roots
@@ -357,15 +386,20 @@ impl<T, M> Weave<DependentNode<T>, T> for DependentWeave<T, M> {
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]
-    fn remove_node(&mut self, id: &u128) -> Option<DependentNode<T>> {
+    fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
 }
 
-impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWeave<T, M> {
+impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
-    fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool {
+    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
@@ -409,7 +443,7 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
         }
     }
     #[debug_ensures(self.validate())]
-    fn merge_with_parent(&mut self, id: &u128) -> bool {
+    fn merge_with_parent(&mut self, id: &K) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
                 if parent.to.len() > 1 {
@@ -457,14 +491,25 @@ impl<T: DiscreteContents, M> DiscreteWeave<DependentNode<T>, T> for DependentWea
     }
 }
 
-impl<T: IndependentContents, M> SemiIndependentWeave<DependentNode<T>, T> for DependentWeave<T, M> {
-    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T> {
+impl<K, T, M, S> SemiIndependentWeave<K, DependentNode<K, T, S>, T, S>
+    for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T> {
         self.nodes.get_mut(id).map(|node| &mut node.contents)
     }
 }
 
-impl<T: DeduplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for DependentWeave<T, M> {
-    fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128> {
+impl<K, T, M, S> DuplicatableWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: DeduplicatableContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.nodes.get(id).into_iter().flat_map(|node| {
             self.siblings(node).filter_map(|sibling| {
                 if node.contents.is_duplicate_of(&sibling.contents) {
@@ -477,17 +522,19 @@ impl<T: DeduplicatableContents, M> DuplicatableWeave<DependentNode<T>, T> for De
     }
 }
 
-impl<T> ArchivedNode<T> for ArchivedDependentNode<T>
+impl<K, T, S> ArchivedNode<K, T> for ArchivedDependentNode<K, T, S>
 where
+    K: Archive<Archived = K> + Hash + Copy + Eq,
     T: Archive<Archived = T>,
+    S: BuildHasher + Default + Clone,
 {
-    fn id(&self) -> u128_le {
+    fn id(&self) -> K {
         self.id
     }
-    fn from(&self) -> impl Iterator<Item = u128_le> {
+    fn from(&self) -> impl Iterator<Item = K> {
         self.from.into_iter().copied()
     }
-    fn to(&self) -> impl Iterator<Item = u128_le> {
+    fn to(&self) -> impl Iterator<Item = K> {
         self.to.iter().copied()
     }
     fn is_active(&self) -> bool {
@@ -501,10 +548,13 @@ where
     }
 }
 
-impl<T, M> ArchivedWeave<ArchivedDependentNode<T>, T> for ArchivedDependentWeave<T, M>
+impl<K, T, M, S> ArchivedWeave<K, ArchivedDependentNode<K, T, S>, T>
+    for ArchivedDependentWeave<K, T, M, S>
 where
+    K: Archive<Archived = K> + Hash + Copy + Eq,
     T: Archive<Archived = T>,
     M: Archive<Archived = T>,
+    S: BuildHasher + Default + Clone,
 {
     fn len(&self) -> usize {
         self.nodes.len()
@@ -512,63 +562,70 @@ where
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
-    fn contains(&self, id: &u128_le) -> bool {
+    fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
-    fn get_node(&self, id: &u128_le) -> Option<&ArchivedDependentNode<T>> {
+    fn get_node(&self, id: &K) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128_le> {
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K> {
         self.nodes.keys().copied()
     }
-    fn get_roots(&self) -> &ArchivedIndexSet<u128_le> {
+    fn get_roots(&self) -> &ArchivedIndexSet<K> {
         &self.roots
     }
-    fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le> {
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<K> {
         &self.bookmarked
     }
-    fn get_active_thread(&self) -> VecDeque<u128_le> {
+    fn get_active_thread(
+        &self,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         let mut thread =
-            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
         if let ArchivedOption::Some(active) = self.active {
             build_thread_archived(&self.nodes, &active, &mut thread);
         }
 
-        thread
+        thread.into_iter()
     }
-    fn get_thread_from(&self, id: &u128_le) -> VecDeque<u128_le> {
+    fn get_thread_from(
+        &self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         let mut thread =
-            VecDeque::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
         build_thread_archived(&self.nodes, id, &mut thread);
 
-        thread
+        thread.into_iter()
     }
 }
 
-fn build_thread<T>(
-    nodes: &HashMap<u128, DependentNode<T>, BuildHasherDefault<FxHasher64>>,
-    id: &u128,
-    thread: &mut VecDeque<u128>,
-) {
+fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: &K, thread: &mut Vec<K>)
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     if let Some(node) = nodes.get(id) {
-        thread.push_back(*id);
+        thread.push(*id);
         if let Some(parent) = node.from {
             build_thread(nodes, &parent, thread);
         }
     }
 }
 
-fn build_thread_archived<T>(
-    nodes: &ArchivedHashMap<u128_le, ArchivedDependentNode<T>>,
-    id: &u128_le,
-    thread: &mut VecDeque<u128_le>,
+fn build_thread_archived<K, T, S>(
+    nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
+    id: &K::Archived,
+    thread: &mut Vec<K::Archived>,
 ) where
-    T: Archive,
+    K: Archive<Archived = K> + Hash + Copy + Eq,
+    T: Archive<Archived = T>,
+    S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(id) {
-        thread.push_back(*id);
+        thread.push(*id);
         if let ArchivedOption::Some(parent) = node.from {
             build_thread_archived(nodes, &parent, thread);
         }
