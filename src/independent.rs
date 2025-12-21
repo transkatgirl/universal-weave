@@ -857,19 +857,20 @@ where
     }
 }
 
-impl<K, T, S> ArchivedNode<K, T> for ArchivedIndependentNode<K, T, S>
+impl<K, K2, T, T2, S> ArchivedNode<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
-    K: Archive<Archived = K> + Hash + Copy + Eq,
-    T: Archive<Archived = T> + IndependentContents,
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    fn id(&self) -> K {
+    fn id(&self) -> K::Archived {
         self.id
     }
-    fn from(&self) -> impl Iterator<Item = K> {
+    fn from(&self) -> impl Iterator<Item = K::Archived> {
         self.from.iter().copied()
     }
-    fn to(&self) -> impl Iterator<Item = K> {
+    fn to(&self) -> impl Iterator<Item = K::Archived> {
         self.to.iter().copied()
     }
     fn is_active(&self) -> bool {
@@ -878,17 +879,19 @@ where
     fn is_bookmarked(&self) -> bool {
         self.bookmarked
     }
-    fn contents(&self) -> &T {
+    fn contents(&self) -> &T::Archived {
         &self.contents
     }
 }
 
-impl<K, T, M, S> ArchivedWeave<K, ArchivedIndependentNode<K, T, S>, T>
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K> + Hash + Copy + Eq,
-    T: Archive<Archived = T> + IndependentContents,
-    M: Archive<Archived = T>,
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
+    M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
 {
     fn len(&self) -> usize {
@@ -897,24 +900,24 @@ where
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
-    fn contains(&self, id: &K) -> bool {
+    fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
-    fn get_node(&self, id: &K) -> Option<&ArchivedIndependentNode<K, T, S>> {
+    fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K> {
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K::Archived> {
         self.nodes.keys().copied()
     }
-    fn get_roots(&self) -> &ArchivedIndexSet<K> {
+    fn get_roots(&self) -> &ArchivedIndexSet<K::Archived> {
         &self.roots
     }
-    fn get_bookmarks(&self) -> &ArchivedIndexSet<K> {
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<K::Archived> {
         &self.bookmarked
     }
     fn get_active_thread(
         &self,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
+    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
         let mut thread =
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
@@ -926,8 +929,8 @@ where
     }
     fn get_thread_from(
         &self,
-        id: &K,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
+        id: &K::Archived,
+    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
         let mut thread =
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
@@ -987,14 +990,15 @@ fn build_thread_from<K, T, S>(
     }
 }
 
-fn build_thread_archived<K, T, S>(
-    nodes: &ArchivedHashMap<K, ArchivedIndependentNode<K, T, S>>,
-    active: &ArchivedHashSet<K>,
-    id: &K,
-    thread: &mut Vec<K>,
+fn build_thread_archived<K, K2, T, T2, S>(
+    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
+    active: &ArchivedHashSet<K::Archived>,
+    id: &K::Archived,
+    thread: &mut Vec<K::Archived>,
 ) where
-    K: Archive<Archived = K> + Hash + Copy + Eq,
-    T: Archive<Archived = T> + IndependentContents,
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq,
+    T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(id)
@@ -1008,14 +1012,15 @@ fn build_thread_archived<K, T, S>(
     }
 }
 
-fn build_thread_from_archived<K, T, S>(
-    nodes: &ArchivedHashMap<K, ArchivedIndependentNode<K, T, S>>,
-    active: &ArchivedHashSet<K>,
-    id: &K,
-    thread: &mut Vec<K>,
+fn build_thread_from_archived<K, K2, T, T2, S>(
+    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
+    active: &ArchivedHashSet<K::Archived>,
+    id: &K::Archived,
+    thread: &mut Vec<K::Archived>,
 ) where
-    K: Archive<Archived = K> + Hash + Copy + Eq,
-    T: Archive<Archived = T> + IndependentContents,
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq,
+    T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(id) {
