@@ -10,8 +10,8 @@ use universal_weave::rkyv::rancor::Error;
 pub use ulid;
 pub use universal_weave;
 
-//pub mod treeless;
 pub mod hashers;
+pub mod treeless;
 pub mod v0;
 pub mod versioning;
 
