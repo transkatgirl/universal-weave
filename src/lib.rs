@@ -1,5 +1,3 @@
-// TODO: Make key and hashing algo generic
-// TODO: Replace VecDeque<T> with Vec<T>
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
