@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::{borrow::Cow, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
 use ulid::Ulid;
@@ -8,7 +8,8 @@ use universal_weave::{
     dependent::{DependentNode, DependentWeave},
     indexmap::{IndexMap, IndexSet},
     rkyv::{
-        Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes, util::AlignedVec,
+        Archive, Deserialize, Serialize, from_bytes, hash::FxHasher64, rancor::Error, to_bytes,
+        util::AlignedVec,
     },
 };
 
@@ -208,7 +209,8 @@ pub struct Model {
 }
 
 pub struct TapestryWeave {
-    pub weave: DependentWeave<NodeContent, IndexMap<String, String>>,
+    pub weave:
+        DependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<FxHasher64>>,
 }
 
 impl TapestryWeave {
@@ -251,7 +253,10 @@ impl TapestryWeave {
     pub fn contains(&self, id: &Ulid) -> bool {
         self.weave.contains(&id.0)
     }
-    pub fn get_node(&self, id: &Ulid) -> Option<&DependentNode<NodeContent>> {
+    pub fn get_node(
+        &self,
+        id: &Ulid,
+    ) -> Option<&DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>> {
         self.weave.get_node(&id.0)
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
@@ -262,16 +267,20 @@ impl TapestryWeave {
     }
     pub fn get_active_thread(
         &mut self,
-    ) -> impl DoubleEndedIterator<Item = &DependentNode<NodeContent>> {
-        let active: Vec<u128> = self.weave.get_active_thread().iter().copied().collect();
+    ) -> impl DoubleEndedIterator<Item = &DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>>
+    {
+        let active: Vec<u128> = self.weave.get_active_thread().collect();
 
         active.into_iter().filter_map(|id| self.weave.get_node(&id))
     }
 
-    pub fn add_node(&mut self, node: DependentNode<NodeContent>) -> bool {
+    pub fn add_node(
+        &mut self,
+        node: DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>,
+    ) -> bool {
         let identifier = node.id;
         let last_active_set: HashSet<u128> = if node.active {
-            HashSet::from_iter(self.weave.get_active_thread().iter().copied())
+            HashSet::from_iter(self.weave.get_active_thread())
         } else {
             HashSet::default()
         };
@@ -324,13 +333,7 @@ impl TapestryWeave {
 
         let value_len = value.len();
 
-        let active_thread: Vec<u128> = self
-            .weave
-            .get_active_thread()
-            .iter()
-            .rev()
-            .copied()
-            .collect();
+        let active_thread: Vec<u128> = self.weave.get_active_thread().rev().collect();
         let active_node = active_thread.iter().copied().last();
 
         let mut last_node = None;
@@ -426,13 +429,7 @@ impl TapestryWeave {
         modified
     }
     pub fn get_active_content(&mut self) -> Vec<u8> {
-        let active_thread: Vec<u128> = self
-            .weave
-            .get_active_thread()
-            .iter()
-            .rev()
-            .copied()
-            .collect();
+        let active_thread: Vec<u128> = self.weave.get_active_thread().rev().collect();
 
         active_thread
             .into_iter()
@@ -466,7 +463,10 @@ impl TapestryWeave {
             false
         }
     }
-    pub fn remove_node(&mut self, id: &Ulid) -> Option<DependentNode<NodeContent>> {
+    pub fn remove_node(
+        &mut self,
+        id: &Ulid,
+    ) -> Option<DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>> {
         self.weave.remove_node(&id.0)
     }
 }

@@ -1,82 +1,102 @@
 // TODO: Make key and hashing algo generic
+// TODO: Replace VecDeque<T> with Vec<T>
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
 pub mod dependent;
 pub mod independent;
 
-use std::{cmp::Ordering, collections::VecDeque, hash::BuildHasherDefault};
+use std::{
+    cmp::Ordering,
+    hash::{BuildHasher, Hash},
+};
 
 pub use indexmap;
 use indexmap::IndexSet;
 pub use rkyv;
-use rkyv::{collections::swiss_table::ArchivedIndexSet, hash::FxHasher64, rend::u128_le};
+use rkyv::collections::swiss_table::ArchivedIndexSet;
 
-pub type IdentifierSet = IndexSet<u128, BuildHasherDefault<FxHasher64>>;
-
-pub trait Node<T> {
-    fn id(&self) -> u128;
-    fn from(&self) -> impl Iterator<Item = u128>;
-    fn to(&self) -> impl Iterator<Item = u128>;
+pub trait Node<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn id(&self) -> K;
+    fn from(&self) -> impl ExactSizeIterator<Item = K>;
+    fn to(&self) -> impl ExactSizeIterator<Item = K>;
     fn is_active(&self) -> bool;
     fn is_bookmarked(&self) -> bool;
     fn contents(&self) -> &T;
 }
 
-pub trait Weave<N, T>
+pub trait Weave<K, N, T, S>
 where
-    N: Node<T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
+    S: BuildHasher + Default + Clone,
 {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
-    fn contains(&self, id: &u128) -> bool;
-    fn get_node(&self, id: &u128) -> Option<&N>;
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128>;
-    fn get_roots(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
-    fn get_bookmarks(&self) -> &IndexSet<u128, BuildHasherDefault<FxHasher64>>;
-    fn get_active_thread(&mut self) -> &VecDeque<u128>; // TODO: Rewrite this to use Vec<T>
-    fn get_thread_from(&mut self, id: &u128) -> &VecDeque<u128>; // TODO: Rewrite this to use Vec<T>
+    fn contains(&self, id: &K) -> bool;
+    fn get_node(&self, id: &K) -> Option<&N>;
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K>;
+    fn get_roots(&self) -> &IndexSet<K, S>;
+    fn get_bookmarks(&self) -> &IndexSet<K, S>;
+    fn get_active_thread(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_thread_from(
+        &mut self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     fn add_node(&mut self, node: N) -> bool;
-    fn set_node_active_status(&mut self, id: &u128, value: bool, alternate: bool) -> bool;
-    fn set_node_bookmarked_status(&mut self, id: &u128, value: bool) -> bool;
-    fn sort_node_children_by(&mut self, id: &u128, compare: impl FnMut(&N, &N) -> Ordering)
-    -> bool;
+    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
+    fn sort_node_children_by(&mut self, id: &K, compare: impl FnMut(&N, &N) -> Ordering) -> bool;
     fn sort_roots_by(&mut self, compare: impl FnMut(&N, &N) -> Ordering);
-    fn remove_node(&mut self, id: &u128) -> Option<N>;
+    fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
-pub trait IndependentWeave<N, T>
+pub trait IndependentWeave<K, N, T, S>
 where
-    N: Node<T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
     T: IndependentContents,
+    S: BuildHasher + Default + Clone,
 {
-    fn move_node(&mut self, id: &u128, new_parents: &[u128]) -> bool;
-    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T>;
+    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
+    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
-pub trait SemiIndependentWeave<N, T>
+pub trait SemiIndependentWeave<K, N, T, S>
 where
-    N: Node<T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
     T: IndependentContents,
+    S: BuildHasher + Default + Clone,
 {
-    fn get_contents_mut(&mut self, id: &u128) -> Option<&mut T>;
+    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
-pub trait DiscreteWeave<N, T>
+pub trait DiscreteWeave<K, N, T, S>
 where
-    N: Node<T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
     T: DiscreteContents,
+    S: BuildHasher + Default + Clone,
 {
-    fn split_node(&mut self, id: &u128, at: usize, new_id: u128) -> bool;
-    fn merge_with_parent(&mut self, id: &u128) -> bool;
+    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
+    fn merge_with_parent(&mut self, id: &K) -> bool;
 }
 
-pub trait DuplicatableWeave<N, T>
+pub trait DuplicatableWeave<K, N, T, S>
 where
-    N: Node<T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
     T: DeduplicatableContents,
+    S: BuildHasher + Default + Clone,
 {
-    fn find_duplicates(&self, id: &u128) -> impl Iterator<Item = u128>;
+    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
 pub enum DiscreteContentResult<T> {
@@ -95,26 +115,34 @@ pub trait DeduplicatableContents {
 
 pub trait IndependentContents {}
 
-pub trait ArchivedNode<T> {
-    fn id(&self) -> u128_le;
-    fn from(&self) -> impl Iterator<Item = u128_le>;
-    fn to(&self) -> impl Iterator<Item = u128_le>;
+pub trait ArchivedNode<K, T>
+where
+    K: Hash + Copy + Eq,
+{
+    fn id(&self) -> K;
+    fn from(&self) -> impl Iterator<Item = K>;
+    fn to(&self) -> impl Iterator<Item = K>;
     fn is_active(&self) -> bool;
     fn is_bookmarked(&self) -> bool;
     fn contents(&self) -> &T;
 }
 
-pub trait ArchivedWeave<N, T>
+pub trait ArchivedWeave<K, N, T>
 where
-    N: ArchivedNode<T>,
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
 {
     fn len(&self) -> usize;
     fn is_empty(&self) -> bool;
-    fn contains(&self, id: &u128_le) -> bool;
-    fn get_node(&self, id: &u128_le) -> Option<&N>;
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = u128_le>;
-    fn get_roots(&self) -> &ArchivedIndexSet<u128_le>;
-    fn get_bookmarks(&self) -> &ArchivedIndexSet<u128_le>;
-    fn get_active_thread(&self) -> VecDeque<u128_le>;
-    fn get_thread_from(&self, id: &u128_le) -> VecDeque<u128_le>;
+    fn contains(&self, id: &K) -> bool;
+    fn get_node(&self, id: &K) -> Option<&N>;
+    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K>;
+    fn get_roots(&self) -> &ArchivedIndexSet<K>;
+    fn get_bookmarks(&self) -> &ArchivedIndexSet<K>;
+    fn get_active_thread(&self)
+    -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_thread_from(
+        &self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
 }
