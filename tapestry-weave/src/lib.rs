@@ -1,5 +1,4 @@
 // TODO: v1 format using IndependentWeave
-// TODO: Implement efficient ULID hashing (use existing random bytes)
 // TODO: Keep track of weave modifications
 // TODO: Remove ability to perform inner accesses
 // TODO: Duplicate nodes before splitting/merging/moving
@@ -11,7 +10,8 @@ use universal_weave::rkyv::rancor::Error;
 pub use ulid;
 pub use universal_weave;
 
-pub mod treeless;
+//pub mod treeless;
+pub mod hashers;
 pub mod v0;
 pub mod versioning;
 

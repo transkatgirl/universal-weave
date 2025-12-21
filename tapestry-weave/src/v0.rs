@@ -8,15 +8,17 @@ use universal_weave::{
     dependent::{DependentNode, DependentWeave},
     indexmap::{IndexMap, IndexSet},
     rkyv::{
-        Archive, Deserialize, Serialize, from_bytes, hash::FxHasher64, rancor::Error, to_bytes,
-        util::AlignedVec,
+        Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes, util::AlignedVec,
     },
 };
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-use crate::versioning::{MixedData, VersionedBytes};
+use crate::{
+    hashers::UlidHasher,
+    versioning::{MixedData, VersionedBytes},
+};
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
@@ -210,7 +212,7 @@ pub struct Model {
 
 pub struct TapestryWeave {
     pub weave:
-        DependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<FxHasher64>>,
+        DependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<UlidHasher>>,
 }
 
 impl TapestryWeave {
@@ -256,7 +258,7 @@ impl TapestryWeave {
     pub fn get_node(
         &self,
         id: &Ulid,
-    ) -> Option<&DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>> {
+    ) -> Option<&DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>> {
         self.weave.get_node(&id.0)
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
@@ -267,7 +269,7 @@ impl TapestryWeave {
     }
     pub fn get_active_thread(
         &mut self,
-    ) -> impl DoubleEndedIterator<Item = &DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>>
+    ) -> impl DoubleEndedIterator<Item = &DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>>
     {
         let active: Vec<u128> = self.weave.get_active_thread().collect();
 
@@ -276,7 +278,7 @@ impl TapestryWeave {
 
     pub fn add_node(
         &mut self,
-        node: DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>,
+        node: DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>,
     ) -> bool {
         let identifier = node.id;
         let last_active_set: HashSet<u128> = if node.active {
@@ -466,7 +468,7 @@ impl TapestryWeave {
     pub fn remove_node(
         &mut self,
         id: &Ulid,
-    ) -> Option<DependentNode<u128, NodeContent, BuildHasherDefault<FxHasher64>>> {
+    ) -> Option<DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>> {
         self.weave.remove_node(&id.0)
     }
 }
