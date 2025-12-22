@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
-use rkyv::rend::u128_le;
+use rkyv::{hash::FxHasher64, rend::u128_le};
 use ulid::Ulid;
 use universal_weave::{
     ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
@@ -31,7 +31,7 @@ use crate::{
 pub struct NodeContent {
     pub modified: bool,
     pub content: InnerNodeContent,
-    pub metadata: IndexMap<String, String>,
+    pub metadata: IndexMap<String, String, BuildHasherDefault<FxHasher64>>,
     pub creator: Option<Creator>,
 }
 
@@ -107,7 +107,7 @@ pub enum InnerNodeContent {
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct InnerNodeToken {
     bytes: Vec<u8>,
-    metadata: IndexMap<String, String>,
+    metadata: IndexMap<String, String, BuildHasherDefault<FxHasher64>>,
     modified: bool,
 }
 
@@ -267,7 +267,7 @@ pub enum Creator {
 pub struct Model {
     pub label: String,
     pub identifier: Option<u128>,
-    pub metadata: IndexMap<String, String>,
+    pub metadata: IndexMap<String, String, BuildHasherDefault<FxHasher64>>,
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -280,8 +280,12 @@ pub struct Author {
 pub type TapestryNode = IndependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>;
 pub type ArchivedTapestryNode =
     ArchivedIndependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>;
-pub type TapestryWeaveInner =
-    IndependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<UlidHasher>>;
+pub type TapestryWeaveInner = IndependentWeave<
+    u128,
+    NodeContent,
+    IndexMap<String, String, BuildHasherDefault<FxHasher64>>,
+    BuildHasherDefault<UlidHasher>,
+>;
 
 pub struct TapestryWeave {
     weave: TapestryWeaveInner,
@@ -328,7 +332,10 @@ impl TapestryWeave {
     pub fn to_versioned_weave(self) -> VersionedWeave {
         VersionedWeave::V1(self)
     }*/
-    pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {
+    pub fn with_capacity(
+        capacity: usize,
+        metadata: IndexMap<String, String, BuildHasherDefault<FxHasher64>>,
+    ) -> Self {
         Self {
             weave: IndependentWeave::with_capacity(capacity, metadata),
             active: Vec::with_capacity(capacity),
@@ -391,9 +398,7 @@ impl TapestryWeave {
         self.weave.get_bookmarks()
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
-        let active: Vec<u128> = self.weave.get_active_thread().collect();
-
-        active.into_iter().filter_map(|id| self.weave.get_node(&id))
+        self.active.iter().filter_map(|id| self.weave.get_node(id))
     }
     fn update_shape(&mut self) {
         self.changed = true;
@@ -403,8 +408,8 @@ impl TapestryWeave {
     }
     pub fn add_node(&mut self, node: TapestryNode) -> bool {
         let identifier = node.id;
-        let last_active_set: HashSet<u128> = if node.active {
-            HashSet::from_iter(self.weave.get_active_thread())
+        let last_active_set: HashSet<u128, BuildHasherDefault<UlidHasher>> = if node.active {
+            HashSet::from_iter(self.active.iter().copied())
         } else {
             HashSet::default()
         };
@@ -474,11 +479,10 @@ impl TapestryWeave {
         }
     }
     pub fn get_active_content(&mut self) -> Vec<u8> {
-        let active_thread: Vec<u128> = self.weave.get_active_thread().rev().collect();
-
-        active_thread
-            .into_iter()
-            .filter_map(|id| self.weave.get_node(&id))
+        self.active
+            .iter()
+            .rev()
+            .filter_map(|id| self.weave.get_node(id))
             .flat_map(|node| node.contents.content.as_bytes().to_vec())
             .collect()
     }
