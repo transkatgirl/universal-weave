@@ -211,6 +211,8 @@ pub struct Model {
     pub metadata: IndexMap<String, String>,
 }
 
+pub type TapestryNode = DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>;
+
 pub struct TapestryWeave {
     pub weave:
         DependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<UlidHasher>>,
@@ -259,10 +261,7 @@ impl TapestryWeave {
     pub fn contains(&self, id: &Ulid) -> bool {
         self.weave.contains(&id.0)
     }
-    pub fn get_node(
-        &self,
-        id: &Ulid,
-    ) -> Option<&DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>> {
+    pub fn get_node(&self, id: &Ulid) -> Option<&TapestryNode> {
         self.weave.get_node(&id.0)
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
@@ -271,19 +270,13 @@ impl TapestryWeave {
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_bookmarks().iter().copied().map(Ulid)
     }
-    pub fn get_active_thread(
-        &mut self,
-    ) -> impl DoubleEndedIterator<Item = &DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>>
-    {
+    pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         let active: Vec<u128> = self.weave.get_active_thread().collect();
 
         active.into_iter().filter_map(|id| self.weave.get_node(&id))
     }
 
-    pub fn add_node(
-        &mut self,
-        node: DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>,
-    ) -> bool {
+    pub fn add_node(&mut self, node: TapestryNode) -> bool {
         let identifier = node.id;
         let last_active_set: HashSet<u128> = if node.active {
             HashSet::from_iter(self.weave.get_active_thread())
@@ -469,10 +462,7 @@ impl TapestryWeave {
             false
         }
     }
-    pub fn remove_node(
-        &mut self,
-        id: &Ulid,
-    ) -> Option<DependentNode<u128, NodeContent, BuildHasherDefault<UlidHasher>>> {
+    pub fn remove_node(&mut self, id: &Ulid) -> Option<TapestryNode> {
         self.weave.remove_node(&id.0)
     }
 }
