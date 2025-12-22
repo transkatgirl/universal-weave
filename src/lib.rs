@@ -3,6 +3,7 @@
 
 pub mod dependent;
 pub mod independent;
+pub mod legacy_dependent;
 
 use std::{
     cmp::Ordering,

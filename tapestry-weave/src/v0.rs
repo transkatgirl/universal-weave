@@ -5,8 +5,8 @@ use ulid::Ulid;
 use universal_weave::{
     DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult, DiscreteContents,
     DiscreteWeave, Weave,
-    dependent::{DependentNode, DependentWeave},
     indexmap::{IndexMap, IndexSet},
+    legacy_dependent::{DependentNode, DependentWeave},
     rkyv::{
         Archive, Deserialize, Serialize, from_bytes, rancor::Error, to_bytes, util::AlignedVec,
     },
