@@ -13,7 +13,7 @@ pub use universal_weave;
 pub mod hashers;
 pub mod treeless;
 pub mod v0;
-//pub mod v1;
+pub mod v1;
 pub mod versioning;
 
 pub const VERSIONED_WEAVE_FILE_EXTENSION: &str = "tapestry";
@@ -23,6 +23,7 @@ use crate::versioning::{MixedData, VersionedBytes};
 #[non_exhaustive]
 pub enum VersionedWeave {
     V0(v0::TapestryWeave),
+    //V1(v1::TapestryWeave),
 }
 
 impl VersionedWeave {
@@ -33,6 +34,10 @@ impl VersionedWeave {
                     v0::TapestryWeave::from_unversioned_bytes(versioned.data.as_ref())
                         .map(Self::V0),
                 ),
+                /*1 => Some(
+                    v1::TapestryWeave::from_unversioned_bytes(versioned.data.as_ref())
+                        .map(Self::V1),
+                ),*/
                 _ => None,
             }
         } else {
@@ -44,9 +49,16 @@ impl VersionedWeave {
             Self::V0(weave) => weave,
         }
     }
+    /*pub fn into_latest(self) -> v1::TapestryWeave {
+        match self {
+            Self::V0(weave) => v1::TapestryWeave::from(weave),
+            Self::V1(weave) => weave,
+        }
+    }*/
     pub fn to_bytes(self) -> Result<Vec<u8>, Error> {
         let (version, bytes) = match self {
             Self::V0(weave) => (0, weave.to_unversioned_bytes()?),
+            //Self::V1(weave) => (1, weave.to_unversioned_bytes()?),
         };
 
         Ok(VersionedBytes {

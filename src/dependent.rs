@@ -10,6 +10,7 @@ use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
     option::ArchivedOption,
+    with::Skip,
 };
 
 #[cfg(feature = "serde")]
@@ -88,6 +89,8 @@ where
     roots: IndexSet<K, S>,
     active: Option<K>,
     bookmarked: IndexSet<K, S>,
+
+    #[rkyv(with = Skip)]
     thread: Vec<K>,
 
     pub metadata: M,

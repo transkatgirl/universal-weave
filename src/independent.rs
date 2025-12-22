@@ -11,6 +11,7 @@ use indexmap::IndexSet;
 use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
+    with::Skip,
 };
 
 #[cfg(feature = "serde")]
@@ -88,6 +89,8 @@ where
     roots: IndexSet<K, S>,
     active: HashSet<K, S>,
     bookmarked: IndexSet<K, S>,
+
+    #[rkyv(with = Skip)]
     thread: Vec<K>,
 
     pub metadata: M,
