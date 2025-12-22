@@ -16,6 +16,7 @@ use universal_weave::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
+    VersionedWeave,
     hashers::UlidHasher,
     versioning::{MixedData, VersionedBytes},
 };
@@ -231,6 +232,9 @@ impl TapestryWeave {
             data: MixedData::Output(self.to_unversioned_bytes()?),
         }
         .to_bytes())
+    }
+    pub fn to_versioned_weave(self) -> VersionedWeave {
+        VersionedWeave::V0(self)
     }
     pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {
         Self {
