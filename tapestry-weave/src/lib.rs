@@ -1,6 +1,5 @@
 // TODO: v1 format using IndependentWeave
 // TODO: Duplicate nodes before splitting/merging/moving
-// TODO: Implement a "link" node to allow linking between weaves
 // TODO: Add temporary nodes which are not actually stored in the IndependentWeave?
 
 use universal_weave::rkyv::rancor::Error;

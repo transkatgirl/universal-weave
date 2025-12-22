@@ -101,6 +101,7 @@ impl DeduplicatableContents for NodeContent {
 pub enum InnerNodeContent {
     Snippet(Vec<u8>),
     Tokens(Vec<InnerNodeToken>),
+    Link(String),
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -168,6 +169,7 @@ impl InnerNodeContent {
                     DiscreteContentResult::One(Self::Tokens(tokens))
                 }
             }
+            Self::Link(link) => DiscreteContentResult::One(Self::Link(link)),
         }
     }
     fn merge(self, value: Self) -> DiscreteContentResult<Self> {
@@ -181,6 +183,10 @@ impl InnerNodeContent {
                     Self::Snippet(left_snippet),
                     Self::Tokens(right_tokens),
                 )),
+                Self::Link(right_link) => DiscreteContentResult::Two((
+                    Self::Snippet(left_snippet),
+                    Self::Link(right_link),
+                )),
             },
             Self::Tokens(mut left_tokens) => match value {
                 Self::Snippet(right_snippet) => DiscreteContentResult::Two((
@@ -191,7 +197,11 @@ impl InnerNodeContent {
                     left_tokens.append(&mut right_tokens);
                     DiscreteContentResult::One(Self::Tokens(left_tokens))
                 }
+                Self::Link(right_link) => {
+                    DiscreteContentResult::Two((Self::Tokens(left_tokens), Self::Link(right_link)))
+                }
             },
+            Self::Link(link) => DiscreteContentResult::Two((Self::Link(link), value)),
         }
     }
     fn is_mergeable_with(&self, value: &Self) -> bool {
@@ -199,11 +209,14 @@ impl InnerNodeContent {
             Self::Snippet(_) => match value {
                 Self::Snippet(_) => true,
                 Self::Tokens(_) => false,
+                Self::Link(_) => false,
             },
             Self::Tokens(_) => match value {
                 Self::Snippet(_) => false,
                 Self::Tokens(_) => true,
+                Self::Link(_) => false,
             },
+            Self::Link(_) => false,
         }
     }
     pub fn as_bytes(&'_ self) -> Cow<'_, Vec<u8>> {
@@ -215,18 +228,21 @@ impl InnerNodeContent {
                     .flat_map(|token| token.bytes.clone())
                     .collect(),
             ),
+            Self::Link(_) => Cow::Owned(Vec::new()),
         }
     }
     pub fn len(&self) -> usize {
         match self {
             Self::Snippet(snippet) => snippet.len(),
             Self::Tokens(tokens) => tokens.iter().map(|token| token.bytes.len()).sum(),
+            Self::Link(_) => 0,
         }
     }
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Snippet(snippet) => snippet.is_empty(),
             Self::Tokens(tokens) => tokens.iter().all(|token| token.bytes.is_empty()),
+            Self::Link(_) => true,
         }
     }
 }
@@ -239,18 +255,21 @@ impl ArchivedInnerNodeContent {
                 .iter()
                 .flat_map(|token| token.bytes.to_vec())
                 .collect(),
+            Self::Link(_) => Vec::new(),
         }
     }
     pub fn len(&self) -> usize {
         match self {
             Self::Snippet(snippet) => snippet.len(),
             Self::Tokens(tokens) => tokens.iter().map(|token| token.bytes.len()).sum(),
+            Self::Link(_) => 0,
         }
     }
     pub fn is_empty(&self) -> bool {
         match self {
             Self::Snippet(snippet) => snippet.is_empty(),
             Self::Tokens(tokens) => tokens.iter().all(|token| token.bytes.is_empty()),
+            Self::Link(_) => true,
         }
     }
 }
