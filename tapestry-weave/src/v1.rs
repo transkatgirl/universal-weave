@@ -341,14 +341,14 @@ impl TapestryWeave {
         assert!(self.weave.validate());
         to_bytes::<Error>(&self.weave)
     }
-    /*pub fn to_versioned_bytes(&self) -> Result<Vec<u8>, Error> {
+    pub fn to_versioned_bytes(&self) -> Result<Vec<u8>, Error> {
         Ok(VersionedBytes {
             version: 1,
             data: MixedData::Output(self.to_unversioned_bytes()?),
         }
         .to_bytes())
     }
-    pub fn to_versioned_weave(self) -> VersionedWeave {
+    /*pub fn to_versioned_weave(self) -> VersionedWeave {
         VersionedWeave::V1(self)
     }*/
     pub fn with_capacity(
@@ -373,6 +373,9 @@ impl TapestryWeave {
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.weave.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
+    }
+    pub fn metadata(&mut self) -> &mut IndexMap<String, String, BuildHasherDefault<FxHasher64>> {
+        &mut self.weave.metadata
     }
     pub fn len(&self) -> usize {
         self.weave.len()
@@ -424,6 +427,22 @@ impl TapestryWeave {
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         self.active.iter().filter_map(|id| self.weave.get_node(id))
+    }
+    pub fn get_active_thread_u128(
+        &mut self,
+    ) -> impl DoubleEndedIterator<Item = u128> + ExactSizeIterator<Item = u128> {
+        self.active.iter().copied()
+    }
+    pub fn get_thread_from(&mut self, id: &Ulid) -> impl DoubleEndedIterator<Item = &TapestryNode> {
+        let thread: Vec<u128> = self.weave.get_thread_from(&id.0).collect();
+
+        thread.into_iter().filter_map(|id| self.weave.get_node(&id))
+    }
+    pub fn get_thread_from_u128(
+        &mut self,
+        id: &u128,
+    ) -> impl DoubleEndedIterator<Item = u128> + ExactSizeIterator<Item = u128> {
+        self.weave.get_thread_from(id)
     }
     fn update_shape_and_active(&mut self) {
         self.changed = true;
@@ -622,7 +641,12 @@ impl ArchivedTapestryWeave {
 }
 
 impl From<OldTapestryWeave> for TapestryWeave {
-    fn from(value: OldTapestryWeave) -> Self {
+    fn from(mut value: OldTapestryWeave) -> Self {
+        let output = TapestryWeave::with_capacity(
+            value.capacity(),
+            IndexMap::from_iter(value.weave.metadata.drain(..)),
+        );
+
         todo!()
     }
 }

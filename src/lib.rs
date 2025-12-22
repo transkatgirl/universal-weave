@@ -21,8 +21,8 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn id(&self) -> K;
-    fn from(&self) -> impl ExactSizeIterator<Item = K>;
-    fn to(&self) -> impl ExactSizeIterator<Item = K>;
+    fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     fn is_active(&self) -> bool;
     fn is_bookmarked(&self) -> bool;
     fn contents(&self) -> &T;

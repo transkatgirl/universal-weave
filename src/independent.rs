@@ -60,10 +60,10 @@ where
     fn id(&self) -> K {
         self.id
     }
-    fn from(&self) -> impl ExactSizeIterator<Item = K> {
+    fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.from.iter().copied()
     }
-    fn to(&self) -> impl ExactSizeIterator<Item = K> {
+    fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.to.iter().copied()
     }
     fn is_active(&self) -> bool {
