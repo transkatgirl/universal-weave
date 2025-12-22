@@ -17,8 +17,8 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
-    DiscreteWeave, DuplicatableWeave, IndependentContents, Node, Weave,
+    ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -569,6 +569,11 @@ where
             self.update_node_activity_in_place(id, value)
         }*/
     }
+    #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
+    #[debug_ensures(self.validate())]
+    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
+        self.update_node_activity_in_place(id, value)
+    }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
@@ -749,7 +754,7 @@ where
     }
 }
 
-impl<K, T, M, S> DuplicatableWeave<K, IndependentNode<K, T, S>, T, S>
+impl<K, T, M, S> DeduplicatableWeave<K, IndependentNode<K, T, S>, T, S>
     for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,

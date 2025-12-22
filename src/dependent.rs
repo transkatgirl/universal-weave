@@ -16,8 +16,9 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DiscreteContentResult, DiscreteContents,
-    DiscreteWeave, DuplicatableWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
+    ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node,
+    SemiIndependentWeave, Weave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -305,9 +306,14 @@ where
 
         true
     }
+    /*#[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
+    #[debug_ensures(self.validate())]*/
+    fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
+        self.set_node_active_status_in_place(id, value)
+    }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]
-    fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
+    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
@@ -503,7 +509,7 @@ where
     }
 }
 
-impl<K, T, M, S> DuplicatableWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: DeduplicatableContents,

@@ -49,6 +49,7 @@ where
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     fn add_node(&mut self, node: N) -> bool;
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
+    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     fn sort_node_children_by(&mut self, id: &K, compare: impl FnMut(&N, &N) -> Ordering) -> bool;
     fn sort_roots_by(&mut self, compare: impl FnMut(&N, &N) -> Ordering);
@@ -87,7 +88,7 @@ where
     fn merge_with_parent(&mut self, id: &K) -> bool;
 }
 
-pub trait DuplicatableWeave<K, N, T, S>
+pub trait DeduplicatableWeave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
