@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashSet, hash::BuildHasherDefault};
+use std::{borrow::Cow, cmp::Ordering, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
 use rkyv::{hash::FxHasher64, rend::u128_le};
@@ -362,7 +362,7 @@ impl TapestryWeave {
         self.weave.is_empty()
     }
     pub fn contains(&self, id: &Ulid) -> bool {
-        self.contains_u128(&id.0)
+        self.weave.contains(&id.0)
     }
     pub fn contains_u128(&self, id: &u128) -> bool {
         self.weave.contains(id)
@@ -373,14 +373,14 @@ impl TapestryWeave {
 
         changed
     }
-    pub fn has_changed_shape(&mut self) -> bool {
+    pub fn has_shape_changed(&mut self) -> bool {
         let changed = self.changed_shape;
         self.changed_shape = false;
 
         changed
     }
     pub fn get_node(&self, id: &Ulid) -> Option<&TapestryNode> {
-        self.get_node_u128(&id.0)
+        self.weave.get_node(&id.0)
     }
     pub fn get_node_u128(&self, id: &u128) -> Option<&TapestryNode> {
         self.weave.get_node(id)
@@ -388,11 +388,17 @@ impl TapestryWeave {
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
     }
+    pub fn get_roots_u128(&self) -> impl ExactSizeIterator<Item = u128> {
+        self.weave.get_roots().iter().copied()
+    }
     pub fn get_roots_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
         self.weave.get_roots()
     }
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_bookmarks().iter().copied().map(Ulid)
+    }
+    pub fn get_bookmarks_u128(&self) -> impl ExactSizeIterator<Item = u128> {
+        self.weave.get_bookmarks().iter().copied()
     }
     pub fn get_bookmarks_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
         self.weave.get_bookmarks()
@@ -400,7 +406,7 @@ impl TapestryWeave {
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         self.active.iter().filter_map(|id| self.weave.get_node(id))
     }
-    fn update_shape(&mut self) {
+    fn update_shape_and_active(&mut self) {
         self.changed = true;
         self.changed_shape = true;
         self.active.clear();
@@ -440,7 +446,7 @@ impl TapestryWeave {
                 self.weave.remove_node(&identifier);
             }
 
-            self.update_shape();
+            self.update_shape_and_active();
         }
 
         status
@@ -450,7 +456,7 @@ impl TapestryWeave {
     }
     pub fn set_node_active_status_u128(&mut self, id: &u128, value: bool, alternate: bool) -> bool {
         if self.weave.set_node_active_status(id, value, alternate) {
-            self.update_shape();
+            self.update_shape_and_active();
             true
         } else {
             false
@@ -461,7 +467,7 @@ impl TapestryWeave {
     }
     pub fn set_node_active_status_in_place_u128(&mut self, id: &u128, value: bool) -> bool {
         if self.weave.set_node_active_status_in_place(id, value) {
-            self.update_shape();
+            self.update_shape_and_active();
             true
         } else {
             false
@@ -490,7 +496,7 @@ impl TapestryWeave {
         let new_id = Ulid::from_datetime(id.datetime());
 
         if self.weave.split_node(&id.0, at, new_id.0) {
-            self.update_shape();
+            self.update_shape_and_active();
             Some(new_id)
         } else {
             None
@@ -498,7 +504,7 @@ impl TapestryWeave {
     }
     pub fn split_node_direct(&mut self, id: &u128, at: usize, new_id: u128) -> Option<u128> {
         if self.weave.split_node(id, at, new_id) {
-            self.update_shape();
+            self.update_shape_and_active();
             Some(new_id)
         } else {
             None
@@ -509,7 +515,7 @@ impl TapestryWeave {
     }
     pub fn merge_with_parent_u128(&mut self, id: &u128) -> bool {
         if self.weave.merge_with_parent(id) {
-            self.update_shape();
+            self.update_shape_and_active();
             true
         } else {
             false
@@ -536,11 +542,25 @@ impl TapestryWeave {
     }
     pub fn remove_node_u128(&mut self, id: &u128) -> Option<TapestryNode> {
         if let Some(removed) = self.weave.remove_node(id) {
-            self.update_shape();
+            self.update_shape_and_active();
             Some(removed)
         } else {
             None
         }
+    }
+    pub fn sort_roots_by(&mut self, compare: impl FnMut(&TapestryNode, &TapestryNode) -> Ordering) {
+        self.changed = true;
+        self.changed_shape = true;
+        self.weave.sort_roots_by(compare)
+    }
+    pub fn sort_node_children_by(
+        &mut self,
+        id: &u128,
+        compare: impl FnMut(&TapestryNode, &TapestryNode) -> Ordering,
+    ) -> bool {
+        self.changed = true;
+        self.changed_shape = true;
+        self.weave.sort_node_children_by(id, compare)
     }
 }
 
