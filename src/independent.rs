@@ -974,17 +974,14 @@ fn build_thread_from<K, T, S>(
     if let Some(node) = nodes.get(id) {
         thread.push(*id);
 
-        let mut has_child = false;
-
         for child in &node.from {
             if active.contains(child) {
-                has_child = true;
                 build_thread_from(nodes, active, child, thread);
-                break;
+                return;
             }
         }
 
-        if !has_child && let Some(child) = node.from.first() {
+        if let Some(child) = node.from.first() {
             build_thread_from(nodes, active, child, thread);
         }
     }
@@ -1026,17 +1023,14 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
     if let Some(node) = nodes.get(id) {
         thread.push(*id);
 
-        let mut has_child = false;
-
         for child in node.from.iter() {
             if active.contains(child) {
-                has_child = true;
                 build_thread_from_archived(nodes, active, child, thread);
-                break;
+                return;
             }
         }
 
-        if !has_child && let Some(child) = node.from.get_index(0) {
+        if let Some(child) = node.from.get_index(0) {
             build_thread_from_archived(nodes, active, child, thread);
         }
     }
