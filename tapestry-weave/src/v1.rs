@@ -19,6 +19,10 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     VersionedWeave,
     hashers::UlidHasher,
+    v0::{
+        NodeContent as OldNodeContent, TapestryNode as OldTapestryNode,
+        TapestryWeave as OldTapestryWeave,
+    },
     versioning::{MixedData, VersionedBytes},
 };
 
@@ -280,14 +284,35 @@ pub type TapestryWeaveInner =
     IndependentWeave<u128, NodeContent, IndexMap<String, String>, BuildHasherDefault<UlidHasher>>;
 
 pub struct TapestryWeave {
-    pub weave: TapestryWeaveInner,
+    weave: TapestryWeaveInner,
+    active: Vec<u128>,
+    changed: bool,
+    changed_shape: bool,
+}
+
+impl From<TapestryWeaveInner> for TapestryWeave {
+    fn from(mut value: TapestryWeaveInner) -> Self {
+        let mut active = Vec::with_capacity(value.capacity());
+        active.extend(value.get_active_thread());
+
+        Self {
+            active,
+            weave: value,
+            changed: false,
+            changed_shape: false,
+        }
+    }
+}
+
+impl From<TapestryWeave> for TapestryWeaveInner {
+    fn from(value: TapestryWeave) -> Self {
+        value.weave
+    }
 }
 
 impl TapestryWeave {
     pub fn from_unversioned_bytes(bytes: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
-            weave: from_bytes::<_, Error>(bytes)?,
-        })
+        Ok(Self::from(from_bytes::<TapestryWeaveInner, Error>(bytes)?))
     }
     pub fn to_unversioned_bytes(&self) -> Result<AlignedVec, Error> {
         assert!(self.weave.validate());
@@ -306,6 +331,9 @@ impl TapestryWeave {
     pub fn with_capacity(capacity: usize, metadata: IndexMap<String, String>) -> Self {
         Self {
             weave: IndependentWeave::with_capacity(capacity, metadata),
+            active: Vec::with_capacity(capacity),
+            changed: false,
+            changed_shape: false,
         }
     }
     pub fn capacity(&self) -> usize {
@@ -313,9 +341,12 @@ impl TapestryWeave {
     }
     pub fn reserve(&mut self, additional: usize) {
         self.weave.reserve(additional);
+        self.active
+            .reserve(self.weave.capacity().saturating_sub(self.active.capacity()));
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.weave.shrink_to(min_capacity);
+        self.active.shrink_to(min_capacity);
     }
     pub fn len(&self) -> usize {
         self.weave.len()
@@ -324,23 +355,52 @@ impl TapestryWeave {
         self.weave.is_empty()
     }
     pub fn contains(&self, id: &Ulid) -> bool {
-        self.weave.contains(&id.0)
+        self.contains_u128(&id.0)
+    }
+    pub fn contains_u128(&self, id: &u128) -> bool {
+        self.weave.contains(id)
+    }
+    pub fn has_changed(&mut self) -> bool {
+        let changed = self.changed;
+        self.changed = false;
+
+        changed
+    }
+    pub fn has_changed_shape(&mut self) -> bool {
+        let changed = self.changed_shape;
+        self.changed_shape = false;
+
+        changed
     }
     pub fn get_node(&self, id: &Ulid) -> Option<&TapestryNode> {
-        self.weave.get_node(&id.0)
+        self.get_node_u128(&id.0)
+    }
+    pub fn get_node_u128(&self, id: &u128) -> Option<&TapestryNode> {
+        self.weave.get_node(id)
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
     }
+    pub fn get_roots_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
+        self.weave.get_roots()
+    }
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_bookmarks().iter().copied().map(Ulid)
+    }
+    pub fn get_bookmarks_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
+        self.weave.get_bookmarks()
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         let active: Vec<u128> = self.weave.get_active_thread().collect();
 
         active.into_iter().filter_map(|id| self.weave.get_node(&id))
     }
-
+    fn update_shape(&mut self) {
+        self.changed = true;
+        self.changed_shape = true;
+        self.active.clear();
+        self.active.extend(self.weave.get_active_thread());
+    }
     pub fn add_node(&mut self, node: TapestryNode) -> bool {
         let identifier = node.id;
         let last_active_set: HashSet<u128> = if node.active {
@@ -352,38 +412,66 @@ impl TapestryWeave {
 
         let status = self.weave.add_node(node);
 
-        let duplicates: Vec<u128> = self.weave.find_duplicates(&identifier).collect();
+        if status {
+            let duplicates: Vec<u128> = self.weave.find_duplicates(&identifier).collect();
 
-        if !duplicates.is_empty() {
-            if is_active {
-                let mut has_active = false;
+            if !duplicates.is_empty() {
+                if is_active {
+                    let mut has_active = false;
 
-                for duplicate in &duplicates {
-                    if last_active_set.contains(duplicate) {
-                        self.weave.set_node_active_status_in_place(duplicate, true);
-                        has_active = true;
-                        break;
+                    for duplicate in &duplicates {
+                        if last_active_set.contains(duplicate) {
+                            self.weave.set_node_active_status_in_place(duplicate, true);
+                            has_active = true;
+                            break;
+                        }
+                    }
+
+                    if !has_active {
+                        self.weave
+                            .set_node_active_status_in_place(duplicates.first().unwrap(), true);
                     }
                 }
-
-                if !has_active {
-                    self.weave
-                        .set_node_active_status_in_place(duplicates.first().unwrap(), true);
-                }
+                self.weave.remove_node(&identifier);
             }
-            self.weave.remove_node(&identifier);
+
+            self.update_shape();
         }
 
         status
     }
     pub fn set_node_active_status(&mut self, id: &Ulid, value: bool, alternate: bool) -> bool {
-        self.weave.set_node_active_status(&id.0, value, alternate)
+        self.set_node_active_status_u128(&id.0, value, alternate)
+    }
+    pub fn set_node_active_status_u128(&mut self, id: &u128, value: bool, alternate: bool) -> bool {
+        if self.weave.set_node_active_status(id, value, alternate) {
+            self.update_shape();
+            true
+        } else {
+            false
+        }
     }
     pub fn set_node_active_status_in_place(&mut self, id: &Ulid, value: bool) -> bool {
-        self.weave.set_node_active_status_in_place(&id.0, value)
+        self.set_node_active_status_in_place_u128(&id.0, value)
+    }
+    pub fn set_node_active_status_in_place_u128(&mut self, id: &u128, value: bool) -> bool {
+        if self.weave.set_node_active_status_in_place(id, value) {
+            self.update_shape();
+            true
+        } else {
+            false
+        }
     }
     pub fn set_node_bookmarked_status(&mut self, id: &Ulid, value: bool) -> bool {
-        self.weave.set_node_bookmarked_status(&id.0, value)
+        self.set_node_bookmarked_status_u128(&id.0, value)
+    }
+    pub fn set_node_bookmarked_status_u128(&mut self, id: &u128, value: bool) -> bool {
+        if self.weave.set_node_bookmarked_status(id, value) {
+            self.changed = true;
+            true
+        } else {
+            false
+        }
     }
     pub fn get_active_content(&mut self) -> Vec<u8> {
         let active_thread: Vec<u128> = self.weave.get_active_thread().rev().collect();
@@ -394,23 +482,40 @@ impl TapestryWeave {
             .flat_map(|node| node.contents.content.as_bytes().to_vec())
             .collect()
     }
-    pub fn split_node<F>(&mut self, id: &Ulid, at: usize, id_generator: F) -> Option<Ulid>
-    where
-        F: FnOnce(u64) -> Ulid,
-    {
-        let new_id = id_generator(id.timestamp_ms());
+    pub fn split_node(&mut self, id: &Ulid, at: usize) -> Option<Ulid> {
+        let new_id = Ulid::from_datetime(id.datetime());
 
         if self.weave.split_node(&id.0, at, new_id.0) {
+            self.update_shape();
+            Some(new_id)
+        } else {
+            None
+        }
+    }
+    pub fn split_node_direct(&mut self, id: &u128, at: usize, new_id: u128) -> Option<u128> {
+        if self.weave.split_node(id, at, new_id) {
+            self.update_shape();
             Some(new_id)
         } else {
             None
         }
     }
     pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
-        self.weave.merge_with_parent(&id.0)
+        self.merge_with_parent_u128(&id.0)
+    }
+    pub fn merge_with_parent_u128(&mut self, id: &u128) -> bool {
+        if self.weave.merge_with_parent(id) {
+            self.update_shape();
+            true
+        } else {
+            false
+        }
     }
     pub fn is_mergeable_with_parent(&self, id: &Ulid) -> bool {
-        if let Some(node) = self.weave.get_node(&id.0) {
+        self.is_mergeable_with_parent_u128(&id.0)
+    }
+    pub fn is_mergeable_with_parent_u128(&self, id: &u128) -> bool {
+        if let Some(node) = self.weave.get_node(id) {
             if node.from.len() == 1
                 && let Some(parent) = node.from.first().and_then(|id| self.weave.get_node(id))
             {
@@ -423,7 +528,15 @@ impl TapestryWeave {
         }
     }
     pub fn remove_node(&mut self, id: &Ulid) -> Option<TapestryNode> {
-        self.weave.remove_node(&id.0)
+        self.remove_node_u128(&id.0)
+    }
+    pub fn remove_node_u128(&mut self, id: &u128) -> Option<TapestryNode> {
+        if let Some(removed) = self.weave.remove_node(id) {
+            self.update_shape();
+            Some(removed)
+        } else {
+            None
+        }
     }
 }
 
@@ -462,5 +575,11 @@ impl ArchivedTapestryWeave {
             .filter_map(|id| self.weave.get_node(&id))
             .flat_map(|node| node.contents.content.as_bytes())
             .collect()
+    }
+}
+
+impl From<OldTapestryWeave> for TapestryWeave {
+    fn from(value: OldTapestryWeave) -> Self {
+        todo!()
     }
 }
