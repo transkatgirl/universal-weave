@@ -1,3 +1,5 @@
+//! Experimental & untested
+
 use std::{borrow::Cow, cmp::Ordering, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
@@ -628,6 +630,14 @@ impl ArchivedTapestryWeave {
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &ArchivedTapestryNode> {
         self.weave
             .get_active_thread()
+            .filter_map(|id| self.weave.get_node(&id))
+    }
+    pub fn get_thread_from(
+        &mut self,
+        id: &u128_le,
+    ) -> impl DoubleEndedIterator<Item = &ArchivedTapestryNode> {
+        self.weave
+            .get_thread_from(id)
             .filter_map(|id| self.weave.get_node(&id))
     }
     pub fn get_active_content(&self) -> Vec<u8> {
