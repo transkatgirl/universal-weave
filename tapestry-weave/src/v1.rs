@@ -335,6 +335,12 @@ impl From<TapestryWeave> for TapestryWeaveInner {
     }
 }
 
+impl AsRef<TapestryWeaveInner> for TapestryWeave {
+    fn as_ref(&self) -> &TapestryWeaveInner {
+        &self.weave
+    }
+}
+
 impl TapestryWeave {
     pub fn from_unversioned_bytes(bytes: &[u8]) -> Result<Self, Error> {
         Ok(Self::from(from_bytes::<TapestryWeaveInner, Error>(bytes)?))
@@ -606,6 +612,12 @@ impl TapestryWeave {
 
 pub struct ArchivedTapestryWeave {
     pub weave: <TapestryWeaveInner as Archive>::Archived,
+}
+
+impl AsRef<<TapestryWeaveInner as Archive>::Archived> for ArchivedTapestryWeave {
+    fn as_ref(&self) -> &<TapestryWeaveInner as Archive>::Archived {
+        &self.weave
+    }
 }
 
 impl ArchivedTapestryWeave {
