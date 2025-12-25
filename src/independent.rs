@@ -1,3 +1,5 @@
+//! A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -18,6 +20,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave,
+    dependent::DependentWeave,
 };
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
@@ -382,6 +385,9 @@ where
         } else {
             None
         }
+    }
+    pub fn from_dependent(input: DependentWeave<K, IndependentNode<K, T, S>, T, S>) -> Self {
+        todo!()
     }
 }
 

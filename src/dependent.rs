@@ -1,3 +1,5 @@
+//! A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
+
 use std::{
     cmp::Ordering,
     collections::HashMap,

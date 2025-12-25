@@ -1,6 +1,4 @@
-//! An experimental attempt at creating general-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
-//!
-//!
+//! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
@@ -19,19 +17,55 @@ use indexmap::IndexSet;
 pub use rkyv;
 use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet};
 
+/// An item within a [`Weave`] which can be connected to other items.
 pub trait Node<K, T, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    /// The unique identifier of the node.
     fn id(&self) -> K;
+    /// The identifiers corresponding to the parents of this node.
     fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// The identifiers corresponding to the children of this node.
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// If the node is considered "active".
+    ///
+    /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
+    /// If the node is bookmarked.
     fn is_bookmarked(&self) -> bool;
+    /// The contents of the node.
     fn contents(&self) -> &T;
 }
 
+/// [`Node`] contents which can be split apart or merged together.
+pub trait DiscreteContents: Sized {
+    /// Splits the item at specified index.
+    fn split(self, at: usize) -> DiscreteContentResult<Self>;
+    /// Merges two items together.
+    fn merge(self, value: Self) -> DiscreteContentResult<Self>;
+}
+
+/// The result from an action on a [`DiscreteContents`] item.
+///
+/// Actions are fallible; If the action was not successful, the original contents are returned.
+pub enum DiscreteContentResult<T> {
+    Two((T, T)),
+    One(T),
+}
+
+/// [`Node`] contents which can be meaningfully deduplicated.
+pub trait DeduplicatableContents {
+    /// Whether or not two items are considered duplicates of each-other.
+    ///
+    /// The result of this function must be symmetric (`a == b` implies `b == a` and `a != b` implies `!(a == b)`).
+    fn is_duplicate_of(&self, value: &Self) -> bool;
+}
+
+pub trait IndependentContents {}
+
+/// A document which links together multiple [`Node`] objects.
 pub trait Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
@@ -61,6 +95,7 @@ where
     fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
+/// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.
 pub trait IndependentWeave<K, N, T, S>:
     Weave<K, N, T, S> + SemiIndependentWeave<K, N, T, S>
 where
@@ -72,6 +107,7 @@ where
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
+/// A [`Weave`] where [`Node`] objects do not depend on the *contents* of their parents in order to be meaningful.
 pub trait SemiIndependentWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
@@ -82,6 +118,7 @@ where
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
+/// A [`Weave`] where the contents of [`Node`] objects can be split and merged.
 pub trait DiscreteWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
@@ -93,6 +130,7 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
+/// A [`Weave`] where [`Node`] objects can be meaningfully deduplicated by their contents.
 pub trait DeduplicatableWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
@@ -102,22 +140,6 @@ where
 {
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
-
-pub enum DiscreteContentResult<T> {
-    Two((T, T)),
-    One(T),
-}
-
-pub trait DiscreteContents: Sized {
-    fn split(self, at: usize) -> DiscreteContentResult<Self>;
-    fn merge(self, value: Self) -> DiscreteContentResult<Self>;
-}
-
-pub trait DeduplicatableContents {
-    fn is_duplicate_of(&self, value: &Self) -> bool;
-}
-
-pub trait IndependentContents {}
 
 pub trait ArchivedNode<K, T>
 where
