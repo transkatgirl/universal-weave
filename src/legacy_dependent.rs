@@ -449,13 +449,13 @@ where
         }
     }
     #[debug_ensures(self.validate())]
-    fn merge_with_parent(&mut self, id: &K) -> bool {
+    fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
                     self.nodes.insert(node.id, node);
-                    return false;
+                    return None;
                 }
 
                 match parent.contents.merge(node.contents) {
@@ -464,7 +464,7 @@ where
                         node.contents = right;
                         self.nodes.insert(parent.id, parent);
                         self.nodes.insert(node.id, node);
-                        false
+                        None
                     }
                     DiscreteContentResult::One(content) => {
                         parent.contents = content;
@@ -480,19 +480,21 @@ where
                             self.active = Some(parent.id);
                         }
 
+                        let parent_id = parent.id;
+
                         self.nodes.insert(parent.id, parent);
 
                         self.bookmarked.shift_remove(&node.id);
 
-                        true
+                        Some(parent_id)
                     }
                 }
             } else {
                 self.nodes.insert(node.id, node);
-                false
+                None
             }
         } else {
-            false
+            None
         }
     }
 }

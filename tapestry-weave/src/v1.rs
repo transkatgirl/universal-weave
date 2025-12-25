@@ -415,6 +415,12 @@ impl TapestryWeave {
     pub fn get_node_u128(&self, id: &u128) -> Option<&TapestryNode> {
         self.weave.get_node(id)
     }
+    pub fn get_node_children(
+        &self,
+        id: &u128,
+    ) -> Option<&IndexSet<u128, BuildHasherDefault<UlidHasher>>> {
+        self.weave.get_node(id).map(|node| &node.to)
+    }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
     }
@@ -560,7 +566,7 @@ impl TapestryWeave {
         self.merge_with_parent_u128(&id.0)
     }
     pub fn merge_with_parent_u128(&mut self, id: &u128) -> bool {
-        if self.weave.merge_with_parent(id) {
+        if let Some(_new_id) = self.weave.merge_with_parent(id) {
             self.update_shape_and_active();
             true
         } else {
@@ -609,6 +615,8 @@ impl TapestryWeave {
         self.weave.sort_node_children_by(id, compare)
     }
 }
+
+// TODO: set_active_content, duplicate before splitting nodes
 
 pub struct ArchivedTapestryWeave {
     pub weave: <TapestryWeaveInner as Archive>::Archived,

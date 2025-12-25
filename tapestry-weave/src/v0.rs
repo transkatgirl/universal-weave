@@ -449,7 +449,7 @@ impl TapestryWeave {
         }
     }
     pub fn merge_with_parent(&mut self, id: &Ulid) -> bool {
-        self.weave.merge_with_parent(&id.0)
+        self.weave.merge_with_parent(&id.0).is_some()
     }
     pub fn is_mergeable_with_parent(&self, id: &Ulid) -> bool {
         if let Some(node) = self.weave.get_node(&id.0) {

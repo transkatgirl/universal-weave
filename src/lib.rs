@@ -86,7 +86,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
-    fn merge_with_parent(&mut self, id: &K) -> bool;
+    fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
 pub trait DeduplicatableWeave<K, N, T, S>
