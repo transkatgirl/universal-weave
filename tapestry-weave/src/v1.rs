@@ -3,7 +3,11 @@
 use std::{borrow::Cow, cmp::Ordering, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
-use rkyv::{hash::FxHasher64, rend::u128_le};
+use rkyv::{
+    collections::swiss_table::{ArchivedIndexMap, ArchivedIndexSet},
+    hash::FxHasher64,
+    rend::u128_le,
+};
 use ulid::Ulid;
 use universal_weave::{
     ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
@@ -250,6 +254,21 @@ impl InnerNodeContent {
 }
 
 impl ArchivedInnerNodeContent {
+    fn is_mergeable_with(&self, value: &Self) -> bool {
+        match self {
+            Self::Snippet(_) => match value {
+                Self::Snippet(_) => true,
+                Self::Tokens(_) => false,
+                Self::Link(_) => false,
+            },
+            Self::Tokens(_) => match value {
+                Self::Snippet(_) => false,
+                Self::Tokens(_) => true,
+                Self::Link(_) => false,
+            },
+            Self::Link(_) => false,
+        }
+    }
     pub fn as_bytes(&'_ self) -> Vec<u8> {
         match self {
             Self::Snippet(snippet) => snippet.to_vec(),
@@ -438,26 +457,20 @@ impl TapestryWeave {
     pub fn get_node_siblings_or_roots<'s>(
         &'s self,
         id: &u128,
-    ) -> Box<dyn DoubleEndedIterator<Item = u128> + 's> {
-        self.weave
-            .get_node(id)
-            .map(|node| {
-                if node.from.is_empty() {
-                    Box::new(self.weave.get_roots().iter().copied())
-                        as Box<dyn DoubleEndedIterator<Item = u128>>
-                } else {
-                    Box::new(
-                        node.from
-                            .iter()
-                            .filter_map(|parent| self.weave.get_node(parent))
-                            .flat_map(|parent| parent.to.iter().copied()),
-                    ) as Box<dyn DoubleEndedIterator<Item = u128>>
-                }
-            })
-            .unwrap_or_else(|| {
+    ) -> Option<Box<dyn DoubleEndedIterator<Item = u128> + 's>> {
+        self.weave.get_node(id).map(|node| {
+            if node.from.is_empty() {
                 Box::new(self.weave.get_roots().iter().copied())
                     as Box<dyn DoubleEndedIterator<Item = u128>>
-            })
+            } else {
+                Box::new(
+                    node.from
+                        .iter()
+                        .filter_map(|parent| self.weave.get_node(parent))
+                        .flat_map(|parent| parent.to.iter().copied()),
+                ) as Box<dyn DoubleEndedIterator<Item = u128>>
+            }
+        })
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
@@ -679,6 +692,38 @@ impl ArchivedTapestryWeave {
     pub fn get_node(&self, id: &u128_le) -> Option<&ArchivedTapestryNode> {
         self.weave.get_node(id)
     }
+    pub fn get_node_children(&self, id: &u128_le) -> Option<&ArchivedIndexSet<u128_le>> {
+        self.weave.get_node(id).map(|node| &node.to)
+    }
+    pub fn get_node_parents(&self, id: &u128_le) -> Option<&ArchivedIndexSet<u128_le>> {
+        self.weave.get_node(id).map(|node| &node.from)
+    }
+    pub fn get_node_siblings(&self, id: &u128_le) -> Option<impl Iterator<Item = u128_le>> {
+        self.weave.get_node(id).map(|node| {
+            node.from
+                .iter()
+                .filter_map(|parent| self.weave.get_node(parent))
+                .flat_map(|parent| parent.to.iter().copied())
+        })
+    }
+    pub fn get_node_siblings_or_roots<'s>(
+        &'s self,
+        id: &u128_le,
+    ) -> Option<Box<dyn Iterator<Item = u128_le> + 's>> {
+        self.weave.get_node(id).map(|node| {
+            if node.from.is_empty() {
+                Box::new(self.weave.get_roots().iter().copied())
+                    as Box<dyn Iterator<Item = u128_le>>
+            } else {
+                Box::new(
+                    node.from
+                        .iter()
+                        .filter_map(|parent| self.weave.get_node(parent))
+                        .flat_map(|parent| parent.to.iter().copied()),
+                ) as Box<dyn Iterator<Item = u128_le>>
+            }
+        })
+    }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = u128_le> {
         self.weave.get_roots().iter().copied()
     }
@@ -705,6 +750,26 @@ impl ArchivedTapestryWeave {
             .filter_map(|id| self.weave.get_node(&id))
             .flat_map(|node| node.contents.content.as_bytes())
             .collect()
+    }
+    pub fn is_mergeable_with_parent_u128(&self, id: &u128_le) -> bool {
+        if let Some(node) = self.weave.get_node(id) {
+            if node.from.len() == 1
+                && let Some(parent) = node
+                    .from
+                    .get_index(0)
+                    .and_then(|id| self.weave.get_node(id))
+            {
+                parent.to.len() == 1
+                    && parent
+                        .contents
+                        .content
+                        .is_mergeable_with(&node.contents.content)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
 }
 
