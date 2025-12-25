@@ -11,7 +11,8 @@ use rkyv::{
 use ulid::Ulid;
 use universal_weave::{
     ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Weave,
+    DiscreteContents, DiscreteWeave, IndependentContents,
+    IndependentWeave as IndependentWeaveTrait, Weave,
     independent::{ArchivedIndependentNode, IndependentNode, IndependentWeave},
     indexmap::{IndexMap, IndexSet},
     rkyv::{
@@ -599,6 +600,8 @@ impl TapestryWeave {
         let new_id = Ulid::from_datetime(id.datetime());
 
         if self.weave.split_node(&id.0, at, new_id.0) {
+            self.weave.get_contents_mut(&id.0).unwrap().modified = true;
+            self.weave.get_contents_mut(&new_id.0).unwrap().modified = true;
             self.update_shape_and_active();
             Some(new_id)
         } else {
@@ -607,6 +610,8 @@ impl TapestryWeave {
     }
     pub fn split_node_direct(&mut self, id: &u128, at: usize, new_id: u128) -> Option<u128> {
         if self.weave.split_node(id, at, new_id) {
+            self.weave.get_contents_mut(id).unwrap().modified = true;
+            self.weave.get_contents_mut(&new_id).unwrap().modified = true;
             self.update_shape_and_active();
             Some(new_id)
         } else {
@@ -617,7 +622,8 @@ impl TapestryWeave {
         self.merge_with_parent_u128(&id.0)
     }
     pub fn merge_with_parent_u128(&mut self, id: &u128) -> bool {
-        if let Some(_new_id) = self.weave.merge_with_parent(id) {
+        if let Some(new_id) = self.weave.merge_with_parent(id) {
+            self.weave.get_contents_mut(&new_id).unwrap().modified = true;
             self.update_shape_and_active();
             true
         } else {
