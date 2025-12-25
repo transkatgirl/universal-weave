@@ -9,6 +9,7 @@ description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
 [features]
+legacy = [  ]
 serde = [
 	"dep:serde",
 	"indexmap/serde",

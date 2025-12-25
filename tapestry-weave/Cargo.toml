@@ -19,7 +19,9 @@ serde = [
 contracts = "0.6.7"
 ulid = "1.2.1"
 rkyv = "*"
-universal-weave = { path = ".." }
+universal-weave = { path = "..", features = [
+	"legacy",
+] }
 serde = { version = "1.0.228", features = [
 	"derive",
 ], optional = true }

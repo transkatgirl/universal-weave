@@ -1,3 +1,5 @@
+//! A deprecated version of DependentWeave used by `tapestry-weave`'s v0 format
+
 use std::{
     cmp::Ordering,
     collections::HashMap,
