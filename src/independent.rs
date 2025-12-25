@@ -224,11 +224,11 @@ where
     fn all_parent_ids_or_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
-    ) -> &'a IndexSet<K, S> {
+    ) -> Box<dyn Iterator<Item = K> + 'a> {
         if node.from.is_empty() {
-            &self.roots
+            Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
-            &node.from
+            Box::new(node.from.iter().copied())
         }
     }
     fn siblings_from_active_parents(
@@ -244,7 +244,7 @@ where
         node: &'a IndependentNode<K, T, S>,
     ) -> Box<dyn Iterator<Item = K> + 'a> {
         if node.from.is_empty() {
-            Box::new(self.roots.iter().copied())
+            Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
             Box::new(
                 self.all_parents(node)
@@ -262,8 +262,7 @@ where
             if value {
                 let has_active_parents = self
                     .all_parent_ids_or_roots(node)
-                    .iter()
-                    .any(|parent| self.active.contains(parent));
+                    .any(|parent| self.active.contains(&parent));
                 if has_active_parents {
                     let siblings: Vec<_> = self
                         .sibling_ids_from_all_parents_including_roots(node)
