@@ -456,7 +456,7 @@ impl TapestryWeave {
     ) -> Option<Box<dyn DoubleEndedIterator<Item = u128> + 's>> {
         self.weave.get_node(id).map(|node| {
             if node.from.is_empty() {
-                Box::new(self.weave.get_roots().iter().copied())
+                Box::new(self.weave.roots().iter().copied())
                     as Box<dyn DoubleEndedIterator<Item = u128>>
             } else {
                 Box::new(
@@ -469,22 +469,22 @@ impl TapestryWeave {
         })
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
-        self.weave.get_roots().iter().copied().map(Ulid)
+        self.weave.roots().iter().copied().map(Ulid)
     }
     pub fn get_roots_u128(&self) -> impl ExactSizeIterator<Item = u128> {
-        self.weave.get_roots().iter().copied()
+        self.weave.roots().iter().copied()
     }
     pub fn get_roots_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
-        self.weave.get_roots()
+        self.weave.roots()
     }
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
-        self.weave.get_bookmarks().iter().copied().map(Ulid)
+        self.weave.bookmarks().iter().copied().map(Ulid)
     }
     pub fn get_bookmarks_u128(&self) -> impl ExactSizeIterator<Item = u128> {
-        self.weave.get_bookmarks().iter().copied()
+        self.weave.bookmarks().iter().copied()
     }
     pub fn get_bookmarks_u128_direct(&self) -> &IndexSet<u128, BuildHasherDefault<UlidHasher>> {
-        self.weave.get_bookmarks()
+        self.weave.bookmarks()
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         self.active.iter().filter_map(|id| self.weave.get_node(id))
@@ -735,8 +735,7 @@ impl ArchivedTapestryWeave {
     ) -> Option<Box<dyn Iterator<Item = u128_le> + 's>> {
         self.weave.get_node(id).map(|node| {
             if node.from.is_empty() {
-                Box::new(self.weave.get_roots().iter().copied())
-                    as Box<dyn Iterator<Item = u128_le>>
+                Box::new(self.weave.roots().iter().copied()) as Box<dyn Iterator<Item = u128_le>>
             } else {
                 Box::new(
                     node.from
@@ -748,10 +747,10 @@ impl ArchivedTapestryWeave {
         })
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = u128_le> {
-        self.weave.get_roots().iter().copied()
+        self.weave.roots().iter().copied()
     }
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = u128_le> {
-        self.weave.get_bookmarks().iter().copied()
+        self.weave.bookmarks().iter().copied()
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &ArchivedTapestryNode> {
         self.weave

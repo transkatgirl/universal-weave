@@ -265,10 +265,10 @@ impl TapestryWeave {
         self.weave.get_node(&id.0)
     }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
-        self.weave.get_roots().iter().copied().map(Ulid)
+        self.weave.roots().iter().copied().map(Ulid)
     }
     pub fn get_bookmarks(&self) -> impl ExactSizeIterator<Item = Ulid> {
-        self.weave.get_bookmarks().iter().copied().map(Ulid)
+        self.weave.bookmarks().iter().copied().map(Ulid)
     }
     pub fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = &TapestryNode> {
         let active: Vec<u128> = self.weave.get_active_thread().collect();
