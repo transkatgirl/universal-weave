@@ -708,13 +708,7 @@ where
                 return false;
             }
 
-            if let Some(mut parent) = node
-                .from
-                .iter()
-                .find(|parent| self.active.contains(parent))
-                .or_else(|| node.from.first())
-                .and_then(|id| self.nodes.remove(id))
-            {
+            if let Some(mut parent) = node.from.first().and_then(|id| self.nodes.remove(id)) {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
                     self.nodes.insert(node.id, node);
