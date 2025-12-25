@@ -241,20 +241,20 @@ where
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    fn nodes(&self) -> &HashMap<K, DependentNode<K, T, S>, S> {
+        &self.nodes
+    }
+    fn roots(&self) -> &IndexSet<K, S> {
+        &self.roots
+    }
+    fn bookmarks(&self) -> &IndexSet<K, S> {
+        &self.bookmarked
+    }
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
-    }
-    fn get_all_nodes(&self) -> &HashMap<K, DependentNode<K, T, S>, S> {
-        &self.nodes
-    }
-    fn get_roots(&self) -> &IndexSet<K, S> {
-        &self.roots
-    }
-    fn get_bookmarks(&self) -> &IndexSet<K, S> {
-        &self.bookmarked
     }
     fn get_active_thread(
         &mut self,
@@ -581,20 +581,20 @@ where
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    fn nodes(&self) -> &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>> {
+        &self.nodes
+    }
+    fn roots(&self) -> &ArchivedIndexSet<K::Archived> {
+        &self.roots
+    }
+    fn bookmarks(&self) -> &ArchivedIndexSet<K::Archived> {
+        &self.bookmarked
+    }
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
-    }
-    fn get_all_nodes(&self) -> &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>> {
-        &self.nodes
-    }
-    fn get_roots(&self) -> &ArchivedIndexSet<K::Archived> {
-        &self.roots
-    }
-    fn get_bookmarks(&self) -> &ArchivedIndexSet<K::Archived> {
-        &self.bookmarked
     }
     fn get_active_thread(
         &self,

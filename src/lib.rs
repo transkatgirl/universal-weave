@@ -80,16 +80,16 @@ where
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
+    /// Returns a reference to the HashMap used to map identifiers to nodes.
+    fn nodes(&self) -> &HashMap<K, N, S>;
+    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
+    fn roots(&self) -> &IndexSet<K, S>;
+    /// Returns a reference to the IndexSet used to store bookmarked nodes.
+    fn bookmarks(&self) -> &IndexSet<K, S>;
     /// Returns `true` if the Weave contains a Node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the Node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    /// Returns a reference to the HashMap used to map identifiers to nodes.
-    fn get_all_nodes(&self) -> &HashMap<K, N, S>;
-    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
-    fn get_roots(&self) -> &IndexSet<K, S>;
-    /// Returns a reference to the IndexSet used to store bookmarked nodes.
-    fn get_bookmarks(&self) -> &IndexSet<K, S>;
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
@@ -179,13 +179,20 @@ where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
+    /// Returns the number of Node objects stored within the Weave.
     fn len(&self) -> usize;
+    /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
+    /// Returns a reference to the HashMap used to map identifiers to nodes.
+    fn nodes(&self) -> &ArchivedHashMap<K, N>;
+    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
+    fn roots(&self) -> &ArchivedIndexSet<K>;
+    /// Returns a reference to the IndexSet used to store bookmarked nodes.
+    fn bookmarks(&self) -> &ArchivedIndexSet<K>;
+    /// Returns `true` if the Weave contains a Node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
+    /// Returns a reference to the Node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    fn get_all_nodes(&self) -> &ArchivedHashMap<K, N>;
-    fn get_roots(&self) -> &ArchivedIndexSet<K>;
-    fn get_bookmarks(&self) -> &ArchivedIndexSet<K>;
     fn get_active_thread(&self)
     -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     fn get_thread_from(
