@@ -598,6 +598,7 @@ impl TapestryWeave {
                 let to = Ulid::from_datetime(id.datetime());
 
                 node.id = from.0;
+                node.bookmarked = false;
                 self.weave.add_node(node);
 
                 if self.weave.split_node(&from.0, at, to.0) {
