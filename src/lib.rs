@@ -8,9 +8,6 @@
 pub mod dependent;
 pub mod independent;
 
-#[cfg(feature = "legacy")]
-pub mod legacy_dependent;
-
 use std::{
     cmp::Ordering,
     collections::HashMap,

@@ -22,6 +22,9 @@ use crate::{
     SemiIndependentWeave, Weave,
 };
 
+#[cfg(feature = "legacy")]
+pub mod legacy_dependent;
+
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentNode<K, T, S>

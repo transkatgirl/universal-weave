@@ -18,64 +18,25 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node,
-    SemiIndependentWeave, Weave,
+    ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
+    DiscreteContents, DiscreteWeave, IndependentContents, SemiIndependentWeave, Weave,
+    dependent::{ArchivedDependentNode, DependentNode, DependentWeave as NewDependentWeave},
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-pub struct DependentNode<K, T, S>
+impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    pub id: K,
-    pub from: Option<K>,
-    pub to: IndexSet<K, S>,
-
-    pub active: bool,
-    pub bookmarked: bool,
-    pub contents: T,
-}
-
-impl<K, T, S> DependentNode<K, T, S>
-where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    fn validate(&self) -> bool {
-        (if let Some(from) = self.from {
-            !self.to.contains(&from)
-        } else {
-            true
-        } && self.from != Some(self.id)
-            && !self.to.contains(&self.id))
-    }
-}
-
-impl<K, T, S> Node<K, T, S> for DependentNode<K, T, S>
-where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    fn id(&self) -> K {
-        self.id
-    }
-    fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.from.into_iter()
-    }
-    fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.to.iter().copied()
-    }
-    fn is_active(&self) -> bool {
-        self.active
-    }
-    fn is_bookmarked(&self) -> bool {
-        self.bookmarked
-    }
-    fn contents(&self) -> &T {
-        &self.contents
+    fn from(value: DependentWeave<K, T, M, S>) -> Self {
+        NewDependentWeave {
+            nodes: value.nodes,
+            roots: value.roots,
+            active: value.active,
+            bookmarked: value.bookmarked,
+            thread: value.thread,
+            metadata: value.metadata,
+        }
     }
 }
 
@@ -530,33 +491,6 @@ where
                 }
             })
         })
-    }
-}
-
-impl<K, K2, T, T2, S> ArchivedNode<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
-where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2>,
-    S: BuildHasher + Default + Clone,
-{
-    fn id(&self) -> K::Archived {
-        self.id
-    }
-    fn from(&self) -> impl Iterator<Item = K::Archived> {
-        self.from.into_iter().copied()
-    }
-    fn to(&self) -> impl Iterator<Item = K::Archived> {
-        self.to.iter().copied()
-    }
-    fn is_active(&self) -> bool {
-        self.active
-    }
-    fn is_bookmarked(&self) -> bool {
-        self.bookmarked
-    }
-    fn contents(&self) -> &<T as Archive>::Archived {
-        &self.contents
     }
 }
 
