@@ -1,5 +1,3 @@
-//! Experimental & untested; likely contains serious bugs
-
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -223,14 +221,14 @@ where
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
         node.from.iter().filter_map(|id| self.nodes.get(id))
     }
-    fn all_parent_ids_or_roots<'a>(
+    fn all_parents_or_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
-    ) -> &'a IndexSet<K, S> {
+    ) -> Box<dyn Iterator<Item = &'a IndependentNode<K, T, S>> + 'a> {
         if node.from.is_empty() {
-            &self.roots
+            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
         } else {
-            &node.from
+            Box::new(node.from.iter().filter_map(|id| self.nodes.get(id)))
         }
     }
     fn siblings_from_active_parents(
@@ -241,16 +239,17 @@ where
             .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
             .filter_map(|id| self.nodes.get(&id))
     }
-    fn sibling_ids_from_all_parents_including_roots<'a>(
+    fn siblings_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = K> + 'a> {
+    ) -> Box<dyn Iterator<Item = &'a IndependentNode<K, T, S>> + 'a> {
         if node.from.is_empty() {
-            Box::new(self.roots.iter().copied())
+            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
         } else {
             Box::new(
                 self.all_parents(node)
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id)),
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+                    .filter_map(|id| self.nodes.get(&id)),
             )
         }
     }
@@ -262,14 +261,13 @@ where
             }
 
             if value {
-                let has_active_parents = self
-                    .all_parent_ids_or_roots(node)
-                    .iter()
-                    .any(|parent| self.active.contains(parent));
+                let has_active_parents =
+                    self.all_parents_or_roots(node).any(|parent| parent.active);
                 if has_active_parents {
                     let siblings: Vec<_> = self
-                        .sibling_ids_from_all_parents_including_roots(node)
-                        .filter(|sibling| self.active.contains(sibling))
+                        .siblings_from_all_parents_including_roots(node)
+                        .filter(|sibling| sibling.active)
+                        .map(|sibling| sibling.id)
                         .collect();
 
                     for sibling in siblings {
@@ -288,10 +286,8 @@ where
                             .nodes
                             .get(id)
                             .iter()
-                            .flat_map(|child| child.from.iter())
-                            .any(|child_parent| {
-                                self.active.contains(child_parent) && *child_parent != node.id
-                            })
+                            .flat_map(|child| child.from.iter().filter_map(|id| self.nodes.get(id)))
+                            .any(|child_parent| child_parent.active && child_parent.id != node.id)
                     })
                     .collect();
 
@@ -338,7 +334,11 @@ where
                 return true;
             }
 
-            let has_active_parents = node.from.iter().any(|parent| self.active.contains(parent));
+            let has_active_parents = node
+                .from
+                .iter()
+                .filter_map(|id| self.nodes.get(id))
+                .any(|parent| parent.active);
 
             if has_active_parents {
                 return true;
@@ -406,8 +406,8 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K> {
-        self.nodes.keys().copied()
+    fn get_all_nodes(&self) -> &HashMap<K, IndependentNode<K, T, S>, S> {
+        &self.nodes
     }
     fn get_roots(&self) -> &IndexSet<K, S> {
         &self.roots
@@ -472,8 +472,11 @@ where
             self.roots.insert(node.id);
         } else {
             if node.active {
-                let has_active_parents =
-                    node.from.iter().any(|parent| self.active.contains(parent));
+                let has_active_parents = node
+                    .from
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .any(|parent| parent.active);
 
                 if !has_active_parents {
                     let parent = node.from.first().unwrap();
@@ -485,7 +488,9 @@ where
                     .iter()
                     .filter_map(|id| self.nodes.get(id))
                     .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                    .filter(|sibling| self.active.contains(sibling))
+                    .filter_map(|id| self.nodes.get(&id))
+                    .filter(|sibling| sibling.active)
+                    .map(|sibling| sibling.id)
                     .collect();
 
                 for sibling in siblings {
@@ -777,10 +782,7 @@ where
                 if node.active && !node.from.is_empty() {
                     Box::new(self.siblings_from_active_parents(node))
                 } else {
-                    Box::new(
-                        self.sibling_ids_from_all_parents_including_roots(node)
-                            .filter_map(|id| self.nodes.get(&id)),
-                    )
+                    Box::new(self.siblings_from_all_parents_including_roots(node))
                 };
 
             iter.filter_map(|sibling| {
@@ -921,8 +923,8 @@ where
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K::Archived> {
-        self.nodes.keys().copied()
+    fn get_all_nodes(&self) -> &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>> {
+        &self.nodes
     }
     fn get_roots(&self) -> &ArchivedIndexSet<K::Archived> {
         &self.roots

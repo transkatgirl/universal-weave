@@ -690,7 +690,7 @@ impl TapestryWeave {
     }
 }
 
-// TODO: set_active_content, dump_identifiers_ordered
+// TODO: (diff-based) set_active_content, dump_identifiers_ordered
 
 pub struct ArchivedTapestryWeave {
     pub weave: <TapestryWeaveInner as Archive>::Archived,

@@ -1,4 +1,6 @@
 //! An experimental attempt at creating general-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
+//!
+//!
 
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
@@ -11,13 +13,14 @@ pub mod legacy_dependent;
 
 use std::{
     cmp::Ordering,
+    collections::HashMap,
     hash::{BuildHasher, Hash},
 };
 
 pub use indexmap;
 use indexmap::IndexSet;
 pub use rkyv;
-use rkyv::collections::swiss_table::ArchivedIndexSet;
+use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet};
 
 pub trait Node<K, T, S>
 where
@@ -42,7 +45,7 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &K) -> bool;
     fn get_node(&self, id: &K) -> Option<&N>;
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K>;
+    fn get_all_nodes(&self) -> &HashMap<K, N, S>;
     fn get_roots(&self) -> &IndexSet<K, S>;
     fn get_bookmarks(&self) -> &IndexSet<K, S>;
     fn get_active_thread(
@@ -140,7 +143,7 @@ where
     fn is_empty(&self) -> bool;
     fn contains(&self, id: &K) -> bool;
     fn get_node(&self, id: &K) -> Option<&N>;
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K>;
+    fn get_all_nodes(&self) -> &ArchivedHashMap<K, N>;
     fn get_roots(&self) -> &ArchivedIndexSet<K>;
     fn get_bookmarks(&self) -> &ArchivedIndexSet<K>;
     fn get_active_thread(&self)

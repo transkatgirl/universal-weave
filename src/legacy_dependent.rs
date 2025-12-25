@@ -241,8 +241,8 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K> {
-        self.nodes.keys().copied()
+    fn get_all_nodes(&self) -> &HashMap<K, DependentNode<K, T, S>, S> {
+        &self.nodes
     }
     fn get_roots(&self) -> &IndexSet<K, S> {
         &self.roots
@@ -580,8 +580,8 @@ where
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_all_nodes_unordered(&self) -> impl ExactSizeIterator<Item = K::Archived> {
-        self.nodes.keys().copied()
+    fn get_all_nodes(&self) -> &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>> {
+        &self.nodes
     }
     fn get_roots(&self) -> &ArchivedIndexSet<K::Archived> {
         &self.roots
