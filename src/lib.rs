@@ -25,9 +25,9 @@ where
 {
     /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// Returns an iterator over the identifiers corresponding to the node's children.
+    /// An iterator over the identifiers corresponding to the node's children.
     fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// Returns an iterator over the identifiers corresponding to the node's parents.
+    /// An iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     /// Returns `true` if the node is considered "active".
     ///
@@ -90,9 +90,19 @@ where
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the Node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Builds a thread starting at the deepest active Node within the weave.
+    ///
+    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    ///
+    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// Builds a thread starting at the specified Node.
+    ///
+    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    ///
+    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
     fn get_thread_from(
         &mut self,
         id: &K,
@@ -159,9 +169,9 @@ where
 {
     /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// Returns an iterator over the identifiers corresponding to the node's children.
+    /// An iterator over the identifiers corresponding to the node's children.
     fn from(&self) -> impl Iterator<Item = K>;
-    /// Returns an iterator over the identifiers corresponding to the node's parents.
+    /// An iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl Iterator<Item = K>;
     /// Returns `true` if the node is considered "active".
     ///
@@ -193,8 +203,18 @@ where
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the Node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Builds a thread starting at the deepest active Node within the weave.
+    ///
+    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    ///
+    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
     fn get_active_thread(&self)
     -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// Builds a thread starting at the specified Node.
+    ///
+    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    ///
+    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
     fn get_thread_from(
         &self,
         id: &K,
