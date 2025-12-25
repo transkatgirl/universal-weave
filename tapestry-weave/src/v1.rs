@@ -421,6 +421,44 @@ impl TapestryWeave {
     ) -> Option<&IndexSet<u128, BuildHasherDefault<UlidHasher>>> {
         self.weave.get_node(id).map(|node| &node.to)
     }
+    pub fn get_node_parents(
+        &self,
+        id: &u128,
+    ) -> Option<&IndexSet<u128, BuildHasherDefault<UlidHasher>>> {
+        self.weave.get_node(id).map(|node| &node.from)
+    }
+    pub fn get_node_siblings(&self, id: &u128) -> Option<impl DoubleEndedIterator<Item = u128>> {
+        self.weave.get_node(id).map(|node| {
+            node.from
+                .iter()
+                .filter_map(|parent| self.weave.get_node(parent))
+                .flat_map(|parent| parent.to.iter().copied())
+        })
+    }
+    pub fn get_node_siblings_or_roots<'s>(
+        &'s self,
+        id: &u128,
+    ) -> Box<dyn DoubleEndedIterator<Item = u128> + 's> {
+        self.weave
+            .get_node(id)
+            .map(|node| {
+                if node.from.is_empty() {
+                    Box::new(self.weave.get_roots().iter().copied())
+                        as Box<dyn DoubleEndedIterator<Item = u128>>
+                } else {
+                    Box::new(
+                        node.from
+                            .iter()
+                            .filter_map(|parent| self.weave.get_node(parent))
+                            .flat_map(|parent| parent.to.iter().copied()),
+                    ) as Box<dyn DoubleEndedIterator<Item = u128>>
+                }
+            })
+            .unwrap_or_else(|| {
+                Box::new(self.weave.get_roots().iter().copied())
+                    as Box<dyn DoubleEndedIterator<Item = u128>>
+            })
+    }
     pub fn get_roots(&self) -> impl ExactSizeIterator<Item = Ulid> {
         self.weave.get_roots().iter().copied().map(Ulid)
     }
