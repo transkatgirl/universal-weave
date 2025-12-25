@@ -759,6 +759,18 @@ where
     }
 }
 
+impl<K, T, M, S> crate::SemiIndependentWeave<K, IndependentNode<K, T, S>, T, S>
+    for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T> {
+        self.nodes.get_mut(id).map(|node| &mut node.contents)
+    }
+}
+
 impl<K, T, M, S> DeduplicatableWeave<K, IndependentNode<K, T, S>, T, S>
     for IndependentWeave<K, T, M, S>
 where
@@ -861,9 +873,6 @@ where
         }
 
         true
-    }
-    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T> {
-        self.nodes.get_mut(id).map(|node| &mut node.contents)
     }
 }
 

@@ -12,7 +12,7 @@ use ulid::Ulid;
 use universal_weave::{
     ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents,
-    IndependentWeave as IndependentWeaveTrait, Weave,
+    IndependentWeave as IndependentWeaveTrait, SemiIndependentWeave, Weave,
     independent::{ArchivedIndependentNode, IndependentNode, IndependentWeave},
     indexmap::{IndexMap, IndexSet},
     rkyv::{

@@ -57,7 +57,8 @@ where
     fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
-pub trait IndependentWeave<K, N, T, S>
+pub trait IndependentWeave<K, N, T, S>:
+    Weave<K, N, T, S> + SemiIndependentWeave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
@@ -65,10 +66,9 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
-    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
-pub trait SemiIndependentWeave<K, N, T, S>
+pub trait SemiIndependentWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
@@ -78,7 +78,7 @@ where
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
-pub trait DiscreteWeave<K, N, T, S>
+pub trait DiscreteWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
@@ -89,7 +89,7 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
-pub trait DeduplicatableWeave<K, N, T, S>
+pub trait DeduplicatableWeave<K, N, T, S>: Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
