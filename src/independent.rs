@@ -221,14 +221,14 @@ where
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
         node.from.iter().filter_map(|id| self.nodes.get(id))
     }
-    fn all_parents_or_roots<'a>(
+    fn all_parent_ids_or_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = &'a IndependentNode<K, T, S>> + 'a> {
+    ) -> &'a IndexSet<K, S> {
         if node.from.is_empty() {
-            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
+            &self.roots
         } else {
-            Box::new(node.from.iter().filter_map(|id| self.nodes.get(id)))
+            &node.from
         }
     }
     fn siblings_from_active_parents(
@@ -239,17 +239,16 @@ where
             .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
             .filter_map(|id| self.nodes.get(&id))
     }
-    fn siblings_from_all_parents_including_roots<'a>(
+    fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = &'a IndependentNode<K, T, S>> + 'a> {
+    ) -> Box<dyn Iterator<Item = K> + 'a> {
         if node.from.is_empty() {
-            Box::new(self.roots.iter().filter_map(|id| self.nodes.get(id)))
+            Box::new(self.roots.iter().copied())
         } else {
             Box::new(
                 self.all_parents(node)
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                    .filter_map(|id| self.nodes.get(&id)),
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id)),
             )
         }
     }
@@ -261,13 +260,14 @@ where
             }
 
             if value {
-                let has_active_parents =
-                    self.all_parents_or_roots(node).any(|parent| parent.active);
+                let has_active_parents = self
+                    .all_parent_ids_or_roots(node)
+                    .iter()
+                    .any(|parent| self.active.contains(parent));
                 if has_active_parents {
                     let siblings: Vec<_> = self
-                        .siblings_from_all_parents_including_roots(node)
-                        .filter(|sibling| sibling.active)
-                        .map(|sibling| sibling.id)
+                        .sibling_ids_from_all_parents_including_roots(node)
+                        .filter(|sibling| self.active.contains(sibling))
                         .collect();
 
                     for sibling in siblings {
@@ -286,8 +286,10 @@ where
                             .nodes
                             .get(id)
                             .iter()
-                            .flat_map(|child| child.from.iter().filter_map(|id| self.nodes.get(id)))
-                            .any(|child_parent| child_parent.active && child_parent.id != node.id)
+                            .flat_map(|child| child.from.iter())
+                            .any(|child_parent| {
+                                self.active.contains(child_parent) && *child_parent != node.id
+                            })
                     })
                     .collect();
 
@@ -334,11 +336,7 @@ where
                 return true;
             }
 
-            let has_active_parents = node
-                .from
-                .iter()
-                .filter_map(|id| self.nodes.get(id))
-                .any(|parent| parent.active);
+            let has_active_parents = node.from.iter().any(|parent| self.active.contains(parent));
 
             if has_active_parents {
                 return true;
@@ -472,11 +470,8 @@ where
             self.roots.insert(node.id);
         } else {
             if node.active {
-                let has_active_parents = node
-                    .from
-                    .iter()
-                    .filter_map(|id| self.nodes.get(id))
-                    .any(|parent| parent.active);
+                let has_active_parents =
+                    node.from.iter().any(|parent| self.active.contains(parent));
 
                 if !has_active_parents {
                     let parent = node.from.first().unwrap();
@@ -488,9 +483,7 @@ where
                     .iter()
                     .filter_map(|id| self.nodes.get(id))
                     .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                    .filter_map(|id| self.nodes.get(&id))
-                    .filter(|sibling| sibling.active)
-                    .map(|sibling| sibling.id)
+                    .filter(|sibling| self.active.contains(sibling))
                     .collect();
 
                 for sibling in siblings {
@@ -782,7 +775,10 @@ where
                 if node.active && !node.from.is_empty() {
                     Box::new(self.siblings_from_active_parents(node))
                 } else {
-                    Box::new(self.siblings_from_all_parents_including_roots(node))
+                    Box::new(
+                        self.sibling_ids_from_all_parents_including_roots(node)
+                            .filter_map(|id| self.nodes.get(&id)),
+                    )
                 };
 
             iter.filter_map(|sibling| {
