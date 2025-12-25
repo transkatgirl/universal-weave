@@ -55,6 +55,9 @@ pub enum DiscreteContentResult<T> {
     One(T),
 }
 
+/// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
+pub trait IndependentContents {}
+
 /// [`Node`] contents which can be meaningfully deduplicated.
 pub trait DeduplicatableContents {
     /// Whether or not two items are considered duplicates of each-other.
@@ -62,8 +65,6 @@ pub trait DeduplicatableContents {
     /// The result of this function must be symmetric (`a == b` implies `b == a` and `a != b` implies `!(a == b)`).
     fn is_duplicate_of(&self, value: &Self) -> bool;
 }
-
-pub trait IndependentContents {}
 
 /// A document which links together multiple [`Node`] objects.
 pub trait Weave<K, N, T, S>
@@ -141,6 +142,7 @@ where
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
+/// A [`Node`] which has been decoded using zero-copy deserialization.
 pub trait ArchivedNode<K, T>
 where
     K: Hash + Copy + Eq,
@@ -153,6 +155,7 @@ where
     fn contents(&self) -> &T;
 }
 
+/// A read-only [`Weave`] which has been decoded using zero-copy deserialization.
 pub trait ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
