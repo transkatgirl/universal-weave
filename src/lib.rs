@@ -23,62 +23,72 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    /// The unique identifier of the node.
+    /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// The identifiers corresponding to the parents of this node.
+    /// Returns an iterator over the identifiers corresponding to the node's children.
     fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// The identifiers corresponding to the children of this node.
+    /// Returns an iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// If the node is considered "active".
+    /// Returns `true` if the node is considered "active".
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
-    /// If the node is bookmarked.
+    /// Returns `true` if the node is bookmarked.
     fn is_bookmarked(&self) -> bool;
-    /// The contents of the node.
+    /// Returns a reference to the node's contents.
     fn contents(&self) -> &T;
 }
 
 /// [`Node`] contents which can be split apart or merged together.
 pub trait DiscreteContents: Sized {
     /// Splits the item at specified index.
+    ///
+    /// If splitting the item fails, the original contents are returned.
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
+    ///
+    /// If merging the two items fails, the original contents are returned in the order they were specified in.
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
-/// The result from an action on a [`DiscreteContents`] item.
-///
-/// Actions are fallible; If the action was not successful, the original contents are returned.
+/// A type representing the results of an action on a [`DiscreteContents`] item.
 pub enum DiscreteContentResult<T> {
-    Two((T, T)),
     One(T),
+    Two((T, T)),
 }
 
 /// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
 pub trait IndependentContents {}
 
 /// [`Node`] contents which can be meaningfully deduplicated.
+///
+/// Deduplication must be symmetric:
+/// For all `a` and `b`, `a == b` implies `b == a` and `a != b` implies `!(a == b)`.
 pub trait DeduplicatableContents {
-    /// Whether or not two items are considered duplicates of each-other.
-    ///
-    /// The result of this function must be symmetric (`a == b` implies `b == a` and `a != b` implies `!(a == b)`).
-    fn is_duplicate_of(&self, value: &Self) -> bool;
+    /// Tests if `self` and `other` should be considered duplicates of each other.
+    fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
-/// A document which links together multiple [`Node`] objects.
+/// A document linking together multiple [`Node`] objects.
 pub trait Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
     S: BuildHasher + Default + Clone,
 {
+    /// Returns the number of Node objects stored within the Weave.
     fn len(&self) -> usize;
+    /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
+    /// Returns `true` if the Weave contains a Node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
+    /// Returns a reference to the Node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Returns a reference to the HashMap used to map identifiers to nodes.
     fn get_all_nodes(&self) -> &HashMap<K, N, S>;
+    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
     fn get_roots(&self) -> &IndexSet<K, S>;
+    /// Returns a reference to the IndexSet used to store bookmarked nodes.
     fn get_bookmarks(&self) -> &IndexSet<K, S>;
     fn get_active_thread(
         &mut self,
@@ -147,11 +157,19 @@ pub trait ArchivedNode<K, T>
 where
     K: Hash + Copy + Eq,
 {
+    /// Returns the node's unique identifier.
     fn id(&self) -> K;
+    /// Returns an iterator over the identifiers corresponding to the node's children.
     fn from(&self) -> impl Iterator<Item = K>;
+    /// Returns an iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl Iterator<Item = K>;
+    /// Returns `true` if the node is considered "active".
+    ///
+    /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
+    /// Returns `true` if the node is bookmarked.
     fn is_bookmarked(&self) -> bool;
+    /// Returns a reference to the node's contents.
     fn contents(&self) -> &T;
 }
 
