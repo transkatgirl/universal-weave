@@ -3,16 +3,11 @@
 use std::{borrow::Cow, cmp::Ordering, collections::HashSet, hash::BuildHasherDefault};
 
 use contracts::ensures;
-use rkyv::{
-    collections::swiss_table::{ArchivedIndexMap, ArchivedIndexSet},
-    hash::FxHasher64,
-    rend::u128_le,
-};
+use rkyv::{collections::swiss_table::ArchivedIndexSet, hash::FxHasher64, rend::u128_le};
 use ulid::Ulid;
 use universal_weave::{
     ArchivedWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents,
-    IndependentWeave as IndependentWeaveTrait, SemiIndependentWeave, Weave,
+    DiscreteContents, DiscreteWeave, IndependentContents, SemiIndependentWeave, Weave,
     independent::{ArchivedIndependentNode, IndependentNode, IndependentWeave},
     indexmap::{IndexMap, IndexSet},
     rkyv::{
@@ -596,16 +591,37 @@ impl TapestryWeave {
             .flat_map(|node| node.contents.content.as_bytes().to_vec())
             .collect()
     }
-    pub fn split_node(&mut self, id: &Ulid, at: usize) -> Option<Ulid> {
-        let new_id = Ulid::from_datetime(id.datetime());
+    pub fn split_node(&mut self, id: &Ulid, at: usize, duplicate: bool) -> Option<(Ulid, Ulid)> {
+        if duplicate {
+            if let Some(mut node) = self.weave.get_node(&id.0).cloned() {
+                let from = Ulid::from_datetime(id.datetime());
+                let to = Ulid::from_datetime(id.datetime());
 
-        if self.weave.split_node(&id.0, at, new_id.0) {
-            self.weave.get_contents_mut(&id.0).unwrap().modified = true;
-            self.weave.get_contents_mut(&new_id.0).unwrap().modified = true;
-            self.update_shape_and_active();
-            Some(new_id)
+                node.id = from.0;
+                self.weave.add_node(node);
+
+                if self.weave.split_node(&from.0, at, to.0) {
+                    self.weave.get_contents_mut(&from.0).unwrap().modified = true;
+                    self.weave.get_contents_mut(&to.0).unwrap().modified = true;
+                    self.update_shape_and_active();
+                    Some((from, to))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
         } else {
-            None
+            let new_id = Ulid::from_datetime(id.datetime());
+
+            if self.weave.split_node(&id.0, at, new_id.0) {
+                self.weave.get_contents_mut(&id.0).unwrap().modified = true;
+                self.weave.get_contents_mut(&new_id.0).unwrap().modified = true;
+                self.update_shape_and_active();
+                Some((*id, new_id))
+            } else {
+                None
+            }
         }
     }
     pub fn split_node_direct(&mut self, id: &u128, at: usize, new_id: u128) -> Option<u128> {
@@ -673,7 +689,7 @@ impl TapestryWeave {
     }
 }
 
-// TODO: set_active_content, duplicate before splitting nodes
+// TODO: set_active_content, dump_identifiers_ordered
 
 pub struct ArchivedTapestryWeave {
     pub weave: <TapestryWeaveInner as Archive>::Archived,
