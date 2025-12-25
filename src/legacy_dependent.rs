@@ -390,7 +390,8 @@ where
             .collect();
         roots.sort_by(|a, b| compare(a, b));
 
-        self.roots = roots.into_iter().map(|node| node.id).collect();
+        self.roots.clear();
+        self.roots.extend(roots.into_iter().map(|node| node.id));
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]

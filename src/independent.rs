@@ -455,14 +455,15 @@ where
 
         if node.from.is_empty() {
             if node.active {
-                let roots: Vec<_> = self.roots.iter().copied().collect();
+                let active_roots: Vec<_> = self
+                    .roots
+                    .iter()
+                    .copied()
+                    .filter(|root| self.active.contains(root))
+                    .collect();
 
-                for root in &roots {
-                    let is_active = self.nodes.get(root).unwrap().active;
-
-                    if is_active {
-                        self.update_node_activity_in_place(root, false);
-                    }
+                for root in &active_roots {
+                    self.update_node_activity_in_place(root, false);
                 }
             }
 
@@ -620,7 +621,8 @@ where
             .collect();
         roots.sort_by(|a, b| compare(a, b));
 
-        self.roots = roots.into_iter().map(|node| node.id).collect();
+        self.roots.clear();
+        self.roots.extend(roots.into_iter().map(|node| node.id));
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]
