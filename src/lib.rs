@@ -257,6 +257,28 @@ where
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    fn get_ordered_node_identifiers(&self) -> Vec<K> {
+        let mut identifiers = Vec::with_capacity(self.len());
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers(self, *root, &mut identifiers);
+        }
+
+        identifiers
+    }
+    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    ///
+    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
+        let mut identifiers = Vec::with_capacity(self.len());
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers_rev(self, *root, &mut identifiers);
+        }
+
+        identifiers
+    }
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
@@ -305,6 +327,38 @@ fn add_node_identifiers_rev<K, N, T, S>(
         identifiers.push(id);
         for child in node.to().rev() {
             add_node_identifiers(weave, child, identifiers);
+        }
+    }
+}
+
+fn add_archived_node_identifiers<K, N, T>(
+    weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
+{
+    if let Some(node) = weave.get_node(&id) {
+        identifiers.push(id);
+        for child in node.to() {
+            add_archived_node_identifiers(weave, child, identifiers);
+        }
+    }
+}
+
+fn add_archived_node_identifiers_rev<K, N, T>(
+    weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
+{
+    if let Some(node) = weave.get_node(&id) {
+        identifiers.push(id);
+        for child in node.to().collect::<Vec<_>>().into_iter().rev() {
+            add_archived_node_identifiers_rev(weave, child, identifiers);
         }
     }
 }
