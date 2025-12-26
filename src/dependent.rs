@@ -109,6 +109,11 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    /// Validates that the weave is internally consistent.
+    ///
+    /// If this returns `false`, further actions on the weave will result in unexpected behavior, including but not limited to panics. However, since this function is fairly slow, it should only be called occasionally (such as when saving the weave to disk).
+    ///
+    /// This function will be removed in the future once this [`Weave`] implementation has undergone formal verification.
     pub fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
