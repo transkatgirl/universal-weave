@@ -1,4 +1,4 @@
-//! A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 
 use std::{
     cmp::Ordering,
@@ -78,6 +78,9 @@ where
     }
 }
 
+/// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+///
+/// In order to reduced serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentWeave<K, T, M, S>
