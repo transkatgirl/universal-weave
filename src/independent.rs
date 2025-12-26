@@ -402,8 +402,32 @@ where
             None
         }
     }
-    pub fn from_dependent(input: DependentWeave<K, IndependentNode<K, T, S>, T, S>) -> Self {
-        todo!()
+}
+
+impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents + Clone,
+    M: Clone,
+    S: BuildHasher + Default + Clone,
+{
+    fn from(value: DependentWeave<K, T, M, S>) -> Self {
+        let mut output = Self::with_capacity(value.capacity(), value.metadata.clone());
+
+        for identifier in value.get_ordered_node_identifiers() {
+            let node = value.get_node(&identifier).unwrap().clone();
+
+            assert!(output.add_node(IndependentNode {
+                id: node.id,
+                from: IndexSet::from_iter(node.from.into_iter()),
+                to: node.to,
+                active: node.active,
+                bookmarked: node.bookmarked,
+                contents: node.contents,
+            }));
+        }
+
+        output
     }
 }
 

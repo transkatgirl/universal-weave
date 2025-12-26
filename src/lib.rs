@@ -90,6 +90,28 @@ where
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    fn get_ordered_node_identifiers(&self) -> Vec<K> {
+        let mut identifiers = Vec::with_capacity(self.len());
+
+        for root in self.roots() {
+            add_node_identifiers(self, *root, &mut identifiers);
+        }
+
+        identifiers
+    }
+    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    ///
+    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
+        let mut identifiers = Vec::with_capacity(self.len());
+
+        for root in self.roots() {
+            add_node_identifiers_rev(self, *root, &mut identifiers);
+        }
+
+        identifiers
+    }
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
@@ -251,4 +273,38 @@ where
         &self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+}
+
+fn add_node_identifiers<K, N, T, S>(
+    weave: &(impl Weave<K, N, T, S> + ?Sized),
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = weave.get_node(&id) {
+        identifiers.push(id);
+        for child in node.to() {
+            add_node_identifiers(weave, child, identifiers);
+        }
+    }
+}
+
+fn add_node_identifiers_rev<K, N, T, S>(
+    weave: &(impl Weave<K, N, T, S> + ?Sized),
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = weave.get_node(&id) {
+        identifiers.push(id);
+        for child in node.to().rev() {
+            add_node_identifiers(weave, child, identifiers);
+        }
+    }
 }
