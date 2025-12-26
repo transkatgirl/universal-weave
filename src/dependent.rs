@@ -34,12 +34,19 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    /// The node's unique identifier.
     pub id: K,
+    /// The identifier corresponding to the node's parent.
     pub from: Option<K>,
+    /// The identifiers corresponding to the node's children.
     pub to: IndexSet<K, S>,
-
+    /// If the node should be considered "active".
+    ///
+    /// [`DependentWeave`] only considers the node at the start of an active thread to be "active".
     pub active: bool,
+    /// If the node is bookmarked.
     pub bookmarked: bool,
+    /// The node's contents.
     pub contents: T,
 }
 

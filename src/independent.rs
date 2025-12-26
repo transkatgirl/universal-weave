@@ -31,11 +31,19 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    /// The node's unique identifier.
     pub id: K,
+    /// The identifiers corresponding to the node's parents.
     pub from: IndexSet<K, S>,
+    /// The identifiers corresponding to the node's children.
     pub to: IndexSet<K, S>,
+    /// If the node should be considered active.
+    ///
+    /// Unlike [`DependentWeave`], [`IndependentWeave`] considers all nodes within an active thread to be active.
     pub active: bool,
+    /// If the node is bookmarked.
     pub bookmarked: bool,
+    /// The node's contents.
     pub contents: T,
 }
 
