@@ -76,7 +76,7 @@ where
     N: Node<K, T, S>,
     S: BuildHasher + Default + Clone,
 {
-    /// Returns the number of Node objects stored within the Weave.
+    /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
@@ -86,33 +86,52 @@ where
     fn roots(&self) -> &IndexSet<K, S>;
     /// Returns a reference to the IndexSet used to store bookmarked nodes.
     fn bookmarks(&self) -> &IndexSet<K, S>;
-    /// Returns `true` if the Weave contains a Node with the specified identifier.
+    /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
-    /// Returns a reference to the Node corresponding to the identifier.
+    /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    /// Builds a thread starting at the deepest active Node within the weave.
+    /// Builds a thread starting at the deepest active node within the Weave.
     ///
-    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
-    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
+    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// Builds a thread starting at the specified Node.
+    /// Builds a thread starting at the specified node.
     ///
-    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
-    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
+    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_thread_from(
         &mut self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// Inserts a node into the Weave.
+    ///
+    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
+    ///
+    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
     fn add_node(&mut self, node: N) -> bool;
+    /// Sets the active status of a node with the specified identifier.
+    ///
+    /// This function is meant to be used in user interfaces and it's exact behavior is decided by the Weave implementation. The `alternate` argument should be used in cases where an alternative behavior is desired (such as when shift-clicking a button).
+    ///
+    /// This function uses [`Weave::set_node_active_status_in_place`] internally.
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
+    /// Sets the active status of a node with the specified identifier.
+    ///
+    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to keep the weave internally consistent.
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
+    /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
-    fn sort_node_children_by(&mut self, id: &K, compare: impl FnMut(&N, &N) -> Ordering) -> bool;
-    fn sort_roots_by(&mut self, compare: impl FnMut(&N, &N) -> Ordering);
+    /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
+    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
+    /// Sorts "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
+    fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
+    /// Removes a node with the specified identifier, returning its value if it was present within the weave.
+    ///
+    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
     fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
@@ -125,6 +144,11 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    /// Moves a node with the specified identifier to a new set of parent nodes.
+    ///
+    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
+    ///
+    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
@@ -136,6 +160,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    /// Returns a mutable reference to the contents of a node with the specified identifier.
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
@@ -147,7 +172,13 @@ where
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
+    /// Splits a node with the specified identifier at the given index, creating a new node with the identifier `new_id`.
+    ///
+    /// Returns `false` if splitting the node failed or the node could not be found.
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
+    /// Merges a node with the specified identifier with its parent.
+    ///
+    /// Returns the identifier of the merged node if merging was successful.
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
@@ -159,6 +190,7 @@ where
     T: DeduplicatableContents,
     S: BuildHasher + Default + Clone,
 {
+    /// An iterator over the identifiers of sibling nodes of the specified node which contain contents which are considered duplicates of the specified node.
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
@@ -189,7 +221,7 @@ where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
-    /// Returns the number of Node objects stored within the Weave.
+    /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
@@ -199,22 +231,22 @@ where
     fn roots(&self) -> &ArchivedIndexSet<K>;
     /// Returns a reference to the IndexSet used to store bookmarked nodes.
     fn bookmarks(&self) -> &ArchivedIndexSet<K>;
-    /// Returns `true` if the Weave contains a Node with the specified identifier.
+    /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
-    /// Returns a reference to the Node corresponding to the identifier.
+    /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    /// Builds a thread starting at the deepest active Node within the weave.
+    /// Builds a thread starting at the deepest active node within the Weave.
     ///
-    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
-    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
+    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_active_thread(&self)
     -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// Builds a thread starting at the specified Node.
+    /// Builds a thread starting at the specified node.
     ///
-    /// A thread is an iterator over the identifiers of directly connected Nodes which always ends at a root Node.
+    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
-    /// In Weave implementations where Nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the Node does not contain any active parents.
+    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_thread_from(
         &self,
         id: &K,
