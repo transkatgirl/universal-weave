@@ -190,7 +190,7 @@ where
     T: DeduplicatableContents,
     S: BuildHasher + Default + Clone,
 {
-    /// An iterator over the identifiers of sibling nodes of the specified node which contain contents which are considered duplicates of the specified node.
+    /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
