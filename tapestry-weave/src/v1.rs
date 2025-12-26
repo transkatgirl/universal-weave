@@ -21,10 +21,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     VersionedWeave,
     hashers::UlidHasher,
-    v0::{
-        NodeContent as OldNodeContent, TapestryNode as OldTapestryNode,
-        TapestryWeave as OldTapestryWeave,
-    },
+    v0::{NodeContent as OldNodeContent, TapestryWeave as OldTapestryWeave},
     versioning::{MixedData, VersionedBytes},
 };
 
@@ -795,13 +792,32 @@ impl ArchivedTapestryWeave {
     }
 }
 
+impl From<OldNodeContent> for NodeContent {
+    fn from(value: OldNodeContent) -> Self {
+        todo!()
+    }
+}
+
 impl From<OldTapestryWeave> for TapestryWeave {
     fn from(mut value: OldTapestryWeave) -> Self {
-        let output = TapestryWeave::with_capacity(
+        let mut output = TapestryWeave::with_capacity(
             value.capacity(),
             IndexMap::from_iter(value.weave.metadata.drain(..)),
         );
 
-        todo!()
+        for identifier in value.weave.get_ordered_node_identifiers() {
+            let node = value.weave.get_node(&identifier).unwrap().clone();
+
+            assert!(output.add_node(IndependentNode {
+                id: node.id,
+                from: IndexSet::from_iter(node.from.into_iter()),
+                to: node.to,
+                active: node.active,
+                bookmarked: node.bookmarked,
+                contents: node.contents.into(),
+            }));
+        }
+
+        output
     }
 }
