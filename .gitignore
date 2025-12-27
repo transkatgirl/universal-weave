@@ -1,6 +1,6 @@
 .DS_Store
 /target
-#Cargo.lock
+Cargo.lock
 /verif
 /why3find.json
 /.why3find
