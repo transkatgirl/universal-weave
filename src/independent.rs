@@ -155,6 +155,8 @@ where
             })
     }
     fn validate_layer(&self, layer: &[K]) -> bool {
+        // TODO: Modify this to better handle multi-parent nodes
+
         let mut next_layer = Vec::new();
         let mut has_active = false;
 
