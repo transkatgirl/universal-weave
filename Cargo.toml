@@ -27,8 +27,3 @@ rkyv = { version = "0.8.12", features = [
 serde = { version = "1.0.228", features = [
 	"derive",
 ], optional = true }
-
-[workspace]
-members = [
-	"tapestry-weave",
-]
