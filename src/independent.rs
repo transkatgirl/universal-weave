@@ -105,7 +105,10 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[rkyv(with = Skip)]
-    thread: Vec<K>,
+    thread_list: Vec<K>,
+
+    #[rkyv(with = Skip)]
+    thread_set: HashSet<K, S>,
 
     pub metadata: M,
 }
@@ -203,7 +206,8 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: HashSet::with_capacity_and_hasher(capacity, S::default()),
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread: Vec::with_capacity(capacity),
+            thread_list: Vec::with_capacity(capacity),
+            thread_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
             metadata,
         }
     }
@@ -221,15 +225,24 @@ where
                 .capacity()
                 .saturating_sub(self.bookmarked.capacity()),
         );
-        self.thread
-            .reserve(self.nodes.capacity().saturating_sub(self.thread.capacity()));
+        self.thread_list.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.thread_list.capacity()),
+        );
+        self.thread_set.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.thread_set.capacity()),
+        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread.shrink_to(min_capacity);
+        self.thread_list.shrink_to(min_capacity);
+        self.thread_set.shrink_to(min_capacity);
     }
     fn active_parents(
         &self,
@@ -467,23 +480,42 @@ where
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
+        self.thread_list.clear();
+        self.thread_set.clear();
 
-        if let Some(active_root) = self.roots.iter().find(|root| self.active.contains(root)) {
-            build_thread(&self.nodes, &self.active, active_root, &mut self.thread);
+        for active_root in self
+            .roots
+            .iter()
+            .copied()
+            .filter(|root| self.active.contains(root))
+        {
+            build_thread(
+                &self.nodes,
+                &self.active,
+                active_root,
+                &mut self.thread_list,
+                &mut self.thread_set,
+            );
         }
 
-        self.thread.iter().copied()
+        self.thread_list.iter().copied()
     }
     fn get_thread_from(
         &mut self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
+        self.thread_list.clear();
+        self.thread_set.clear();
 
-        build_thread_from(&self.nodes, &self.active, id, &mut self.thread);
+        build_thread_from(
+            &self.nodes,
+            &self.active,
+            *id,
+            &mut self.thread_list,
+            &mut self.thread_set,
+        );
 
-        self.thread.iter().copied()
+        self.thread_list.iter().copied()
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
@@ -984,45 +1016,78 @@ where
     fn get_active_thread(
         &self,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread =
+        let mut thread_list =
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+        let mut thread_set = HashSet::with_capacity_and_hasher(
+            (self.nodes.len() as f32).sqrt().max(16.0).round() as usize,
+            S::default(),
+        );
 
-        if let Some(active_root) = self.roots.iter().find(|root| self.active.contains(root)) {
-            build_thread_archived(&self.nodes, &self.active, active_root, &mut thread);
+        for active_root in self
+            .roots
+            .iter()
+            .copied()
+            .filter(|root| self.active.contains(root))
+        {
+            build_thread_archived(
+                &self.nodes,
+                &self.active,
+                active_root,
+                &mut thread_list,
+                &mut thread_set,
+            );
         }
 
-        thread.into_iter()
+        thread_list.into_iter()
     }
     fn get_thread_from(
         &self,
         id: &K::Archived,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread =
+        let mut thread_list =
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+        let mut thread_set = HashSet::with_capacity_and_hasher(
+            (self.nodes.len() as f32).sqrt().max(16.0).round() as usize,
+            S::default(),
+        );
 
-        build_thread_from_archived(&self.nodes, &self.active, id, &mut thread);
+        build_thread_from_archived(
+            &self.nodes,
+            &self.active,
+            *id,
+            &mut thread_list,
+            &mut thread_set,
+        );
 
-        thread.into_iter()
+        thread_list.into_iter()
     }
 }
 
 fn build_thread<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
-    id: &K,
-    thread: &mut Vec<K>,
+    id: K,
+    thread_list: &mut Vec<K>,
+    thread_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id)
-        && node.active
+    if let Some(node) = nodes.get(&id)
+        && node
+            .from
+            .iter()
+            .filter(|parent| active.contains(*parent))
+            .all(|parent| thread_set.contains(parent))
     {
-        thread.push(*id);
+        thread_list.push(id);
+        thread_set.insert(id);
 
-        if let Some(active_child) = node.to.iter().find(|node| active.contains(node)) {
-            build_thread(nodes, active, active_child, thread);
+        for child in node.from.iter().cloned() {
+            if active.contains(&child) {
+                build_thread(nodes, active, child, thread_list, thread_set);
+            }
         }
     }
 }
@@ -1030,47 +1095,61 @@ fn build_thread<K, T, S>(
 fn build_thread_from<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
-    id: &K,
-    thread: &mut Vec<K>,
+    id: K,
+    thread_list: &mut Vec<K>,
+    thread_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id) {
-        thread.push(*id);
+    /*if let Some(node) = nodes.get(&id) {
+        thread_list.push(id);
+        thread_set.insert(id);
 
-        for child in &node.from {
-            if active.contains(child) {
-                build_thread_from(nodes, active, child, thread);
-                return;
+        let mut has_active = false;
+
+        for child in node.from.iter().cloned() {
+            if active.contains(&child) {
+                build_thread_from(nodes, active, child, thread_list, thread_set);
+                has_active = true;
             }
         }
 
-        if let Some(child) = node.from.first() {
-            build_thread_from(nodes, active, child, thread);
+        if !has_active && let Some(child) = node.from.first().copied() {
+            build_thread_from(nodes, active, child, thread_list, thread_set);
         }
-    }
+    }*/
+
+    todo!()
 }
 
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
-    id: &K::Archived,
-    thread: &mut Vec<K::Archived>,
+    id: K::Archived,
+    thread_list: &mut Vec<K::Archived>,
+    thread_set: &mut HashSet<K::Archived, S>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq,
     T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id)
-        && node.active
+    if let Some(node) = nodes.get(&id)
+        && node
+            .from
+            .iter()
+            .filter(|parent| active.contains(*parent))
+            .all(|parent| thread_set.contains(parent))
     {
-        thread.push(*id);
+        thread_list.push(id);
+        thread_set.insert(id);
 
-        if let Some(active_child) = node.to.iter().find(|node| active.contains(node)) {
-            build_thread_archived(nodes, active, active_child, thread);
+        for child in node.from.iter().cloned() {
+            if active.contains(&child) {
+                build_thread_archived(nodes, active, child, thread_list, thread_set);
+            }
         }
     }
 }
@@ -1078,26 +1157,32 @@ fn build_thread_archived<K, K2, T, T2, S>(
 fn build_thread_from_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
-    id: &K::Archived,
-    thread: &mut Vec<K::Archived>,
+    id: K::Archived,
+    thread_list: &mut Vec<K::Archived>,
+    thread_set: &mut HashSet<K::Archived, S>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq,
     T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id) {
-        thread.push(*id);
+    /*if let Some(node) = nodes.get(&id) {
+        thread_list.push(id);
+        thread_set.insert(id);
 
-        for child in node.from.iter() {
-            if active.contains(child) {
-                build_thread_from_archived(nodes, active, child, thread);
-                return;
+        let mut has_active = false;
+
+        for child in node.from.iter().cloned() {
+            if active.contains(&child) {
+                build_thread_from_archived(nodes, active, child, thread_list, thread_set);
+                has_active = true;
             }
         }
 
-        if let Some(child) = node.from.get_index(0) {
-            build_thread_from_archived(nodes, active, child, thread);
+        if !has_active && let Some(child) = node.from.get_index(0).copied() {
+            build_thread_from_archived(nodes, active, child, thread_list, thread_set);
         }
-    }
+    }*/
+
+    todo!()
 }
