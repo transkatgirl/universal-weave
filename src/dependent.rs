@@ -106,7 +106,7 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[rkyv(with = Skip)]
-    thread: Vec<K>,
+    scratchpad: Vec<K>,
 
     pub metadata: M,
 }
@@ -171,7 +171,7 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread: Vec::with_capacity(capacity),
+            scratchpad: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -187,14 +187,17 @@ where
                 .capacity()
                 .saturating_sub(self.bookmarked.capacity()),
         );
-        self.thread
-            .reserve(self.nodes.capacity().saturating_sub(self.thread.capacity()));
+        self.scratchpad.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad.capacity()),
+        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread.shrink_to(min_capacity);
+        self.scratchpad.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -292,23 +295,23 @@ where
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
+        self.scratchpad.clear();
 
         if let Some(active) = self.active {
-            build_thread(&self.nodes, active, &mut self.thread);
+            build_thread(&self.nodes, active, &mut self.scratchpad);
         }
 
-        self.thread.iter().copied()
+        self.scratchpad.drain(..)
     }
     fn get_thread_from(
         &mut self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
+        self.scratchpad.clear();
 
-        build_thread(&self.nodes, *id, &mut self.thread);
+        build_thread(&self.nodes, *id, &mut self.scratchpad);
 
-        self.thread.iter().copied()
+        self.scratchpad.drain(..)
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]

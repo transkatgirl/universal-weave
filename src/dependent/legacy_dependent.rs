@@ -247,7 +247,7 @@ where
             build_thread(&self.nodes, active, &mut self.thread);
         }
 
-        self.thread.iter().copied()
+        self.thread.drain(..)
     }
     fn get_thread_from(
         &mut self,
@@ -257,7 +257,7 @@ where
 
         build_thread(&self.nodes, *id, &mut self.thread);
 
-        self.thread.iter().copied()
+        self.thread.drain(..)
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
