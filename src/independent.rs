@@ -268,7 +268,7 @@ where
         self.scratchpad_set.shrink_to(min_capacity);
         self.scratchpad_list_2.shrink_to(min_capacity);
     }
-    fn active_parents(
+    /*fn active_parents(
         &self,
         node: &IndependentNode<K, T, S>,
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
@@ -276,7 +276,7 @@ where
             .iter()
             .filter_map(|id| self.nodes.get(id))
             .filter(|parent| parent.active)
-    }
+    }*/
     fn all_parents(
         &self,
         node: &IndependentNode<K, T, S>,
@@ -293,7 +293,7 @@ where
             Box::new(node.from.iter().copied())
         }
     }
-    fn siblings_from_active_parents(
+    /*fn siblings_from_active_parents(
         &self,
         node: &IndependentNode<K, T, S>,
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
@@ -306,7 +306,7 @@ where
                     .filter(|id| *id != node.id && !node.from.contains(id) && !node.to.contains(id))
             })
             .filter_map(|id| self.nodes.get(&id))
-    }
+    }*/
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
@@ -942,23 +942,25 @@ where
 {
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.nodes.get(id).into_iter().flat_map(|node| {
-            let iter: Box<dyn Iterator<Item = &IndependentNode<K, T, S>>> =
-                if node.active && !node.from.is_empty() {
-                    Box::new(self.siblings_from_active_parents(node))
-                } else {
-                    Box::new(
-                        self.sibling_ids_from_all_parents_including_roots(node)
-                            .filter_map(|id| self.nodes.get(&id)),
-                    )
-                };
+            /*let iter: Box<dyn Iterator<Item = &IndependentNode<K, T, S>>> =
+            if node.active && !node.from.is_empty() {
+                Box::new(self.siblings_from_active_parents(node))
+            } else {
+                Box::new(
+                    self.sibling_ids_from_all_parents_including_roots(node)
+                        .filter_map(|id| self.nodes.get(&id)),
+                )
+            };*/
 
-            iter.filter_map(|sibling| {
-                if node.contents.is_duplicate_of(&sibling.contents) {
-                    Some(sibling.id)
-                } else {
-                    None
-                }
-            })
+            self.sibling_ids_from_all_parents_including_roots(node)
+                .filter_map(|id| self.nodes.get(&id))
+                .filter_map(|sibling| {
+                    if node.contents.is_duplicate_of(&sibling.contents) {
+                        Some(sibling.id)
+                    } else {
+                        None
+                    }
+                })
         })
     }
 }
