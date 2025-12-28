@@ -1,4 +1,4 @@
-//! [`IndependentWeave`] is a simple DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
 //! TODO: Need to fix bugs regarding multi-parent node handling
 
@@ -88,7 +88,7 @@ where
     }
 }
 
-/// A simple DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+/// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]
@@ -498,7 +498,7 @@ where
             );
         }
 
-        self.thread_list.iter().copied()
+        self.thread_list.iter().rev().copied()
     }
     fn get_thread_from(
         &mut self,
@@ -514,6 +514,12 @@ where
             &mut self.thread_list,
             &mut self.thread_set,
         );
+
+        if let Some(last_thread_node) = self.thread_list.last()
+            && !self.roots.contains(last_thread_node)
+        {
+            todo!()
+        }
 
         self.thread_list.iter().copied()
     }
@@ -1038,7 +1044,7 @@ where
             );
         }
 
-        thread_list.into_iter()
+        thread_list.into_iter().rev()
     }
     fn get_thread_from(
         &self,
@@ -1058,6 +1064,12 @@ where
             &mut thread_list,
             &mut thread_set,
         );
+
+        if let Some(last_thread_node) = thread_list.last()
+            && !self.roots.contains(last_thread_node)
+        {
+            todo!()
+        }
 
         thread_list.into_iter()
     }
@@ -1103,25 +1115,18 @@ fn build_thread_from<K, T, S>(
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    /*if let Some(node) = nodes.get(&id) {
+    if let Some(node) = nodes.get(&id) {
         thread_list.push(id);
         thread_set.insert(id);
 
-        let mut has_active = false;
-
-        for child in node.from.iter().cloned() {
-            if active.contains(&child) {
-                build_thread_from(nodes, active, child, thread_list, thread_set);
-                has_active = true;
-            }
+        if node.from.iter().any(|child| active.contains(child)) {
+            return;
         }
 
-        if !has_active && let Some(child) = node.from.first().copied() {
+        if let Some(child) = node.from.first().copied() {
             build_thread_from(nodes, active, child, thread_list, thread_set);
         }
-    }*/
-
-    todo!()
+    }
 }
 
 fn build_thread_archived<K, K2, T, T2, S>(
@@ -1166,23 +1171,16 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
     T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    /*if let Some(node) = nodes.get(&id) {
+    if let Some(node) = nodes.get(&id) {
         thread_list.push(id);
         thread_set.insert(id);
 
-        let mut has_active = false;
-
-        for child in node.from.iter().cloned() {
-            if active.contains(&child) {
-                build_thread_from_archived(nodes, active, child, thread_list, thread_set);
-                has_active = true;
-            }
+        if node.from.iter().any(|child| active.contains(child)) {
+            return;
         }
 
-        if !has_active && let Some(child) = node.from.get_index(0).copied() {
+        if let Some(child) = node.from.get_index(0).copied() {
             build_thread_from_archived(nodes, active, child, thread_list, thread_set);
         }
-    }*/
-
-    todo!()
+    }
 }
