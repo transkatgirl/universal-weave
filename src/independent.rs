@@ -1,4 +1,4 @@
-//! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//! [`IndependentWeave`] is a simple DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
 //! TODO: Need to fix bugs regarding multi-parent node handling
 
@@ -88,7 +88,7 @@ where
     }
 }
 
-/// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+/// A simple DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Archive, Deserialize, Serialize, Debug, Clone)]

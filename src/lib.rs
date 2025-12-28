@@ -328,7 +328,7 @@ fn add_node_identifiers_rev<K, N, T, S>(
     if let Some(node) = weave.get_node(&id) {
         identifiers.push(id);
         for child in node.to().rev() {
-            add_node_identifiers(weave, child, identifiers);
+            add_node_identifiers_rev(weave, child, identifiers);
         }
     }
 }
