@@ -110,6 +110,7 @@ where
     pub metadata: M,
 }
 
+// TODO: Use topological sort for get_active_thread
 impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,

@@ -3,6 +3,8 @@
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
+// TODO: Use topological sort for get_ordered_node_identifiers and get_ordered_node_identifiers_reversed_children
+
 pub mod dependent;
 pub mod independent;
 
