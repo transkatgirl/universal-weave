@@ -1088,7 +1088,7 @@ fn build_thread<K, T, S>(
 {
     if let Some(node) = nodes.get(&id)
         && node
-            .from
+            .to
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
@@ -1096,7 +1096,7 @@ fn build_thread<K, T, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.from.iter().cloned() {
+        for child in node.to.iter().cloned() {
             if active.contains(&child) {
                 build_thread(nodes, active, child, thread_list, thread_set);
             }
@@ -1119,12 +1119,12 @@ fn build_thread_from<K, T, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        if node.from.iter().any(|child| active.contains(child)) {
+        if node.from.iter().any(|parent| active.contains(parent)) {
             return;
         }
 
-        if let Some(child) = node.from.first().copied() {
-            build_thread_from(nodes, active, child, thread_list, thread_set);
+        if let Some(parent) = node.from.first().copied() {
+            build_thread_from(nodes, active, parent, thread_list, thread_set);
         }
     }
 }
@@ -1143,7 +1143,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
 {
     if let Some(node) = nodes.get(&id)
         && node
-            .from
+            .to
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
@@ -1151,7 +1151,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.from.iter().cloned() {
+        for child in node.to.iter().cloned() {
             if active.contains(&child) {
                 build_thread_archived(nodes, active, child, thread_list, thread_set);
             }
@@ -1175,12 +1175,12 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        if node.from.iter().any(|child| active.contains(child)) {
+        if node.from.iter().any(|parent| active.contains(parent)) {
             return;
         }
 
-        if let Some(child) = node.from.get_index(0).copied() {
-            build_thread_from_archived(nodes, active, child, thread_list, thread_set);
+        if let Some(parent) = node.from.get_index(0).copied() {
+            build_thread_from_archived(nodes, active, parent, thread_list, thread_set);
         }
     }
 }
