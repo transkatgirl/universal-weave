@@ -551,6 +551,9 @@ where
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
+    fn contains_active(&self, id: &K::Archived) -> bool {
+        self.active == Some(*id)
+    }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
