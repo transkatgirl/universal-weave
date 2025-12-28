@@ -312,8 +312,6 @@ where
                 self.scratchpad_list.clear();
             }
 
-            // TODO
-
             if value {
                 let has_active_parents = self
                     .all_parent_ids_or_roots(node)
@@ -321,17 +319,22 @@ where
                 if has_active_parents {
                     let siblings: Vec<_> = self
                         .sibling_ids_from_all_parents_including_roots(node)
-                        .filter(|sibling| self.active.contains(sibling))
+                        .filter(|sibling| {
+                            self.active.contains(sibling)
+                                && !node.from.contains(sibling)
+                                && !node.to.contains(sibling)
+                        })
                         .collect();
 
                     for sibling in siblings {
                         self.update_node_activity_in_place_inner(&sibling, false, false);
                     }
-                } else if let Some(child) = node.from.first().copied() {
-                    self.update_node_activity_in_place_inner(&child, true, false);
+                } else if let Some(parent) = node.from.first().copied() {
+                    self.update_node_activity_in_place_inner(&parent, true, false);
                 }
             } else {
-                let selected_children: Vec<_> = node
+                self.scratchpad_list.extend(node.to.iter().copied());
+                /*let selected_children: Vec<_> = node
                     .to
                     .iter()
                     .copied()
@@ -349,7 +352,7 @@ where
 
                 for child in selected_children {
                     self.update_node_activity_in_place_inner(&child, false, false);
-                }
+                }*/
             }
         }
         match self.nodes.get_mut(id) {
