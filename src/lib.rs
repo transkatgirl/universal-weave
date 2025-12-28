@@ -69,7 +69,7 @@ pub trait DeduplicatableContents {
     fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
-/// A document linking together multiple [`Node`] objects.
+/// A document linking together multiple [`Node`] objects without cyclical links.
 pub trait Weave<K, N, T, S>
 where
     K: Hash + Copy + Eq,
