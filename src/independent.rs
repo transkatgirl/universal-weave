@@ -298,7 +298,13 @@ where
         node: &IndependentNode<K, T, S>,
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
         self.active_parents(node)
-            .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
+            .flat_map(|parent| {
+                parent
+                    .to
+                    .iter()
+                    .copied()
+                    .filter(|id| *id != node.id && !node.from.contains(id) && !node.to.contains(id))
+            })
             .filter_map(|id| self.nodes.get(&id))
     }
     fn sibling_ids_from_all_parents_including_roots<'a>(
@@ -308,10 +314,13 @@ where
         if node.from.is_empty() {
             Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
-            Box::new(
-                self.all_parents(node)
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id)),
-            )
+            Box::new(self.all_parents(node).flat_map(|parent| {
+                parent
+                    .to
+                    .iter()
+                    .copied()
+                    .filter(|id| *id != node.id && !node.from.contains(id) && !node.to.contains(id))
+            }))
         }
     }
     fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
@@ -332,16 +341,12 @@ where
                     .all_parent_ids_or_roots(node)
                     .any(|parent| self.active.contains(&parent));
                 if has_active_parents {
-                    let siblings: Vec<_> = self
+                    let active_siblings: Vec<_> = self
                         .sibling_ids_from_all_parents_including_roots(node)
-                        .filter(|sibling| {
-                            self.active.contains(sibling)
-                                && !node.from.contains(sibling)
-                                && !node.to.contains(sibling)
-                        })
+                        .filter(|sibling| self.active.contains(sibling))
                         .collect();
 
-                    for sibling in siblings {
+                    for sibling in active_siblings {
                         self.update_node_activity_in_place_inner(&sibling, false, false);
                     }
                 } else if let Some(parent) = node.from.first().copied() {
@@ -631,21 +636,25 @@ where
                 let has_active_parents =
                     node.from.iter().any(|parent| self.active.contains(parent));
 
-                if !has_active_parents {
+                if has_active_parents {
+                    let active_siblings: Vec<_> = node
+                        .from
+                        .iter()
+                        .filter_map(|id| self.nodes.get(id))
+                        .flat_map(|parent| {
+                            parent.to.iter().copied().filter(|id| {
+                                *id != node.id && !node.from.contains(id) && !node.to.contains(id)
+                            })
+                        })
+                        .filter(|sibling| self.active.contains(sibling))
+                        .collect();
+
+                    for sibling in active_siblings {
+                        self.update_node_activity_in_place(&sibling, false);
+                    }
+                } else {
                     let parent = node.from.first().unwrap();
                     self.update_node_activity_in_place(parent, true);
-                }
-
-                let siblings: Vec<_> = node
-                    .from
-                    .iter()
-                    .filter_map(|id| self.nodes.get(id))
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id))
-                    .filter(|sibling| self.active.contains(sibling))
-                    .collect();
-
-                for sibling in siblings {
-                    self.update_node_activity_in_place(&sibling, false);
                 }
             }
 
