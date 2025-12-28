@@ -35,7 +35,7 @@ where
             roots: value.roots,
             active: value.active,
             bookmarked: value.bookmarked,
-            thread: value.thread,
+            scratchpad: value.thread,
             metadata: value.metadata,
         }
     }
