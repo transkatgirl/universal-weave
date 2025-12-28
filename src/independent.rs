@@ -111,6 +111,7 @@ where
 }
 
 // TODO: Use topological sort for get_active_thread
+// TODO: Treat active nodes as a subgraph
 impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
