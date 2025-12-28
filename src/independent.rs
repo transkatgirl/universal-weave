@@ -105,13 +105,13 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[rkyv(with = Skip)]
-    thread_list: Vec<K>,
+    scratchpad_list: Vec<K>,
 
     #[rkyv(with = Skip)]
-    thread_set: HashSet<K, S>,
+    scratchpad_set: HashSet<K, S>,
 
     #[rkyv(with = Skip)]
-    alternate_thread_list: Vec<K>,
+    scratchpad_list_2: Vec<K>,
 
     pub metadata: M,
 }
@@ -208,9 +208,9 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: HashSet::with_capacity_and_hasher(capacity, S::default()),
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread_list: Vec::with_capacity(capacity),
-            thread_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
-            alternate_thread_list: Vec::with_capacity(capacity),
+            scratchpad_list: Vec::with_capacity(capacity),
+            scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_list_2: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -228,20 +228,20 @@ where
                 .capacity()
                 .saturating_sub(self.bookmarked.capacity()),
         );
-        self.thread_list.reserve(
+        self.scratchpad_list.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.thread_list.capacity()),
+                .saturating_sub(self.scratchpad_list.capacity()),
         );
-        self.thread_set.reserve(
+        self.scratchpad_set.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.thread_set.capacity()),
+                .saturating_sub(self.scratchpad_set.capacity()),
         );
-        self.alternate_thread_list.reserve(
+        self.scratchpad_list_2.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.alternate_thread_list.capacity()),
+                .saturating_sub(self.scratchpad_list_2.capacity()),
         );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
@@ -249,9 +249,9 @@ where
         self.roots.shrink_to(min_capacity);
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread_list.shrink_to(min_capacity);
-        self.thread_set.shrink_to(min_capacity);
-        self.alternate_thread_list.shrink_to(min_capacity);
+        self.scratchpad_list.shrink_to(min_capacity);
+        self.scratchpad_set.shrink_to(min_capacity);
+        self.scratchpad_list_2.shrink_to(min_capacity);
     }
     fn active_parents(
         &self,
@@ -299,8 +299,7 @@ where
             )
         }
     }
-    //#[debug_ensures(self.validate())]
-    fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
+    fn update_node_activity_in_place(&mut self, id: &K, value: bool, start: bool) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
@@ -317,10 +316,10 @@ where
                         .collect();
 
                     for sibling in siblings {
-                        self.update_node_activity_in_place(&sibling, false);
+                        self.update_node_activity_in_place(&sibling, false, false);
                     }
                 } else if let Some(child) = node.from.first().copied() {
-                    self.update_node_activity_in_place(&child, true);
+                    self.update_node_activity_in_place(&child, true, false);
                 }
             } else {
                 let selected_children: Vec<_> = node
@@ -340,7 +339,7 @@ where
                     .collect();
 
                 for child in selected_children {
-                    self.update_node_activity_in_place(&child, false);
+                    self.update_node_activity_in_place(&child, false, false);
                 }
             }
         }
@@ -489,8 +488,8 @@ where
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread_list.clear();
-        self.thread_set.clear();
+        self.scratchpad_list.clear();
+        self.scratchpad_set.clear();
 
         for active_root in self
             .roots
@@ -502,33 +501,33 @@ where
                 &self.nodes,
                 &self.active,
                 active_root,
-                &mut self.thread_list,
-                &mut self.thread_set,
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set,
             );
         }
 
-        self.thread_list.iter().rev().copied()
+        self.scratchpad_list.drain(..).rev()
     }
     fn get_thread_from(
         &mut self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread_list.clear();
-        self.thread_set.clear();
+        self.scratchpad_list.clear();
+        self.scratchpad_set.clear();
 
         build_thread_from(
             &self.nodes,
             &self.active,
             *id,
-            &mut self.thread_list,
-            &mut self.thread_set,
+            &mut self.scratchpad_list,
+            &mut self.scratchpad_set,
         );
 
-        if let Some(last_thread_node) = self.thread_list.last()
+        if let Some(last_thread_node) = self.scratchpad_list.last()
             && !self.roots.contains(last_thread_node)
         {
-            self.thread_set.clear();
-            self.alternate_thread_list.clear();
+            self.scratchpad_set.clear();
+            self.scratchpad_list_2.clear();
 
             for active_root in self
                 .roots
@@ -549,16 +548,16 @@ where
                             .copied()
                             .filter(|parent| self.active.contains(parent)),
                     ),
-                    &mut self.alternate_thread_list,
-                    &mut self.thread_set,
+                    &mut self.scratchpad_list_2,
+                    &mut self.scratchpad_set,
                 );
             }
 
-            self.thread_list
-                .extend(self.alternate_thread_list.iter().rev().cloned());
+            self.scratchpad_list
+                .extend(self.scratchpad_list_2.drain(..).rev());
         }
 
-        self.thread_list.iter().copied()
+        self.scratchpad_list.drain(..)
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
@@ -590,7 +589,7 @@ where
                     .collect();
 
                 for root in &active_roots {
-                    self.update_node_activity_in_place(root, false);
+                    self.update_node_activity_in_place(root, false, true);
                 }
             }
 
@@ -602,7 +601,7 @@ where
 
                 if !has_active_parents {
                     let parent = node.from.first().unwrap();
-                    self.update_node_activity_in_place(parent, true);
+                    self.update_node_activity_in_place(parent, true, true);
                 }
 
                 let siblings: Vec<_> = node
@@ -614,7 +613,7 @@ where
                     .collect();
 
                 for sibling in siblings {
-                    self.update_node_activity_in_place(&sibling, false);
+                    self.update_node_activity_in_place(&sibling, false, true);
                 }
             }
 
@@ -657,15 +656,15 @@ where
             if (!alternate && active_child.from.len() == 1)
                 || (alternate && active_child.from.len() > 1)
             {
-                let result = self.update_node_activity_in_place(id, true);
-                self.update_node_activity_in_place(&child_id, false);
+                let result = self.update_node_activity_in_place(id, true, true);
+                self.update_node_activity_in_place(&child_id, false, true);
 
                 result
             } else {
-                self.update_node_activity_in_place(id, value)
+                self.update_node_activity_in_place(id, value, true)
             }
         } else {
-            self.update_node_activity_in_place(id, value)
+            self.update_node_activity_in_place(id, value, true)
         }
 
         /*let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
@@ -693,7 +692,7 @@ where
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
-        self.update_node_activity_in_place(id, value)
+        self.update_node_activity_in_place(id, value, true)
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
@@ -991,7 +990,7 @@ where
             && !has_active_new_parents
             && let Some(first_parent) = node.from.first().copied()
         {
-            assert!(self.update_node_activity_in_place(&first_parent, true));
+            assert!(self.update_node_activity_in_place(&first_parent, true, true));
         }
 
         true
