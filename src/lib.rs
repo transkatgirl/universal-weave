@@ -3,14 +3,12 @@
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
-// TODO: Use topological sort for get_ordered_node_identifiers and get_ordered_node_identifiers_reversed_children
-
 pub mod dependent;
 pub mod independent;
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
 };
 
@@ -95,9 +93,10 @@ where
     /// Builds a list of all node identifiers ordered by their positions in the weave.
     fn get_ordered_node_identifiers(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
+        let mut identifier_set = HashSet::with_capacity(self.len());
 
         for root in self.roots() {
-            add_node_identifiers(self, *root, &mut identifiers);
+            add_node_identifiers(self, *root, &mut identifiers, &mut identifier_set);
         }
 
         identifiers
@@ -107,9 +106,10 @@ where
     /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
+        let mut identifier_set = HashSet::with_capacity(self.len());
 
         for root in self.roots() {
-            add_node_identifiers_rev(self, *root, &mut identifiers);
+            add_node_identifiers_rev(self, *root, &mut identifiers, &mut identifier_set);
         }
 
         identifiers
@@ -262,9 +262,10 @@ where
     /// Builds a list of all node identifiers ordered by their positions in the weave.
     fn get_ordered_node_identifiers(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
+        let mut identifier_set = HashSet::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            add_archived_node_identifiers(self, *root, &mut identifiers);
+            add_archived_node_identifiers(self, *root, &mut identifiers, &mut identifier_set);
         }
 
         identifiers
@@ -274,9 +275,10 @@ where
     /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
+        let mut identifier_set = HashSet::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(self, *root, &mut identifiers);
+            add_archived_node_identifiers_rev(self, *root, &mut identifiers, &mut identifier_set);
         }
 
         identifiers
@@ -303,15 +305,19 @@ fn add_node_identifiers<K, N, T, S>(
     weave: &(impl Weave<K, N, T, S> + ?Sized),
     id: K,
     identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = weave.get_node(&id) {
+    if let Some(node) = weave.get_node(&id)
+        && node.from().all(|parent| identifier_set.contains(&parent))
+    {
         identifiers.push(id);
+        identifier_set.insert(id);
         for child in node.to() {
-            add_node_identifiers(weave, child, identifiers);
+            add_node_identifiers(weave, child, identifiers, identifier_set);
         }
     }
 }
@@ -320,15 +326,19 @@ fn add_node_identifiers_rev<K, N, T, S>(
     weave: &(impl Weave<K, N, T, S> + ?Sized),
     id: K,
     identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: Node<K, T, S>,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = weave.get_node(&id) {
+    if let Some(node) = weave.get_node(&id)
+        && node.from().all(|parent| identifier_set.contains(&parent))
+    {
         identifiers.push(id);
+        identifier_set.insert(id);
         for child in node.to().rev() {
-            add_node_identifiers_rev(weave, child, identifiers);
+            add_node_identifiers_rev(weave, child, identifiers, identifier_set);
         }
     }
 }
@@ -337,14 +347,18 @@ fn add_archived_node_identifiers<K, N, T>(
     weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
     id: K,
     identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
-    if let Some(node) = weave.get_node(&id) {
+    if let Some(node) = weave.get_node(&id)
+        && node.from().all(|parent| identifier_set.contains(&parent))
+    {
         identifiers.push(id);
+        identifier_set.insert(id);
         for child in node.to() {
-            add_archived_node_identifiers(weave, child, identifiers);
+            add_archived_node_identifiers(weave, child, identifiers, identifier_set);
         }
     }
 }
@@ -353,14 +367,18 @@ fn add_archived_node_identifiers_rev<K, N, T>(
     weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
     id: K,
     identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
-    if let Some(node) = weave.get_node(&id) {
+    if let Some(node) = weave.get_node(&id)
+        && node.from().all(|parent| identifier_set.contains(&parent))
+    {
         identifiers.push(id);
+        identifier_set.insert(id);
         for child in node.to().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(weave, child, identifiers);
+            add_archived_node_identifiers_rev(weave, child, identifiers, identifier_set);
         }
     }
 }
