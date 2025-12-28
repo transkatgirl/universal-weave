@@ -88,9 +88,13 @@ where
     fn bookmarks(&self) -> &IndexSet<K, S>;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
+    /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
+    ///
+    /// The meaning of this value can depend on the underlying Weave implementation.
+    fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
@@ -101,7 +105,7 @@ where
 
         identifiers
     }
-    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
     /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
@@ -135,7 +139,7 @@ where
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
+    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
@@ -145,7 +149,7 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
-    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to keep the weave internally consistent.
+    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
@@ -153,9 +157,9 @@ where
     fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
-    /// Removes a node with the specified identifier, returning its value if it was present within the weave.
+    /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
+    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
@@ -172,7 +176,7 @@ where
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the weave internally consistent.
+    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
@@ -259,7 +263,7 @@ where
     fn contains(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
-    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&self) -> Vec<K> {
         let mut identifiers = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
@@ -270,7 +274,7 @@ where
 
         identifiers
     }
-    /// Builds a list of all node identifiers ordered by their positions in the weave.
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
     /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {

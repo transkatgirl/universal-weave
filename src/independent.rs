@@ -519,6 +519,9 @@ where
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
+    fn contains_active(&self, id: &K) -> bool {
+        self.active.contains(id)
+    }
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
