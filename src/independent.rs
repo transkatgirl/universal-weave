@@ -110,10 +110,12 @@ where
     #[rkyv(with = Skip)]
     thread_set: HashSet<K, S>,
 
+    #[rkyv(with = Skip)]
+    alternate_thread_list: Vec<K>,
+
     pub metadata: M,
 }
 
-// TODO: Use topological sort for get_active_thread
 // TODO: Treat active nodes as a subgraph
 impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
@@ -208,6 +210,7 @@ where
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             thread_list: Vec::with_capacity(capacity),
             thread_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
+            alternate_thread_list: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -235,6 +238,11 @@ where
                 .capacity()
                 .saturating_sub(self.thread_set.capacity()),
         );
+        self.alternate_thread_list.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.alternate_thread_list.capacity()),
+        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
@@ -243,6 +251,7 @@ where
         self.bookmarked.shrink_to(min_capacity);
         self.thread_list.shrink_to(min_capacity);
         self.thread_set.shrink_to(min_capacity);
+        self.alternate_thread_list.shrink_to(min_capacity);
     }
     fn active_parents(
         &self,
@@ -518,7 +527,35 @@ where
         if let Some(last_thread_node) = self.thread_list.last()
             && !self.roots.contains(last_thread_node)
         {
-            todo!()
+            self.thread_set.clear();
+            self.alternate_thread_list.clear();
+
+            for active_root in self
+                .roots
+                .iter()
+                .copied()
+                .filter(|root| self.active.contains(root))
+            {
+                build_thread_until(
+                    &self.nodes,
+                    &self.active,
+                    active_root,
+                    &HashSet::from_iter(
+                        self.nodes
+                            .get(last_thread_node)
+                            .unwrap()
+                            .from
+                            .iter()
+                            .copied()
+                            .filter(|parent| self.active.contains(parent)),
+                    ),
+                    &mut self.alternate_thread_list,
+                    &mut self.thread_set,
+                );
+            }
+
+            self.thread_list
+                .extend(self.alternate_thread_list.iter().rev().cloned());
         }
 
         self.thread_list.iter().copied()
@@ -1068,7 +1105,35 @@ where
         if let Some(last_thread_node) = thread_list.last()
             && !self.roots.contains(last_thread_node)
         {
-            todo!()
+            thread_set.clear();
+
+            let mut alternate_thread_list = Vec::with_capacity(thread_list.capacity());
+
+            for active_root in self
+                .roots
+                .iter()
+                .copied()
+                .filter(|root| self.active.contains(root))
+            {
+                build_thread_archived_until(
+                    &self.nodes,
+                    &self.active,
+                    active_root,
+                    &HashSet::from_iter(
+                        self.nodes
+                            .get(last_thread_node)
+                            .unwrap()
+                            .from
+                            .iter()
+                            .copied()
+                            .filter(|parent| self.active.contains(parent)),
+                    ),
+                    &mut alternate_thread_list,
+                    &mut thread_set,
+                );
+            }
+
+            thread_list.extend(alternate_thread_list.into_iter().rev());
         }
 
         thread_list.into_iter()
@@ -1087,6 +1152,37 @@ fn build_thread<K, T, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && node
+            .to
+            .iter()
+            .filter(|parent| active.contains(*parent))
+            .all(|parent| thread_set.contains(parent))
+    {
+        thread_list.push(id);
+        thread_set.insert(id);
+
+        for child in node.to.iter().cloned() {
+            if active.contains(&child) {
+                build_thread(nodes, active, child, thread_list, thread_set);
+            }
+        }
+    }
+}
+
+fn build_thread_until<K, T, S>(
+    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
+    active: &HashSet<K, S>,
+    id: K,
+    stop_at: &HashSet<K, S>,
+    thread_list: &mut Vec<K>,
+    thread_set: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if !stop_at.contains(&id)
+        && let Some(node) = nodes.get(&id)
         && node
             .to
             .iter()
@@ -1142,6 +1238,38 @@ fn build_thread_archived<K, K2, T, T2, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && node
+            .to
+            .iter()
+            .filter(|parent| active.contains(*parent))
+            .all(|parent| thread_set.contains(parent))
+    {
+        thread_list.push(id);
+        thread_set.insert(id);
+
+        for child in node.to.iter().cloned() {
+            if active.contains(&child) {
+                build_thread_archived(nodes, active, child, thread_list, thread_set);
+            }
+        }
+    }
+}
+
+fn build_thread_archived_until<K, K2, T, T2, S>(
+    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
+    active: &ArchivedHashSet<K::Archived>,
+    id: K::Archived,
+    stop_at: &HashSet<K::Archived, S>,
+    thread_list: &mut Vec<K::Archived>,
+    thread_set: &mut HashSet<K::Archived, S>,
+) where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq,
+    T: Archive<Archived = T2> + IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if !stop_at.contains(&id)
+        && let Some(node) = nodes.get(&id)
         && node
             .to
             .iter()
