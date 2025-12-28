@@ -1,6 +1,4 @@
 //! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
-//!
-//! TODO: Need to fix bugs regarding multi-parent node handling
 
 use std::{
     cmp::Ordering,
@@ -116,7 +114,6 @@ where
     pub metadata: M,
 }
 
-// TODO: Treat active nodes as a subgraph
 impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
@@ -132,10 +129,10 @@ where
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
         let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
-        let roots: Vec<_> = self.roots.iter().copied().collect();
 
         //self.roots.is_subset(&nodes)
-        self.validate_layer(&roots)
+        self.roots.is_subset::<S>(&nodes)
+            && self.validate_active()
             && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset::<S>(&nodes)
             && self.nodes.iter().all(|(key, value)| {
@@ -163,32 +160,50 @@ where
                     }
             })
     }
-    fn validate_layer(&self, layer: &[K]) -> bool {
-        // TODO: Modify this to better handle multi-parent nodes
+    fn validate_active(&self) -> bool {
+        let mut threads = Vec::new();
 
-        let mut next_layer = Vec::new();
-        let mut has_active = false;
-
-        for node in layer {
-            if let Some(node) = self.nodes.get(node) {
-                next_layer.extend(node.to.iter().copied());
-
-                if node.active {
-                    if !has_active {
-                        has_active = true;
-                    } else {
-                        return false;
-                    }
-                }
-            } else {
+        for active_root in self.roots.iter().filter(|root| self.active.contains(root)) {
+            threads.push(Vec::new());
+            let index = threads.len() - 1;
+            if !self.build_path(active_root, &mut threads, index) {
                 return false;
             }
         }
 
-        if !next_layer.is_empty() {
-            self.validate_layer(&next_layer)
-        } else {
+        let mut longest = (0, 0);
+
+        for (index, thread) in threads.iter().enumerate() {
+            if thread.len() > longest.0 {
+                longest = (thread.len(), index);
+            }
+        }
+
+        HashSet::from_iter(threads.swap_remove(longest.1)).is_subset(&self.active)
+    }
+    fn build_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
+        if let Some(node) = self.nodes.get(node) {
+            let mut has_active_child = false;
+            threads[index].push(node.id);
+
+            for active_child in node.to.iter().filter(|root| self.active.contains(root)) {
+                if !has_active_child {
+                    has_active_child = true;
+                    if !self.build_path(active_child, threads, index) {
+                        return false;
+                    }
+                } else {
+                    threads.push(Vec::new());
+                    let index = threads.len() - 1;
+                    if !self.build_path(active_child, threads, index) {
+                        return false;
+                    }
+                }
+            }
+
             true
+        } else {
+            false
         }
     }
     fn under_max_size(&self) -> bool {
