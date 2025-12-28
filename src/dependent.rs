@@ -295,7 +295,7 @@ where
         self.thread.clear();
 
         if let Some(active) = self.active {
-            build_thread(&self.nodes, &active, &mut self.thread);
+            build_thread(&self.nodes, active, &mut self.thread);
         }
 
         self.thread.iter().copied()
@@ -306,7 +306,7 @@ where
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.thread.clear();
 
-        build_thread(&self.nodes, id, &mut self.thread);
+        build_thread(&self.nodes, *id, &mut self.thread);
 
         self.thread.iter().copied()
     }
@@ -654,7 +654,7 @@ where
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
         if let ArchivedOption::Some(active) = self.active {
-            build_thread_archived(&self.nodes, &active, &mut thread);
+            build_thread_archived(&self.nodes, active, &mut thread);
         }
 
         thread.into_iter()
@@ -666,28 +666,28 @@ where
         let mut thread =
             Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
 
-        build_thread_archived(&self.nodes, id, &mut thread);
+        build_thread_archived(&self.nodes, *id, &mut thread);
 
         thread.into_iter()
     }
 }
 
-fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: &K, thread: &mut Vec<K>)
+fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: K, thread: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id) {
-        thread.push(*id);
+    if let Some(node) = nodes.get(&id) {
+        thread.push(id);
         if let Some(parent) = node.from {
-            build_thread(nodes, &parent, thread);
+            build_thread(nodes, parent, thread);
         }
     }
 }
 
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
-    id: &K::Archived,
+    id: K::Archived,
     thread: &mut Vec<K::Archived>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
@@ -695,10 +695,10 @@ fn build_thread_archived<K, K2, T, T2, S>(
     T: Archive<Archived = T2>,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(id) {
-        thread.push(*id);
+    if let Some(node) = nodes.get(&id) {
+        thread.push(id);
         if let ArchivedOption::Some(parent) = node.from {
-            build_thread_archived(nodes, &parent, thread);
+            build_thread_archived(nodes, parent, thread);
         }
     }
 }
