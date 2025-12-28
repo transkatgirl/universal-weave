@@ -193,7 +193,7 @@ where
                         return false;
                     }
                 } else {
-                    threads.push(Vec::new());
+                    threads.push(threads[index].clone());
                     let index = threads.len() - 1;
                     if !self.build_path(active_child, threads, index) {
                         return false;
