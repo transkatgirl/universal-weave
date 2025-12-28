@@ -299,11 +299,20 @@ where
             )
         }
     }
-    fn update_node_activity_in_place(&mut self, id: &K, value: bool, start: bool) -> bool {
+    fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
+        self.update_node_activity_in_place_inner(id, value, true)
+    }
+    fn update_node_activity_in_place_inner(&mut self, id: &K, value: bool, start: bool) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
             }
+
+            if start {
+                self.scratchpad_list.clear();
+            }
+
+            // TODO
 
             if value {
                 let has_active_parents = self
@@ -316,10 +325,10 @@ where
                         .collect();
 
                     for sibling in siblings {
-                        self.update_node_activity_in_place(&sibling, false, false);
+                        self.update_node_activity_in_place_inner(&sibling, false, false);
                     }
                 } else if let Some(child) = node.from.first().copied() {
-                    self.update_node_activity_in_place(&child, true, false);
+                    self.update_node_activity_in_place_inner(&child, true, false);
                 }
             } else {
                 let selected_children: Vec<_> = node
@@ -339,7 +348,7 @@ where
                     .collect();
 
                 for child in selected_children {
-                    self.update_node_activity_in_place(&child, false, false);
+                    self.update_node_activity_in_place_inner(&child, false, false);
                 }
             }
         }
@@ -351,10 +360,15 @@ where
                 } else {
                     self.active.remove(&node.id);
                 }
-                true
             }
-            None => false,
+            None => return false,
         }
+        if start {
+            for item in self.scratchpad_list.clone() {
+                self.update_removed_child_activity(&item);
+            }
+        }
+        true
     }
     /*fn deactivate_top_level_node_recursive(&mut self, id: &u128) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
@@ -589,7 +603,7 @@ where
                     .collect();
 
                 for root in &active_roots {
-                    self.update_node_activity_in_place(root, false, true);
+                    self.update_node_activity_in_place(root, false);
                 }
             }
 
@@ -601,7 +615,7 @@ where
 
                 if !has_active_parents {
                     let parent = node.from.first().unwrap();
-                    self.update_node_activity_in_place(parent, true, true);
+                    self.update_node_activity_in_place(parent, true);
                 }
 
                 let siblings: Vec<_> = node
@@ -613,7 +627,7 @@ where
                     .collect();
 
                 for sibling in siblings {
-                    self.update_node_activity_in_place(&sibling, false, true);
+                    self.update_node_activity_in_place(&sibling, false);
                 }
             }
 
@@ -656,15 +670,15 @@ where
             if (!alternate && active_child.from.len() == 1)
                 || (alternate && active_child.from.len() > 1)
             {
-                let result = self.update_node_activity_in_place(id, true, true);
-                self.update_node_activity_in_place(&child_id, false, true);
+                let result = self.update_node_activity_in_place(id, true);
+                self.update_node_activity_in_place(&child_id, false);
 
                 result
             } else {
-                self.update_node_activity_in_place(id, value, true)
+                self.update_node_activity_in_place(id, value)
             }
         } else {
-            self.update_node_activity_in_place(id, value, true)
+            self.update_node_activity_in_place(id, value)
         }
 
         /*let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
@@ -692,7 +706,7 @@ where
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
-        self.update_node_activity_in_place(id, value, true)
+        self.update_node_activity_in_place(id, value)
     }
     #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
@@ -990,7 +1004,7 @@ where
             && !has_active_new_parents
             && let Some(first_parent) = node.from.first().copied()
         {
-            assert!(self.update_node_activity_in_place(&first_parent, true, true));
+            assert!(self.update_node_activity_in_place(&first_parent, true));
         }
 
         true
