@@ -1107,12 +1107,8 @@ where
     fn get_active_thread(
         &self,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread_list =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
-        let mut thread_set = HashSet::with_capacity_and_hasher(
-            (self.nodes.len() as f32).sqrt().max(16.0).round() as usize,
-            S::default(),
-        );
+        let mut thread_list = Vec::with_capacity(self.len());
+        let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
         for active_root in self
             .roots
@@ -1135,12 +1131,8 @@ where
         &self,
         id: &K::Archived,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread_list =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
-        let mut thread_set = HashSet::with_capacity_and_hasher(
-            (self.nodes.len() as f32).sqrt().max(16.0).round() as usize,
-            S::default(),
-        );
+        let mut thread_list = Vec::with_capacity(self.len());
+        let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
         build_thread_from_archived(
             &self.nodes,
@@ -1155,7 +1147,7 @@ where
         {
             thread_set.clear();
 
-            let mut alternate_thread_list = Vec::with_capacity(thread_list.capacity());
+            let mut alternate_thread_list = Vec::with_capacity(self.len() - thread_list.len());
 
             for active_root in self
                 .roots

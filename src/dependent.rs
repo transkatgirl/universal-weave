@@ -659,8 +659,7 @@ where
     fn get_active_thread(
         &self,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+        let mut thread = Vec::with_capacity(self.len());
 
         if let ArchivedOption::Some(active) = self.active {
             build_thread_archived(&self.nodes, active, &mut thread);
@@ -672,8 +671,7 @@ where
         &self,
         id: &K::Archived,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread =
-            Vec::with_capacity((self.nodes.len() as f32).sqrt().max(16.0).round() as usize);
+        let mut thread = Vec::with_capacity(self.len());
 
         build_thread_archived(&self.nodes, *id, &mut thread);
 
