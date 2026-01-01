@@ -9,6 +9,10 @@ description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
 [features]
+default = [ "rkyv" ]
+rkyv = [
+	"dep:rkyv",
+]
 legacy = [  ]
 serde = [
 	"dep:serde",
@@ -23,7 +27,7 @@ rkyv = { version = "0.8.12", features = [
 	"aligned",
 	"pointer_width_32",
 	"indexmap-2",
-] }
+], optional = true }
 serde = { version = "1.0.228", features = [
 	"derive",
 ], optional = true }

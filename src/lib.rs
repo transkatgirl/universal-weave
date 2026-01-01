@@ -14,8 +14,15 @@ use std::{
 
 pub use indexmap;
 use indexmap::IndexSet;
+
+#[cfg(feature = "rkyv")]
 pub use rkyv;
+
+#[cfg(feature = "rkyv")]
 use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet};
+
+#[cfg(feature = "serde")]
+pub use serde;
 
 /// An item within a [`Weave`] which can be connected to other items.
 pub trait Node<K, T, S>
@@ -222,6 +229,7 @@ where
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
+#[cfg(feature = "rkyv")]
 /// A [`Node`] which has been decoded using zero-copy deserialization.
 pub trait ArchivedNode<K, T>
 where
@@ -243,6 +251,7 @@ where
     fn contents(&self) -> &T;
 }
 
+#[cfg(feature = "rkyv")]
 /// A read-only [`Weave`] which has been decoded using zero-copy deserialization.
 pub trait ArchivedWeave<K, N, T>
 where
@@ -351,6 +360,7 @@ fn add_node_identifiers_rev<K, N, T, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn add_archived_node_identifiers<K, N, T>(
     weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
     id: K,
@@ -371,6 +381,7 @@ fn add_archived_node_identifiers<K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn add_archived_node_identifiers_rev<K, N, T>(
     weave: &(impl ArchivedWeave<K, N, T> + ?Sized),
     id: K,

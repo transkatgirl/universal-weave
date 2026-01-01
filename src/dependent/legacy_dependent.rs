@@ -8,6 +8,8 @@ use std::{
 
 use contracts::*;
 use indexmap::IndexSet;
+
+#[cfg(feature = "rkyv")]
 use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
@@ -17,11 +19,13 @@ use rkyv::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
+#[cfg(feature = "rkyv")]
+use crate::{ArchivedNode, ArchivedWeave, dependent::ArchivedDependentNode};
+
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node,
-    SemiIndependentWeave, Weave,
-    dependent::{ArchivedDependentNode, DependentNode, DependentWeave as NewDependentWeave},
+    DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
+    dependent::{DependentNode, DependentWeave as NewDependentWeave},
 };
 
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
@@ -44,7 +48,8 @@ where
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 ///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
-#[derive(Archive, Deserialize, Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentWeave<K, T, M, S>
 where
@@ -524,6 +529,7 @@ where
     }
 }
 
+#[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, M, M2, S> ArchivedWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
@@ -611,6 +617,7 @@ where
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
     id: K::Archived,
@@ -661,6 +668,7 @@ fn add_node_identifiers_rev<K, T, M, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn add_archived_node_identifiers<K, K2, T, T2, M, M2, S>(
     weave: &ArchivedDependentWeave<K, T, M, S>,
     id: K::Archived,
@@ -680,6 +688,7 @@ fn add_archived_node_identifiers<K, K2, T, T2, M, M2, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn add_archived_node_identifiers_rev<K, K2, T, T2, M, M2, S>(
     weave: &ArchivedDependentWeave<K, T, M, S>,
     id: K::Archived,

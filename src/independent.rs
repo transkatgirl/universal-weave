@@ -8,6 +8,8 @@ use std::{
 
 use contracts::*;
 use indexmap::IndexSet;
+
+#[cfg(feature = "rkyv")]
 use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
@@ -17,13 +19,16 @@ use rkyv::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
+#[cfg(feature = "rkyv")]
+use crate::{ArchivedNode, ArchivedWeave};
+
 use crate::{
-    ArchivedNode, ArchivedWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave,
-    dependent::DependentWeave,
+    DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, IndependentContents, Node, Weave, dependent::DependentWeave,
 };
 
-#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentNode<K, T, S>
 where
@@ -89,7 +94,8 @@ where
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
-#[derive(Archive, Deserialize, Serialize, Debug, Clone)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentWeave<K, T, M, S>
 where
@@ -102,13 +108,13 @@ where
     active: HashSet<K, S>,
     bookmarked: IndexSet<K, S>,
 
-    #[rkyv(with = Skip)]
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     scratchpad_list: Vec<K>,
 
-    #[rkyv(with = Skip)]
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     scratchpad_set: HashSet<K, S>,
 
-    #[rkyv(with = Skip)]
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     scratchpad_list_2: Vec<K>,
 
     pub metadata: M,
@@ -1043,6 +1049,7 @@ where
     }
 }
 
+#[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, S> ArchivedNode<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
@@ -1070,6 +1077,7 @@ where
     }
 }
 
+#[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, M, M2, S>
     ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
@@ -1265,6 +1273,7 @@ fn build_thread_from<K, T, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
@@ -1295,6 +1304,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn build_thread_archived_until<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
@@ -1327,6 +1337,7 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn build_thread_from_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
