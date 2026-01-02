@@ -20,7 +20,9 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedNode, ArchivedWeave, dependent::ArchivedDependentNode};
+use crate::{
+    ArchivedActiveSingularWeave, ArchivedNode, ArchivedWeave, dependent::ArchivedDependentNode,
+};
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
@@ -611,6 +613,22 @@ where
         build_thread_archived(&self.nodes, *id, &mut thread);
 
         thread.into_iter()
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    fn active(&self) -> ArchivedOption<K::Archived> {
+        self.active
     }
 }
 

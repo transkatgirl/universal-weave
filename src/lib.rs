@@ -19,7 +19,10 @@ use indexmap::IndexSet;
 pub use rkyv;
 
 #[cfg(feature = "rkyv")]
-use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet};
+use rkyv::{
+    collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
+    option::ArchivedOption,
+};
 
 #[cfg(feature = "serde")]
 pub use serde;
@@ -338,6 +341,28 @@ where
         &self,
         id: &K,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+}
+
+#[cfg(feature = "rkyv")]
+/// An [`ArchivedWeave`] where only one [`ArchivedNode`] object can be considered "active" at a time.
+pub trait ArchivedActiveSingularWeave<K, N, T>: ArchivedWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
+{
+    /// Returns the active node's identifier, if any.
+    fn active(&self) -> ArchivedOption<K>;
+}
+
+#[cfg(feature = "rkyv")]
+/// An [`ArchivedWeave`] where every [`ArchivedNode`] object in the active path is always considered "active".
+pub trait ArchivedActivePathWeave<K, N, T>: ArchivedWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
+{
+    /// Returns a reference to the HashSet used to store the identifiers of active nodes.
+    fn active(&self) -> &ArchivedHashSet<K>;
 }
 
 fn add_node_identifiers<K, N, T, S>(
