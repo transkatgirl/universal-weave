@@ -89,9 +89,9 @@ where
     fn is_empty(&self) -> bool;
     /// Returns a reference to the HashMap used to map identifiers to nodes.
     fn nodes(&self) -> &HashMap<K, N, S>;
-    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
+    /// Returns a reference to the IndexSet used to store the identifiers of "root" nodes (nodes which do not have any parents).
     fn roots(&self) -> &IndexSet<K, S>;
-    /// Returns a reference to the IndexSet used to store bookmarked nodes.
+    /// Returns a reference to the IndexSet used to store the identifiers of bookmarked nodes.
     fn bookmarks(&self) -> &IndexSet<K, S>;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
@@ -168,6 +168,28 @@ where
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn remove_node(&mut self, id: &K) -> Option<N>;
+}
+
+/// A [`Weave`] where only one [`Node`] object can be considered "active" at a time.
+pub trait ActiveSingularWeave<K, N, T, S>: Weave<K, N, T, S>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
+    S: BuildHasher + Default + Clone,
+{
+    /// Returns the active node's identifier, if any.
+    fn active(&self) -> Option<K>;
+}
+
+/// A [`Weave`] where every [`Node`] object in the active path is always considered "active".
+pub trait ActivePathWeave<K, N, T, S>: Weave<K, N, T, S>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, S>,
+    S: BuildHasher + Default + Clone,
+{
+    /// Returns a reference to the HashSet used to store the identifiers of active nodes.
+    fn active(&self) -> &HashSet<K, S>;
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.

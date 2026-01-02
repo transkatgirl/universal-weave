@@ -23,8 +23,8 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{ArchivedNode, ArchivedWeave, dependent::ArchivedDependentNode};
 
 use crate::{
-    DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult, DiscreteContents,
-    DiscreteWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
+    ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
+    DiscreteContents, DiscreteWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
     dependent::{DependentNode, DependentWeave as NewDependentWeave},
 };
 
@@ -393,6 +393,16 @@ where
     #[debug_ensures(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
+    }
+}
+
+impl<K, T, M, S> ActiveSingularWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn active(&self) -> Option<K> {
+        self.active
     }
 }
 
