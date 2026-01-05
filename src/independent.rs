@@ -494,7 +494,7 @@ where
             assert!(output.add_node(IndependentNode {
                 id: node.id,
                 from: IndexSet::from_iter(node.from.into_iter()),
-                to: node.to,
+                to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
                 active: node.active,
                 bookmarked: node.bookmarked,
                 contents: node.contents,
