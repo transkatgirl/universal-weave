@@ -185,7 +185,7 @@ where
             }
         }
 
-        if threads.len() == 0 {
+        if threads.is_empty() {
             return self.active.is_empty();
         }
 
@@ -1260,8 +1260,7 @@ fn build_thread_until<K, T, S>(
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if !stop_at.contains(&id)
-        && let Some(node) = nodes.get(&id)
+    if let Some(node) = nodes.get(&id)
         && node
             .from
             .iter()
@@ -1271,9 +1270,11 @@ fn build_thread_until<K, T, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.to.iter().cloned() {
-            if active.contains(&child) {
-                build_thread_until(nodes, active, child, stop_at, thread_list, thread_set);
+        if !stop_at.contains(&id) {
+            for child in node.to.iter().cloned() {
+                if active.contains(&child) {
+                    build_thread_until(nodes, active, child, stop_at, thread_list, thread_set);
+                }
             }
         }
     }
@@ -1349,8 +1350,7 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
     T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    if !stop_at.contains(&id)
-        && let Some(node) = nodes.get(&id)
+    if let Some(node) = nodes.get(&id)
         && node
             .from
             .iter()
@@ -1360,9 +1360,18 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.to.iter().cloned() {
-            if active.contains(&child) {
-                build_thread_archived_until(nodes, active, child, stop_at, thread_list, thread_set);
+        if !stop_at.contains(&id) {
+            for child in node.to.iter().cloned() {
+                if active.contains(&child) {
+                    build_thread_archived_until(
+                        nodes,
+                        active,
+                        child,
+                        stop_at,
+                        thread_list,
+                        thread_set,
+                    );
+                }
             }
         }
     }
