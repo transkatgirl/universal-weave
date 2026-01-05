@@ -863,8 +863,9 @@ where
                         } else {
                             child.from.insert(node.id);
                         }
-                        if child.active {
+                        if child.active && left_node.active {
                             node.active = true;
+                            self.active.insert(node.id);
                         }
                     }
 
