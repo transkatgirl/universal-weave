@@ -1228,7 +1228,7 @@ fn build_thread<K, T, S>(
 {
     if let Some(node) = nodes.get(&id)
         && node
-            .to
+            .from
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
@@ -1259,7 +1259,7 @@ fn build_thread_until<K, T, S>(
     if !stop_at.contains(&id)
         && let Some(node) = nodes.get(&id)
         && node
-            .to
+            .from
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
@@ -1315,7 +1315,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
 {
     if let Some(node) = nodes.get(&id)
         && node
-            .to
+            .from
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
@@ -1348,7 +1348,7 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
     if !stop_at.contains(&id)
         && let Some(node) = nodes.get(&id)
         && node
-            .to
+            .from
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
