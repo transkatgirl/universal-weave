@@ -3,7 +3,7 @@
 An experimental attempt at creating general-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 > [!WARNING]
-> Most of the code contained within this repository is either entirely untested or very lightly tested. Please report any bugs that you find.
+> Most of the code contained within this repository is very lightly tested and may contain major bugs. Please report any bugs that you find.
 
 > [!IMPORTANT]
 > This library's API has not yet been stabilized. Expect breaking changes.
