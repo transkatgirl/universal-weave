@@ -185,6 +185,10 @@ where
             }
         }
 
+        if threads.len() == 0 {
+            return self.active.is_empty();
+        }
+
         HashSet::from_iter(threads.swap_remove(longest.1)).is_subset(&self.active)
     }
     fn build_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
