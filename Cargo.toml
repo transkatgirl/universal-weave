@@ -22,7 +22,7 @@ serde = [
 [dependencies]
 contracts = "0.6.7"
 indexmap = "2.13.0"
-rkyv = { version = "0.8.13", features = [
+rkyv = { version = "0.8.14", features = [
 	"little_endian",
 	"aligned",
 	"pointer_width_32",
