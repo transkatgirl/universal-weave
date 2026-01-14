@@ -145,18 +145,13 @@ where
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = K>;
     /// Builds a thread starting at the specified node.
     ///
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(
-        &mut self,
-        id: &K,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_thread_from(&mut self, id: &K) -> impl DoubleEndedIterator<Item = K>;
     /// Inserts a node into the Weave.
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
@@ -342,17 +337,13 @@ where
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(&self)
-    -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_active_thread(&self) -> impl DoubleEndedIterator<Item = K>;
     /// Builds a thread starting at the specified node.
     ///
     /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(
-        &self,
-        id: &K,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    fn get_thread_from(&self, id: &K) -> impl DoubleEndedIterator<Item = K>;
 }
 
 #[cfg(feature = "rkyv")]

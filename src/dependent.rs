@@ -301,6 +301,7 @@ where
 
         identifiers
     }
+    #[allow(refining_impl_trait)]
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
@@ -312,6 +313,7 @@ where
 
         self.scratchpad.drain(..)
     }
+    #[allow(refining_impl_trait)]
     fn get_thread_from(
         &mut self,
         id: &K,
@@ -647,6 +649,7 @@ where
 
         identifiers
     }
+    #[allow(refining_impl_trait)]
     fn get_active_thread(
         &self,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
@@ -658,6 +661,7 @@ where
 
         thread.into_iter()
     }
+    #[allow(refining_impl_trait)]
     fn get_thread_from(
         &self,
         id: &K::Archived,

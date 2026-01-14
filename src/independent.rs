@@ -535,6 +535,7 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
+    #[allow(refining_impl_trait)]
     fn get_active_thread(
         &mut self,
     ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
@@ -558,10 +559,8 @@ where
 
         self.scratchpad_list.drain(..).rev()
     }
-    fn get_thread_from(
-        &mut self,
-        id: &K,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
+    #[allow(refining_impl_trait)]
+    fn get_thread_from<'s>(&'s mut self, id: &K) -> Box<dyn DoubleEndedIterator<Item = K> + 's> {
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
 
@@ -603,11 +602,14 @@ where
                 );
             }
 
-            self.scratchpad_list
-                .extend(self.scratchpad_list_2.drain(..).rev());
+            Box::new(
+                self.scratchpad_list
+                    .drain(..)
+                    .chain(self.scratchpad_list_2.drain(..).rev()),
+            )
+        } else {
+            Box::new(self.scratchpad_list.drain(..))
         }
-
-        self.scratchpad_list.drain(..)
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
@@ -1101,6 +1103,7 @@ where
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
+    #[allow(refining_impl_trait)]
     fn get_active_thread(
         &self,
     ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
@@ -1124,10 +1127,7 @@ where
 
         thread_list.into_iter().rev()
     }
-    fn get_thread_from(
-        &self,
-        id: &K::Archived,
-    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
+    fn get_thread_from(&self, id: &K::Archived) -> impl DoubleEndedIterator<Item = K::Archived> {
         let mut thread_list = Vec::with_capacity(self.len());
         let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
@@ -1170,10 +1170,12 @@ where
                 );
             }
 
-            thread_list.extend(alternate_thread_list.into_iter().rev());
+            thread_list
+                .into_iter()
+                .chain(alternate_thread_list.into_iter().rev())
+        } else {
+            thread_list.into_iter().chain(vec![].into_iter().rev())
         }
-
-        thread_list.into_iter()
     }
 }
 
