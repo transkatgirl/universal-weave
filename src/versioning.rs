@@ -13,7 +13,7 @@ pub struct VersionedBytes<'a> {
 impl<'a> VersionedBytes<'a> {
     /// Tries to deserialize a [`VersionedBytes`] struct from a byte array
     ///
-    /// This can fail in falling cases:
+    /// This can fail in the following cases:
     /// - The specified `format_identifier` does not match the first 24 bytes of the byte array
     /// - The byte array is less than 32 bytes long
     pub fn try_from_bytes(value: &'a [u8], format_identifier: [u8; 24]) -> Option<Self> {
