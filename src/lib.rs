@@ -4,11 +4,9 @@
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
 // Planned API tweaks:
-// - Add associated type: Scratchpad
 // - Allow the following functions to take in a &mut Vec<T>
 //    - get_active_thread()
 //    - get_thread_from()
-// - Ensure that &mut self is only used when absolutely necessary
 
 pub mod dependent;
 pub mod independent;
