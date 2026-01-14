@@ -28,6 +28,7 @@ use crate::{
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, add_archived_node_identifiers,
         add_archived_node_identifiers_rev, add_node_identifiers, add_node_identifiers_rev,
+        build_thread, build_thread_archived,
     },
 };
 
@@ -599,37 +600,5 @@ where
 {
     fn active(&self) -> ArchivedOption<K::Archived> {
         self.active
-    }
-}
-
-fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: K, thread: &mut Vec<K>)
-where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread.push(id);
-        if let Some(parent) = node.from {
-            build_thread(nodes, parent, thread);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn build_thread_archived<K, K2, T, T2, S>(
-    nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
-    id: K::Archived,
-    thread: &mut Vec<K::Archived>,
-) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq,
-    T: Archive<Archived = T2>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread.push(id);
-        if let ArchivedOption::Some(parent) = node.from {
-            build_thread_archived(nodes, parent, thread);
-        }
     }
 }
