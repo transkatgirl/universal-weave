@@ -164,9 +164,9 @@ where
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
-    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
+    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
     /// Sorts "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
-    fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
+    fn sort_roots_by(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.

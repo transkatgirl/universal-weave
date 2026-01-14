@@ -352,44 +352,17 @@ where
             None => false,
         }
     }
-    #[debug_ensures(ret == self.contains(id))]
-    #[debug_ensures(self.validate())]
-    fn sort_node_children_by(
-        &mut self,
-        id: &K,
-        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
-    ) -> bool {
-        if let Some(node) = self.nodes.get(id) {
-            let mut children: Vec<_> = node.to.iter().filter_map(|id| self.nodes.get(id)).collect();
-            children.sort_by(|a, b| compare(a, b));
+    fn sort_node_children_by(&mut self, id: &K, compare: impl FnMut(&K, &K) -> Ordering) -> bool {
+        if let Some(node) = self.nodes.get_mut(id) {
+            node.to.sort_by(compare);
 
-            let children: IndexSet<_, _> = children.into_iter().map(|node| node.id).collect();
-
-            if let Some(node) = self.nodes.get_mut(id) {
-                node.to = children;
-
-                true
-            } else {
-                false
-            }
+            true
         } else {
             false
         }
     }
-    #[debug_ensures(self.validate())]
-    fn sort_roots_by(
-        &mut self,
-        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
-    ) {
-        let mut roots: Vec<_> = self
-            .roots
-            .iter()
-            .filter_map(|id| self.nodes.get(id))
-            .collect();
-        roots.sort_by(|a, b| compare(a, b));
-
-        self.roots.clear();
-        self.roots.extend(roots.into_iter().map(|node| node.id));
+    fn sort_roots_by(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
+        self.roots.sort_by(compare);
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]
