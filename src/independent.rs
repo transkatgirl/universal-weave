@@ -24,7 +24,9 @@ use crate::{ArchivedActivePathWeave, ArchivedNode, ArchivedWeave};
 
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave, dependent::DependentWeave,
+    DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave,
+    add_archived_node_identifiers, add_archived_node_identifiers_rev, add_node_identifiers,
+    add_node_identifiers_rev, dependent::DependentWeave,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -485,10 +487,12 @@ where
     M: Clone,
     S: BuildHasher + Default + Clone,
 {
-    fn from(value: DependentWeave<K, T, M, S>) -> Self {
+    fn from(mut value: DependentWeave<K, T, M, S>) -> Self {
         let mut output = Self::with_capacity(value.capacity(), value.metadata.clone());
+        let mut identifiers = Vec::with_capacity(value.len());
+        value.get_ordered_node_identifiers(&mut identifiers);
 
-        for identifier in value.get_ordered_node_identifiers() {
+        for identifier in identifiers {
             let node = value.get_node(&identifier).unwrap().clone();
 
             assert!(output.add_node(IndependentNode {
@@ -534,6 +538,22 @@ where
     }
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
+    }
+    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+        output.clear();
+        self.scratchpad_set.clear();
+
+        for root in &self.roots {
+            add_node_identifiers(&self.nodes, *root, output, &mut self.scratchpad_set);
+        }
+    }
+    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+        output.clear();
+        self.scratchpad_set.clear();
+
+        for root in &self.roots {
+            add_node_identifiers_rev(&self.nodes, *root, output, &mut self.scratchpad_set);
+        }
     }
     #[allow(refining_impl_trait)]
     fn get_active_thread(
@@ -1102,6 +1122,22 @@ where
     }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
+    }
+    fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
+        let mut identifier_set = HashSet::with_capacity(self.len());
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers(&self.nodes, *root, output, &mut identifier_set);
+        }
+    }
+    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
+        let mut identifier_set = HashSet::with_capacity(self.len());
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
+        }
     }
     #[allow(refining_impl_trait)]
     fn get_active_thread(

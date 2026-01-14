@@ -20,14 +20,15 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{
-    ArchivedActiveSingularWeave, ArchivedNode, ArchivedWeave, dependent::ArchivedDependentNode,
-};
+use crate::{ArchivedActiveSingularWeave, ArchivedWeave, dependent::ArchivedDependentNode};
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
-    dependent::{DependentNode, DependentWeave as NewDependentWeave},
+    DiscreteContents, DiscreteWeave, IndependentContents, SemiIndependentWeave, Weave,
+    dependent::{
+        DependentNode, DependentWeave as NewDependentWeave, add_archived_node_identifiers,
+        add_archived_node_identifiers_rev, add_node_identifiers, add_node_identifiers_rev,
+    },
 };
 
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
@@ -230,23 +231,19 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_ordered_node_identifiers(&self) -> Vec<K> {
-        let mut identifiers = Vec::with_capacity(self.len());
+    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+        output.clear();
 
         for root in self.roots() {
-            add_node_identifiers(self, *root, &mut identifiers);
+            add_node_identifiers(&self.nodes, *root, output);
         }
-
-        identifiers
     }
-    fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K> {
-        let mut identifiers = Vec::with_capacity(self.len());
+    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+        output.clear();
 
         for root in self.roots() {
-            add_node_identifiers_rev(self, *root, &mut identifiers);
+            add_node_identifiers_rev(&self.nodes, *root, output);
         }
-
-        identifiers
     }
     #[allow(refining_impl_trait)]
     fn get_active_thread(
@@ -550,23 +547,19 @@ where
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    fn get_ordered_node_identifiers(&self) -> Vec<K::Archived> {
-        let mut identifiers = Vec::with_capacity(self.len());
+    fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
 
         for root in self.roots().iter() {
-            add_archived_node_identifiers(self, *root, &mut identifiers);
+            add_archived_node_identifiers(&self.nodes, *root, output);
         }
-
-        identifiers
     }
-    fn get_ordered_node_identifiers_reversed_children(&self) -> Vec<K::Archived> {
-        let mut identifiers = Vec::with_capacity(self.len());
+    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
 
         for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(self, *root, &mut identifiers);
+            add_archived_node_identifiers_rev(&self.nodes, *root, output);
         }
-
-        identifiers
     }
     #[allow(refining_impl_trait)]
     fn get_active_thread(
@@ -637,78 +630,6 @@ fn build_thread_archived<K, K2, T, T2, S>(
         thread.push(id);
         if let ArchivedOption::Some(parent) = node.from {
             build_thread_archived(nodes, parent, thread);
-        }
-    }
-}
-
-fn add_node_identifiers<K, T, M, S>(
-    weave: &DependentWeave<K, T, M, S>,
-    id: K,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = weave.nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to() {
-            add_node_identifiers(weave, child, identifiers);
-        }
-    }
-}
-
-fn add_node_identifiers_rev<K, T, M, S>(
-    weave: &DependentWeave<K, T, M, S>,
-    id: K,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = weave.get_node(&id) {
-        identifiers.push(id);
-        for child in node.to().rev() {
-            add_node_identifiers_rev(weave, child, identifiers);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers<K, K2, T, T2, M, M2, S>(
-    weave: &ArchivedDependentWeave<K, T, M, S>,
-    id: K::Archived,
-    identifiers: &mut Vec<K::Archived>,
-) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = weave.nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to() {
-            add_archived_node_identifiers(weave, child, identifiers);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers_rev<K, K2, T, T2, M, M2, S>(
-    weave: &ArchivedDependentWeave<K, T, M, S>,
-    id: K::Archived,
-    identifiers: &mut Vec<K::Archived>,
-) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = weave.nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(weave, child, identifiers);
         }
     }
 }
