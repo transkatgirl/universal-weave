@@ -46,7 +46,6 @@ where
             roots: value.roots,
             active: value.active,
             bookmarked: value.bookmarked,
-            scratchpad: value.thread,
             metadata: value.metadata,
         }
     }
@@ -132,7 +131,7 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread: Vec::with_capacity(capacity),
+            thread: Vec::new(),
             metadata,
         }
     }
@@ -148,14 +147,15 @@ where
                 .capacity()
                 .saturating_sub(self.bookmarked.capacity()),
         );
-        self.thread
-            .reserve(self.nodes.capacity().saturating_sub(self.thread.capacity()));
+        self.thread.clear();
+        self.thread.shrink_to_fit();
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread.shrink_to(min_capacity);
+        self.thread.clear();
+        self.thread.shrink_to_fit();
     }
     fn siblings<'a>(
         &'a self,

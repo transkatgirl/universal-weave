@@ -14,7 +14,6 @@ use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
     option::ArchivedOption,
-    with::Skip,
 };
 
 #[cfg(feature = "serde")]
@@ -111,9 +110,6 @@ where
     active: Option<K>,
     bookmarked: IndexSet<K, S>,
 
-    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    scratchpad: Vec<K>,
-
     pub metadata: M,
 }
 
@@ -177,7 +173,6 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            scratchpad: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -193,17 +188,11 @@ where
                 .capacity()
                 .saturating_sub(self.bookmarked.capacity()),
         );
-        self.scratchpad.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.scratchpad.capacity()),
-        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.scratchpad.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
