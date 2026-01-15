@@ -246,28 +246,18 @@ where
             add_node_identifiers_rev(&self.nodes, *root, output);
         }
     }
-    #[allow(refining_impl_trait)]
-    fn get_active_thread(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
+    fn get_active_thread(&mut self, output: &mut Vec<K>) {
+        output.clear();
 
         if let Some(active) = self.active {
-            build_thread(&self.nodes, active, &mut self.thread);
+            build_thread(&self.nodes, active, output);
         }
-
-        self.thread.drain(..)
     }
-    #[allow(refining_impl_trait)]
-    fn get_thread_from(
-        &mut self,
-        id: &K,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.thread.clear();
 
-        build_thread(&self.nodes, *id, &mut self.thread);
+    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
 
-        self.thread.drain(..)
+        build_thread(&self.nodes, *id, output);
     }
     #[debug_ensures(self.validate())]
     #[requires(self.under_max_size())]
@@ -562,28 +552,17 @@ where
             add_archived_node_identifiers_rev(&self.nodes, *root, output);
         }
     }
-    #[allow(refining_impl_trait)]
-    fn get_active_thread(
-        &self,
-    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread = Vec::with_capacity(self.len());
+    fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
 
         if let ArchivedOption::Some(active) = self.active {
-            build_thread_archived(&self.nodes, active, &mut thread);
+            build_thread_archived(&self.nodes, active, output);
         }
-
-        thread.into_iter()
     }
-    #[allow(refining_impl_trait)]
-    fn get_thread_from(
-        &self,
-        id: &K::Archived,
-    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread = Vec::with_capacity(self.len());
+    fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+        output.clear();
 
-        build_thread_archived(&self.nodes, *id, &mut thread);
-
-        thread.into_iter()
+        build_thread_archived(&self.nodes, *id, output);
     }
 }
 

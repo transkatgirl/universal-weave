@@ -95,6 +95,8 @@ where
 
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
+/// However, this additional flexibility may result in worse performance characteristics overall.
+///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
@@ -115,9 +117,6 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     scratchpad_set: HashSet<K, S>,
-
-    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    scratchpad_list_2: Vec<K>,
 
     pub metadata: M,
 }
@@ -237,7 +236,6 @@ where
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_list: Vec::with_capacity(capacity),
             scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
-            scratchpad_list_2: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -265,11 +263,6 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_set.capacity()),
         );
-        self.scratchpad_list_2.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.scratchpad_list_2.capacity()),
-        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
@@ -278,7 +271,6 @@ where
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad_list.shrink_to(min_capacity);
         self.scratchpad_set.shrink_to(min_capacity);
-        self.scratchpad_list_2.shrink_to(min_capacity);
     }
     /*fn active_parents(
         &self,
@@ -555,11 +547,8 @@ where
             add_node_identifiers_rev(&self.nodes, *root, output, &mut self.scratchpad_set);
         }
     }
-    #[allow(refining_impl_trait)]
-    fn get_active_thread(
-        &mut self,
-    ) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.scratchpad_list.clear();
+    fn get_active_thread(&mut self, output: &mut Vec<K>) {
+        output.clear();
         self.scratchpad_set.clear();
 
         for active_root in self
@@ -572,31 +561,30 @@ where
                 &self.nodes,
                 &self.active,
                 active_root,
-                &mut self.scratchpad_list,
+                output,
                 &mut self.scratchpad_set,
             );
         }
 
-        self.scratchpad_list.drain(..).rev()
+        output.reverse();
     }
-    #[allow(refining_impl_trait)]
-    fn get_thread_from<'s>(&'s mut self, id: &K) -> Box<dyn DoubleEndedIterator<Item = K> + 's> {
-        self.scratchpad_list.clear();
+    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
         self.scratchpad_set.clear();
 
         build_thread_from(
             &self.nodes,
             &self.active,
             *id,
-            &mut self.scratchpad_list,
+            output,
             &mut self.scratchpad_set,
         );
 
-        if let Some(last_thread_node) = self.scratchpad_list.last()
+        if let Some(last_thread_node) = output.last()
             && !self.roots.contains(last_thread_node)
         {
             self.scratchpad_set.clear();
-            self.scratchpad_list_2.clear();
+            self.scratchpad_list.clear();
 
             for active_root in self
                 .roots
@@ -617,18 +605,12 @@ where
                             .copied()
                             .filter(|parent| self.active.contains(parent)),
                     ),
-                    &mut self.scratchpad_list_2,
+                    &mut self.scratchpad_list,
                     &mut self.scratchpad_set,
                 );
             }
 
-            Box::new(
-                self.scratchpad_list
-                    .drain(..)
-                    .chain(self.scratchpad_list_2.drain(..).rev()),
-            )
-        } else {
-            Box::new(self.scratchpad_list.drain(..))
+            output.extend(self.scratchpad_list.drain(..).rev());
         }
     }
     #[debug_ensures(self.validate())]
@@ -1139,11 +1121,8 @@ where
             add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
         }
     }
-    #[allow(refining_impl_trait)]
-    fn get_active_thread(
-        &self,
-    ) -> impl ExactSizeIterator<Item = K::Archived> + DoubleEndedIterator<Item = K::Archived> {
-        let mut thread_list = Vec::with_capacity(self.len());
+    fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
         let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
         for active_root in self
@@ -1156,31 +1135,25 @@ where
                 &self.nodes,
                 &self.active,
                 active_root,
-                &mut thread_list,
+                output,
                 &mut thread_set,
             );
         }
 
-        thread_list.into_iter().rev()
+        output.reverse();
     }
-    fn get_thread_from(&self, id: &K::Archived) -> impl DoubleEndedIterator<Item = K::Archived> {
-        let mut thread_list = Vec::with_capacity(self.len());
+    fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+        output.clear();
         let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
-        build_thread_from_archived(
-            &self.nodes,
-            &self.active,
-            *id,
-            &mut thread_list,
-            &mut thread_set,
-        );
+        build_thread_from_archived(&self.nodes, &self.active, *id, output, &mut thread_set);
 
-        if let Some(last_thread_node) = thread_list.last()
+        if let Some(last_thread_node) = output.last()
             && !self.roots.contains(last_thread_node)
         {
             thread_set.clear();
 
-            let mut alternate_thread_list = Vec::with_capacity(self.len() - thread_list.len());
+            let mut alternate_thread_list = Vec::with_capacity(self.len() - output.len());
 
             for active_root in self
                 .roots
@@ -1206,11 +1179,7 @@ where
                 );
             }
 
-            thread_list
-                .into_iter()
-                .chain(alternate_thread_list.into_iter().rev())
-        } else {
-            thread_list.into_iter().chain(vec![].into_iter().rev())
+            output.extend(alternate_thread_list.into_iter().rev());
         }
     }
 }

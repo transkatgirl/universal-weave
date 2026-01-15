@@ -3,11 +3,6 @@
 // TODO: Unit tests
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
-// Planned API tweaks:
-// - Allow the following functions to take in a &mut Vec<T>
-//    - get_active_thread()
-//    - get_thread_from()
-
 pub mod dependent;
 pub mod independent;
 
@@ -120,16 +115,16 @@ where
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
-    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
+    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(&mut self) -> impl DoubleEndedIterator<Item = K>;
+    fn get_active_thread(&mut self, output: &mut Vec<K>);
     /// Builds a thread starting at the specified node.
     ///
-    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
+    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(&mut self, id: &K) -> impl DoubleEndedIterator<Item = K>;
+    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Inserts a node into the Weave.
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
@@ -294,16 +289,16 @@ where
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
-    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
+    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(&self) -> impl DoubleEndedIterator<Item = K>;
+    fn get_active_thread(&self, output: &mut Vec<K>);
     /// Builds a thread starting at the specified node.
     ///
-    /// A thread is an iterator over the identifiers of directly connected nodes which always ends at a root node.
+    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(&self, id: &K) -> impl DoubleEndedIterator<Item = K>;
+    fn get_thread_from(&self, id: &K, output: &mut Vec<K>);
 }
 
 #[cfg(feature = "rkyv")]
