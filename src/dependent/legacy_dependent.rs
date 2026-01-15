@@ -32,6 +32,9 @@ use crate::{
     },
 };
 
+#[allow(unused_imports)]
+use crate::Node;
+
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
