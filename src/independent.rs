@@ -95,7 +95,7 @@ where
 
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
-/// However, this additional flexibility may result in worse performance characteristics overall.
+/// However, this additional flexibility results in worse performance and memory usage characteristics overall.
 ///
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
