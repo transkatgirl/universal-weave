@@ -391,8 +391,8 @@ where
             None => return false,
         }
         if start {
-            for item in self.scratchpad_list.clone() {
-                self.update_removed_child_activity(&item);
+            for item in self.scratchpad_list.drain(..) {
+                update_removed_child_activity(&mut self.nodes, &mut self.active, &item);
             }
         }
         true
@@ -416,32 +416,6 @@ where
             false
         }
     }*/
-    fn update_removed_child_activity(&mut self, id: &K) -> bool {
-        if let Some(node) = self.nodes.get(id) {
-            if !node.active {
-                return true;
-            }
-
-            let has_active_parents = node.from.iter().any(|parent| self.active.contains(parent));
-
-            if has_active_parents {
-                return true;
-            }
-        }
-        if let Some(node) = self.nodes.get_mut(id) {
-            node.active = false;
-            self.active.remove(&node.id);
-
-            let children: Vec<_> = node.to.iter().copied().collect();
-            for child in &children {
-                self.update_removed_child_activity(child);
-            }
-
-            true
-        } else {
-            false
-        }
-    }
     #[debug_ensures(!self.nodes.contains_key(id))]
     fn remove_node_unverified(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
@@ -461,7 +435,11 @@ where
                     if child.from.is_empty() {
                         self.remove_node_unverified(&identifier);
                     } else if node.active && child.active {
-                        self.update_removed_child_activity(&identifier);
+                        update_removed_child_activity(
+                            &mut self.nodes,
+                            &mut self.active,
+                            &identifier,
+                        );
                     }
                 }
             }
@@ -469,6 +447,42 @@ where
         } else {
             None
         }
+    }
+}
+
+fn update_removed_child_activity<K, T, S>(
+    nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
+    active: &mut HashSet<K, S>,
+    id: &K,
+) -> bool
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(id) {
+        if !node.active {
+            return true;
+        }
+
+        let has_active_parents = node.from.iter().any(|parent| active.contains(parent));
+
+        if has_active_parents {
+            return true;
+        }
+    }
+    if let Some(node) = nodes.get_mut(id) {
+        node.active = false;
+        active.remove(&node.id);
+
+        let children: Vec<_> = node.to.iter().copied().collect();
+        for child in &children {
+            update_removed_child_activity(nodes, active, child);
+        }
+
+        true
+    } else {
+        false
     }
 }
 
