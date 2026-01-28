@@ -370,14 +370,15 @@ fn add_node_identifiers_rev<K, N, T, S>(
 }
 
 #[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers<K, N, T>(
+fn add_archived_node_identifiers<K, N, T, S>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
+    S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
         && node.from().all(|parent| identifier_set.contains(&parent))
@@ -391,14 +392,15 @@ fn add_archived_node_identifiers<K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers_rev<K, N, T>(
+fn add_archived_node_identifiers_rev<K, N, T, S>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
+    S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
         && node.from().all(|parent| identifier_set.contains(&parent))

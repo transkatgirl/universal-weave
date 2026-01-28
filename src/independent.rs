@@ -1155,7 +1155,7 @@ where
     }
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut identifier_set = HashSet::with_capacity(self.len());
+        let mut identifier_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
         for root in self.roots().iter() {
             add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
@@ -1205,15 +1205,15 @@ where
                     &self.nodes,
                     &self.active,
                     active_root,
-                    &HashSet::from_iter(
-                        self.nodes
-                            .get(last_thread_node)
-                            .unwrap()
-                            .from
-                            .iter()
-                            .copied()
-                            .filter(|parent| self.active.contains(parent)),
-                    ),
+                    &self
+                        .nodes
+                        .get(last_thread_node)
+                        .unwrap()
+                        .from
+                        .iter()
+                        .copied()
+                        .filter(|parent| self.active.contains(parent))
+                        .collect::<HashSet<K2, S>>(),
                     &mut alternate_thread_list,
                     &mut thread_set,
                 );
