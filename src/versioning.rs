@@ -45,7 +45,7 @@ impl<'a> VersionedBytes<'a> {
         header
     }
     /// Serializes the header and contents into the specified writer
-    pub fn write_bytes(&self, output: &mut impl Write) -> Result<(), io::Error> {
+    pub fn write_bytes<W: Write>(&self, output: &mut W) -> Result<(), io::Error> {
         output.write_all(&self.format_identifier)?;
         output.write_all(&self.version.to_le_bytes())?;
         output.write_all(self.data)?;
