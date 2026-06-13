@@ -67,9 +67,30 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeSerialize",
+            deserialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     nodes: HashMap<K, DependentNode<K, T, S>, S>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     roots: IndexSet<K, S>,
     active: Option<K>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     bookmarked: IndexSet<K, S>,
     thread: Vec<K>,
 

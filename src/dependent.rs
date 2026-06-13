@@ -43,6 +43,13 @@ where
     /// The identifier corresponding to the node's parent.
     pub from: Option<K>,
     /// The identifiers corresponding to the node's children.
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     pub to: IndexSet<K, S>,
     /// If the node should be considered "active".
     ///
@@ -105,9 +112,30 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeSerialize",
+            deserialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     nodes: HashMap<K, DependentNode<K, T, S>, S>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     roots: IndexSet<K, S>,
     active: Option<K>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     bookmarked: IndexSet<K, S>,
 
     pub metadata: M,

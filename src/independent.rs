@@ -43,8 +43,22 @@ where
     /// The node's unique identifier.
     pub id: K,
     /// The identifiers corresponding to the node's parents.
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     pub from: IndexSet<K, S>,
     /// The identifiers corresponding to the node's children.
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     pub to: IndexSet<K, S>,
     /// If the node should be considered active.
     ///
@@ -109,15 +123,50 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "HashMap<K, IndependentNode<K, T, S>, S>: SerdeSerialize",
+            deserialize = "HashMap<K, IndependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     nodes: HashMap<K, IndependentNode<K, T, S>, S>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     roots: IndexSet<K, S>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "HashSet<K, S>: SerdeSerialize",
+            deserialize = "HashSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     active: HashSet<K, S>,
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "IndexSet<K, S>: SerdeSerialize",
+            deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     scratchpad_list: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(bound(
+            serialize = "HashSet<K, S>: SerdeSerialize",
+            deserialize = "HashSet<K, S>: SerdeDeserialize<'de>"
+        ))
+    )]
     scratchpad_set: HashSet<K, S>,
 
     pub metadata: M,
