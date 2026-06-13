@@ -1,6 +1,6 @@
 //! Utilities for versioning serialized binary data
 
-use std::io::{self, Write};
+use rkyv::{rancor::Fallible, ser::Writer};
 
 /// A set of bytes accompanied by file header information
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -36,19 +36,24 @@ impl<'a> VersionedBytes<'a> {
     pub fn output_length(&self) -> usize {
         32 + self.data.len()
     }
-    /// Returns the serialized header bytes
-    pub fn header_bytes(&self) -> [u8; 32] {
-        let mut header: [u8; 32] = [0; 32];
-        header[..24].copy_from_slice(&self.format_identifier);
-        header[24..].copy_from_slice(&self.version.to_le_bytes());
+    /// Serializes the header into the specified writer
+    pub fn write_header<W: Writer + Fallible>(
+        &self,
+        output: &mut W,
+    ) -> Result<(), <W as Fallible>::Error> {
+        output.write(&self.format_identifier)?;
+        output.write(&self.version.to_le_bytes())?;
 
-        header
+        Ok(())
     }
     /// Serializes the header and contents into the specified writer
-    pub fn write_bytes<W: Write>(&self, output: &mut W) -> Result<(), io::Error> {
-        output.write_all(&self.format_identifier)?;
-        output.write_all(&self.version.to_le_bytes())?;
-        output.write_all(self.data)?;
+    pub fn write<W: Writer + Fallible>(
+        &self,
+        output: &mut W,
+    ) -> Result<(), <W as Fallible>::Error> {
+        output.write(&self.format_identifier)?;
+        output.write(&self.version.to_le_bytes())?;
+        output.write(self.data)?;
 
         Ok(())
     }
