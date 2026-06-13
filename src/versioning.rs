@@ -39,21 +39,21 @@ impl<'a> VersionedBytes<'a> {
     /// Serializes the header into the specified writer
     pub fn write_header<W: Writer + Fallible>(
         &self,
-        output: &mut W,
+        writer: &mut W,
     ) -> Result<(), <W as Fallible>::Error> {
-        output.write(&self.format_identifier)?;
-        output.write(&self.version.to_le_bytes())?;
+        writer.write(&self.format_identifier)?;
+        writer.write(&self.version.to_le_bytes())?;
 
         Ok(())
     }
     /// Serializes the header and contents into the specified writer
     pub fn write<W: Writer + Fallible>(
         &self,
-        output: &mut W,
+        writer: &mut W,
     ) -> Result<(), <W as Fallible>::Error> {
-        output.write(&self.format_identifier)?;
-        output.write(&self.version.to_le_bytes())?;
-        output.write(self.data)?;
+        writer.write(&self.format_identifier)?;
+        writer.write(&self.version.to_le_bytes())?;
+        writer.write(self.data)?;
 
         Ok(())
     }
