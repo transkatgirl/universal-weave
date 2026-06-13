@@ -20,12 +20,14 @@ use rkyv::{
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedActivePathWeave, ArchivedNode, ArchivedWeave};
+use crate::{
+    ArchivedActivePathWeave, ArchivedNode, ArchivedWeave, add_archived_node_identifiers,
+    add_archived_node_identifiers_rev,
+};
 
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave,
-    add_archived_node_identifiers, add_archived_node_identifiers_rev, add_node_identifiers,
+    DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave, add_node_identifiers,
     add_node_identifiers_rev, dependent::DependentWeave,
 };
 
