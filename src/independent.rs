@@ -157,16 +157,11 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_list: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(
-        feature = "serde",
-        serde(bound(
-            serialize = "HashSet<K, S>: SerdeSerialize",
-            deserialize = "HashSet<K, S>: SerdeDeserialize<'de>"
-        ))
-    )]
+    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set: HashSet<K, S>,
 
     pub metadata: M,
