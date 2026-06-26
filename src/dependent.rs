@@ -210,12 +210,9 @@ where
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
-            .reserve(self.nodes.capacity().saturating_sub(self.roots.capacity()));
-        self.bookmarked.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.bookmarked.capacity()),
-        );
+            .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
+        self.bookmarked
+            .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);

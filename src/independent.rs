@@ -291,23 +291,20 @@ where
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
-            .reserve(self.nodes.capacity().saturating_sub(self.roots.capacity()));
+            .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
         self.active
-            .reserve(self.nodes.capacity().saturating_sub(self.active.capacity()));
-        self.bookmarked.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.bookmarked.capacity()),
-        );
+            .reserve(self.nodes.capacity().saturating_sub(self.active.len()));
+        self.bookmarked
+            .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
         self.scratchpad_list.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.scratchpad_list.capacity()),
+                .saturating_sub(self.scratchpad_list.len()),
         );
         self.scratchpad_set.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.scratchpad_set.capacity()),
+                .saturating_sub(self.scratchpad_set.len()),
         );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {

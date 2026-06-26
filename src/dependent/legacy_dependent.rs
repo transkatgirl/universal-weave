@@ -167,12 +167,9 @@ where
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
-            .reserve(self.nodes.capacity().saturating_sub(self.roots.capacity()));
-        self.bookmarked.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.bookmarked.capacity()),
-        );
+            .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
+        self.bookmarked
+            .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
         self.thread.clear();
         self.thread.shrink_to_fit();
     }
