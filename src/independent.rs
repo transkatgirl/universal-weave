@@ -4,6 +4,7 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
+    mem,
 };
 
 use contracts::*;
@@ -537,12 +538,13 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn from(mut value: DependentWeave<K, T, M, S>) -> Self {
-        let mut output = Self::with_capacity(value.capacity(), value.metadata.clone());
         let mut identifiers = Vec::with_capacity(value.len());
         value.get_ordered_node_identifiers(&mut identifiers);
 
+        let mut output = Self::with_capacity(value.capacity(), value.metadata);
+
         for identifier in identifiers {
-            let node = value.get_node(&identifier).unwrap().clone();
+            let node = value.nodes.remove(&identifier).unwrap();
 
             assert!(output.add_node(IndependentNode {
                 id: node.id,
@@ -1077,14 +1079,14 @@ where
             return false;
         }
 
-        if let Some(node) = self.nodes.get(id) {
+        if let Some(node) = self.nodes.get_mut(id) {
             for child in &node.to {
                 if new_parents.contains(child) {
                     return false;
                 }
             }
 
-            let old_parents = node.from.clone();
+            let old_parents = mem::take(&mut node.from);
 
             for old_parent in &old_parents {
                 if !new_parents.contains(old_parent)

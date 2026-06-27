@@ -119,7 +119,7 @@ where
             deserialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
         ))
     )]
-    nodes: HashMap<K, DependentNode<K, T, S>, S>,
+    pub(super) nodes: HashMap<K, DependentNode<K, T, S>, S>,
     #[cfg_attr(
         feature = "serde",
         serde(bound(
