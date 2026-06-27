@@ -1306,7 +1306,7 @@ fn build_thread<K, T, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.to.iter().cloned() {
+        for child in node.to.iter().copied() {
             if active.contains(&child) {
                 build_thread(nodes, active, child, thread_list, thread_set);
             }
@@ -1337,7 +1337,7 @@ fn build_thread_until<K, T, S>(
         thread_set.insert(id);
 
         if !stop_at.contains(&id) {
-            for child in node.to.iter().cloned() {
+            for child in node.to.iter().copied() {
                 if active.contains(&child) {
                     build_thread_until(nodes, active, child, stop_at, thread_list, thread_set);
                 }
@@ -1394,7 +1394,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
         thread_list.push(id);
         thread_set.insert(id);
 
-        for child in node.to.iter().cloned() {
+        for child in node.to.iter().copied() {
             if active.contains(&child) {
                 build_thread_archived(nodes, active, child, thread_list, thread_set);
             }
@@ -1427,7 +1427,7 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
         thread_set.insert(id);
 
         if !stop_at.contains(&id) {
-            for child in node.to.iter().cloned() {
+            for child in node.to.iter().copied() {
                 if active.contains(&child) {
                     build_thread_archived_until(
                         nodes,
