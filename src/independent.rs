@@ -17,6 +17,9 @@ use rkyv::{
     with::Skip,
 };
 
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -34,6 +37,7 @@ use crate::{
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentNode<K, T, S>
 where
@@ -117,6 +121,7 @@ where
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct IndependentWeave<K, T, M, S>
 where
@@ -158,10 +163,12 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_list: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set: HashSet<K, S>,
 

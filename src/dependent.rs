@@ -16,6 +16,9 @@ use rkyv::{
     option::ArchivedOption,
 };
 
+#[cfg(feature = "wincode")]
+use wincode::{SchemaRead, SchemaWrite};
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -32,6 +35,7 @@ pub mod legacy_dependent;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentNode<K, T, S>
 where
@@ -106,6 +110,7 @@ where
 /// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentWeave<K, T, M, S>
 where
