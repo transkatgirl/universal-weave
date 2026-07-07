@@ -151,6 +151,10 @@ where
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
+    /// Sorts bookmarked nodes using the comparison function `cmp`.
+    fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
+    /// Sorts the identifiers of bookmarked nodes using the comparison function `cmp`.
+    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.

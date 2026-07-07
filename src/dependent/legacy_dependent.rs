@@ -410,6 +410,16 @@ where
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
     }
+    fn sort_bookmarks_by(
+        &mut self,
+        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
+    ) {
+        self.bookmarked
+            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+    }
+    fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
+        self.bookmarked.sort_by(compare);
+    }
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[debug_ensures(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
