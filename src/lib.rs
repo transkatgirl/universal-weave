@@ -1,8 +1,8 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
-// TODO: Unit tests
+// TODO: Unit tests and property tests (using proptest)
 // TODO: Node removal callbacks
-// TODO: Add a Weave implementation that supports multi-user + unbounded undo/redo
+// TODO: Add a CRDT-based Weave implementation for multi-user + unbounded undo/redo use cases
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
 pub mod dependent;
