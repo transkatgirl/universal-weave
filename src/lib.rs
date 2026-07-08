@@ -2,6 +2,7 @@
 
 // TODO: Unit tests
 // TODO: Node removal callbacks
+// TODO: Add a Weave implementation that supports multi-user (or add this to the existing implementations?)
 // TODO: Add a Weave implementation that supports unbounded undo/redo
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
@@ -226,7 +227,7 @@ where
     ///
     /// Returns `false` if splitting the node failed or the node could not be found.
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
-    /// Merges a node with the specified identifier with its parent.
+    /// Merges a node with the specified identifier with its parent, with the newly merged node inheriting the parent's identifier.
     ///
     /// Returns the identifier of the merged node if merging was successful.
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
