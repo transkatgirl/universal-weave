@@ -39,16 +39,12 @@ serde = { version = "1.0.228", features = [
 	"derive",
 ], optional = true }
 
-# TODO: Implement multi-user + undo/redo using automerge and/or loro
+# TODO: Implement multi-user + undo/redo using loro
 # See also:
-# - https://automerge.org/docs/reference/under-the-hood/merge-rules/
+# - https://loro.dev/docs
 # - https://loro.dev/docs/tutorial/tree
+# - https://loro.dev/docs/advanced/undo
 # - https://www.ditto.com/blog/testing-crdts-in-rust-from-theory-to-practice
-#automerge = { version = "0.10.0", features = [
-#	"utf8-indexing",
-#] }
-#autosurgeon = "0.12.0"
-#automorph = "0.2.0"
 #loro = "1.13.6"
 
 #[dev-dependencies]
