@@ -28,7 +28,7 @@ use crate::{ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedNode, A
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, Node,
-    SemiIndependentWeave, Weave,
+    SemiIndependentWeave, SortableWeave, Weave,
 };
 
 #[cfg(feature = "legacy")]
@@ -81,26 +81,29 @@ where
     }
 }
 
-impl<K, T, S> Node<K, T, S> for DependentNode<K, T, S>
+impl<K, T, S> Node<K, T> for DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    type From = Option<K>;
+    type To = IndexSet<K, S>;
+
     fn id(&self) -> K {
         self.id
     }
-    fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.from.into_iter()
+    fn from(&self) -> &Self::From {
+        &self.from
     }
-    fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
-        self.to.iter().copied()
+    fn to(&self) -> &Self::To {
+        &self.to
     }
     fn contents(&self) -> &T {
         &self.contents
     }
 }
 
-impl<K, T, S> IntegratedNode<K, T, S> for DependentNode<K, T, S>
+impl<K, T, S> IntegratedNode<K, T> for DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
@@ -281,24 +284,28 @@ where
     }
 }
 
-impl<K, T, M, S> Weave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> Weave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
+    type Roots = IndexSet<K, S>;
+    type Bookmarks = IndexSet<K, S>;
+
     fn len(&self) -> usize {
         self.nodes.len()
     }
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
-    fn nodes(&self) -> &HashMap<K, DependentNode<K, T, S>, S> {
+    fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
-    fn roots(&self) -> &IndexSet<K, S> {
+    fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &IndexSet<K, S> {
+    fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
     fn contains(&self, id: &K) -> bool {
@@ -314,14 +321,7 @@ where
         output.clear();
 
         for root in &self.roots {
-            add_node_identifiers(&self.nodes, *root, output);
-        }
-    }
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
-        output.clear();
-
-        for root in &self.roots {
-            add_node_identifiers_rev(&self.nodes, *root, output);
+            add_node_identifiers::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
         }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
@@ -377,7 +377,7 @@ where
     /*#[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]*/
     fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
-        self.set_node_active_status_in_place(id, value)
+        Self::set_node_active_status_in_place(self, id, value) // Compiler limitation
     }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]
@@ -418,6 +418,26 @@ where
                 true
             }
             None => false,
+        }
+    }
+    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[debug_ensures(self.validate())]
+    fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
+        self.remove_node_unverified(id)
+    }
+}
+
+impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+        output.clear();
+
+        for root in &self.roots {
+            add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
         }
     }
     fn sort_node_children_by(
@@ -468,14 +488,9 @@ where
     fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(compare);
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.validate())]
-    fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        self.remove_node_unverified(id)
-    }
 }
 
-impl<K, T, M, S> ActiveSingularWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> ActiveSingularWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
@@ -587,8 +602,7 @@ where
     }
 }
 
-impl<K, T, M, S> SemiIndependentWeave<K, DependentNode<K, T, S>, T, S>
-    for DependentWeave<K, T, M, S>
+impl<K, T, M, S> SemiIndependentWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: IndependentContents,
@@ -599,7 +613,7 @@ where
     }
 }
 
-impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: DeduplicatableContents,
@@ -626,14 +640,17 @@ where
     T: Archive<Archived = T2>,
     S: BuildHasher + Default + Clone,
 {
+    type From = ArchivedOption<K::Archived>;
+    type To = ArchivedIndexSet<K::Archived>;
+
     fn id(&self) -> K::Archived {
         self.id
     }
-    fn from(&self) -> impl Iterator<Item = K::Archived> {
-        self.from.into_iter().copied()
+    fn from(&self) -> &Self::From {
+        &self.from
     }
-    fn to(&self) -> impl Iterator<Item = K::Archived> {
-        self.to.iter().copied()
+    fn to(&self) -> &Self::To {
+        &self.to
     }
     fn contents(&self) -> &<T as Archive>::Archived {
         &self.contents
@@ -667,19 +684,23 @@ where
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
 {
+    type Nodes = ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>;
+    type Roots = ArchivedIndexSet<K::Archived>;
+    type Bookmarks = ArchivedIndexSet<K::Archived>;
+
     fn len(&self) -> usize {
         self.nodes.len()
     }
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
-    fn nodes(&self) -> &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>> {
+    fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
-    fn roots(&self) -> &ArchivedIndexSet<K::Archived> {
+    fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &ArchivedIndexSet<K::Archived> {
+    fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
     fn contains(&self, id: &K::Archived) -> bool {
@@ -770,13 +791,17 @@ fn build_thread_archived<K, K2, T, T2, S>(
 fn add_node_identifiers<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
+    for<'a> &'a N::From:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::To:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
-        for child in node.to() {
-            add_node_identifiers(nodes, child, identifiers);
+        for child in node.to().into_iter() {
+            add_node_identifiers(nodes, *child, identifiers);
         }
     }
 }
@@ -784,13 +809,17 @@ where
 fn add_node_identifiers_rev<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
+    for<'a> &'a N::From:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::To:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
-        for child in node.to().rev() {
-            add_node_identifiers_rev(nodes, child, identifiers);
+        for child in node.to().into_iter().rev() {
+            add_node_identifiers_rev(nodes, *child, identifiers);
         }
     }
 }
@@ -802,12 +831,12 @@ fn add_archived_node_identifiers<K, N, T>(
     identifiers: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: ArchivedNode<K, T, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
-        for child in node.to() {
-            add_archived_node_identifiers(nodes, child, identifiers);
+        for child in node.to().iter() {
+            add_archived_node_identifiers(nodes, *child, identifiers);
         }
     }
 }
@@ -819,12 +848,12 @@ fn add_archived_node_identifiers_rev<K, N, T>(
     identifiers: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: ArchivedNode<K, T, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
-        for child in node.to().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(nodes, child, identifiers);
+        for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
+            add_archived_node_identifiers_rev(nodes, *child, identifiers);
         }
     }
 }

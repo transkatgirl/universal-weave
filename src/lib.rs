@@ -18,41 +18,44 @@ use std::{
 };
 
 pub use indexmap;
-use indexmap::IndexSet;
 
 #[cfg(feature = "rkyv")]
 pub use rkyv;
 
 #[cfg(feature = "rkyv")]
-use rkyv::{
-    collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
-    option::ArchivedOption,
-};
+use rkyv::option::ArchivedOption;
 
 #[cfg(feature = "serde")]
 pub use serde;
 
 /// An item within a [`Weave`] which can be connected to other items.
-pub trait Node<K, T, S>
+pub trait Node<K, T>
 where
     K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a Self::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
+    /// Identifiers corresponding to the node's children.
+    type From;
+    /// Identifiers corresponding to the node's parents.
+    type To;
+
     /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// An iterator over the identifiers corresponding to the node's children.
-    fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
-    /// An iterator over the identifiers corresponding to the node's parents.
-    fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// Returns a reference to the identifiers corresponding to the node's children.
+    fn from(&self) -> &Self::From;
+    /// Returns a reference to the identifiers corresponding to the node's parents.
+    fn to(&self) -> &Self::To;
     /// Returns a reference to the node's contents.
     fn contents(&self) -> &T;
 }
 
 /// A [`Node`] which contains a copy of its state within the [`Weave`].
-pub trait IntegratedNode<K, T, S>: Node<K, T, S>
+pub trait IntegratedNode<K, T>: Node<K, T>
 where
     K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a Self::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns `true` if the node is considered "active".
     ///
@@ -93,22 +96,33 @@ pub trait DeduplicatableContents {
 }
 
 /// A document linking together multiple [`Node`] objects without cyclical links.
-pub trait Weave<K, N, T, S>
+pub trait Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
-    S: BuildHasher + Default + Clone,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
+    /// Mapping between identifiers and nodes.
+    type Nodes;
+    /// Identifiers of "root" nodes (nodes which do not have any parents).
+    type Roots;
+    /// Identifiers of bookmarked nodes.
+    type Bookmarks;
+
     /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
-    /// Returns a reference to the HashMap used to map identifiers to nodes.
-    fn nodes(&self) -> &HashMap<K, N, S>;
-    /// Returns a reference to the IndexSet used to store the identifiers of "root" nodes (nodes which do not have any parents).
-    fn roots(&self) -> &IndexSet<K, S>;
-    /// Returns a reference to the IndexSet used to store the identifiers of bookmarked nodes.
-    fn bookmarks(&self) -> &IndexSet<K, S>;
+    /// Returns a reference to the identifier:node mapping.
+    fn nodes(&self) -> &Self::Nodes;
+    /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    fn roots(&self) -> &Self::Roots;
+    /// Returns a reference to the identifiers of bookmarked nodes.
+    fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
@@ -119,10 +133,6 @@ where
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
-    /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    ///
-    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
     /// A thread is an identifier list of directly connected nodes which always ends at a root node.
@@ -153,6 +163,31 @@ where
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
+    /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
+    ///
+    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
+    fn remove_node(&mut self, id: &K) -> Option<N>;
+}
+
+/// A [`Weave`] where the ordering of nodes can be user-defined.
+pub trait SortableWeave<K, N, T>: Weave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+    for<'a> &'a N::From:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::To:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a Self::Bookmarks:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+{
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
+    ///
+    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>);
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
     fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts the identifiers of a parent node's children with the specified identifier using the comparison function `cmp`.
@@ -165,42 +200,53 @@ where
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of bookmarked nodes using the comparison function `cmp`.
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
-    /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
-    ///
-    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
-    fn remove_node(&mut self, id: &K) -> Option<N>;
 }
 
 /// A [`Weave`] where only one [`Node`] object can be considered "active" at a time.
-pub trait ActiveSingularWeave<K, N, T, S>: Weave<K, N, T, S>
+pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
-    S: BuildHasher + Default + Clone,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns the active node's identifier, if any.
     fn active(&self) -> Option<K>;
 }
 
 /// A [`Weave`] where every [`Node`] object in the active path is always considered "active".
-pub trait ActivePathWeave<K, N, T, S>: Weave<K, N, T, S>
+pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
-    S: BuildHasher + Default + Clone,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Active: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
-    /// Returns a reference to the HashSet used to store the identifiers of active nodes.
-    fn active(&self) -> &HashSet<K, S>;
+    /// Identifiers of active nodes.
+    type Active;
+
+    /// Returns a reference to the identifiers of active nodes.
+    fn active(&self) -> &Self::Active;
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.
-pub trait IndependentWeave<K, N, T, S>:
-    Weave<K, N, T, S> + SemiIndependentWeave<K, N, T, S>
+pub trait IndependentWeave<K, N, T>: Weave<K, N, T> + SemiIndependentWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
     T: IndependentContents,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Moves a node with the specified identifier to a new set of parent nodes.
     ///
@@ -211,24 +257,32 @@ where
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on the *contents* of their parents in order to be meaningful.
-pub trait SemiIndependentWeave<K, N, T, S>: Weave<K, N, T, S>
+pub trait SemiIndependentWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
     T: IndependentContents,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns a mutable reference to the contents of a node with the specified identifier.
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
 }
 
 /// A [`Weave`] where the contents of [`Node`] objects can be split and merged.
-pub trait DiscreteWeave<K, N, T, S>: Weave<K, N, T, S>
+pub trait DiscreteWeave<K, N, T, S>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
     T: DiscreteContents,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Splits a node with the specified identifier at the given index, creating a new node with the identifier `new_id`.
     ///
@@ -241,12 +295,16 @@ where
 }
 
 /// A [`Weave`] where [`Node`] objects can be meaningfully deduplicated by their contents.
-pub trait DeduplicatableWeave<K, N, T, S>: Weave<K, N, T, S>
+pub trait DeduplicatableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
     T: DeduplicatableContents,
-    S: BuildHasher + Default + Clone,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
@@ -258,12 +316,17 @@ pub trait ArchivedNode<K, T>
 where
     K: Hash + Copy + Eq,
 {
+    /// Identifiers corresponding to the node's children.
+    type From;
+    /// Identifiers corresponding to the node's parents.
+    type To;
+
     /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// An iterator over the identifiers corresponding to the node's children.
-    fn from(&self) -> impl Iterator<Item = K>;
-    /// An iterator over the identifiers corresponding to the node's parents.
-    fn to(&self) -> impl Iterator<Item = K>;
+    /// Returns a reference to the identifiers corresponding to the node's children.
+    fn from(&self) -> &Self::From;
+    /// Returns a reference to the identifiers corresponding to the node's parents.
+    fn to(&self) -> &Self::To;
     /// Returns a reference to the node's contents.
     fn contents(&self) -> &T;
 }
@@ -288,16 +351,23 @@ where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
+    /// Mapping between identifiers and nodes.
+    type Nodes;
+    /// Identifiers of "root" nodes (nodes which do not have any parents).
+    type Roots;
+    /// Identifiers of bookmarked nodes.
+    type Bookmarks;
+
     /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
-    /// Returns a reference to the HashMap used to map identifiers to nodes.
-    fn nodes(&self) -> &ArchivedHashMap<K, N>;
-    /// Returns a reference to the IndexSet used to store "root" nodes (nodes which do not have any parents).
-    fn roots(&self) -> &ArchivedIndexSet<K>;
-    /// Returns a reference to the IndexSet used to store bookmarked nodes.
-    fn bookmarks(&self) -> &ArchivedIndexSet<K>;
+    /// Returns a reference to the identifier:node mapping.
+    fn nodes(&self) -> &Self::Nodes;
+    /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    fn roots(&self) -> &Self::Roots;
+    /// Returns a reference to the identifiers of bookmarked nodes.
+    fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
@@ -344,8 +414,11 @@ where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T>,
 {
-    /// Returns a reference to the HashSet used to store the identifiers of active nodes.
-    fn active(&self) -> &ArchivedHashSet<K>;
+    /// Identifiers of active nodes.
+    type Active;
+
+    /// Returns a reference to the identifiers of active nodes.
+    fn active(&self) -> &Self::Active;
 }
 
 fn add_node_identifiers<K, N, T, S>(
@@ -355,16 +428,21 @@ fn add_node_identifiers<K, N, T, S>(
     identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
-        && node.from().all(|parent| identifier_set.contains(&parent))
+        && node
+            .from()
+            .into_iter()
+            .all(|parent| identifier_set.contains(parent))
     {
         identifiers.push(id);
         identifier_set.insert(id);
-        for child in node.to() {
-            add_node_identifiers(nodes, child, identifiers, identifier_set);
+        for child in node.to().into_iter() {
+            add_node_identifiers(nodes, *child, identifiers, identifier_set);
         }
     }
 }
@@ -376,60 +454,23 @@ fn add_node_identifiers_rev<K, N, T, S>(
     identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq,
-    N: Node<K, T, S>,
+    N: Node<K, T>,
+    for<'a> &'a N::From:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::To:
+        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
-        && node.from().all(|parent| identifier_set.contains(&parent))
+        && node
+            .from()
+            .into_iter()
+            .all(|parent| identifier_set.contains(parent))
     {
         identifiers.push(id);
         identifier_set.insert(id);
-        for child in node.to().rev() {
-            add_node_identifiers_rev(nodes, child, identifiers, identifier_set);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers<K, N, T, S>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id)
-        && node.from().all(|parent| identifier_set.contains(&parent))
-    {
-        identifiers.push(id);
-        identifier_set.insert(id);
-        for child in node.to() {
-            add_archived_node_identifiers(nodes, child, identifiers, identifier_set);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn add_archived_node_identifiers_rev<K, N, T, S>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id)
-        && node.from().all(|parent| identifier_set.contains(&parent))
-    {
-        identifiers.push(id);
-        identifier_set.insert(id);
-        for child in node.to().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(nodes, child, identifiers, identifier_set);
+        for child in node.to().into_iter().rev() {
+            add_node_identifiers_rev(nodes, *child, identifiers, identifier_set);
         }
     }
 }
