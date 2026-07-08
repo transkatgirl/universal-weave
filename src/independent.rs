@@ -25,14 +25,14 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
 use crate::{
-    ArchivedActivePathWeave, ArchivedNode, ArchivedWeave, add_archived_node_identifiers,
-    add_archived_node_identifiers_rev,
+    ArchivedActivePathWeave, ArchivedIntegratedNode, ArchivedNode, ArchivedWeave,
+    add_archived_node_identifiers, add_archived_node_identifiers_rev,
 };
 
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Node, Weave, add_node_identifiers,
-    add_node_identifiers_rev, dependent::DependentWeave,
+    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, Node, Weave,
+    add_node_identifiers, add_node_identifiers_rev, dependent::DependentWeave,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,14 +103,22 @@ where
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.to.iter().copied()
     }
+    fn contents(&self) -> &T {
+        &self.contents
+    }
+}
+
+impl<K, T, S> IntegratedNode<K, T, S> for IndependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
     fn is_active(&self) -> bool {
         self.active
     }
     fn is_bookmarked(&self) -> bool {
         self.bookmarked
-    }
-    fn contents(&self) -> &T {
-        &self.contents
     }
 }
 
@@ -1161,14 +1169,25 @@ where
     fn to(&self) -> impl Iterator<Item = K::Archived> {
         self.to.iter().copied()
     }
+    fn contents(&self) -> &T::Archived {
+        &self.contents
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, S> ArchivedIntegratedNode<K::Archived, T::Archived>
+    for ArchivedIndependentNode<K, T, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
     fn is_active(&self) -> bool {
         self.active
     }
     fn is_bookmarked(&self) -> bool {
         self.bookmarked
-    }
-    fn contents(&self) -> &T::Archived {
-        &self.contents
     }
 }
 

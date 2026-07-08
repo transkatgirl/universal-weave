@@ -23,11 +23,12 @@ use wincode::{SchemaRead, SchemaWrite};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedActiveSingularWeave, ArchivedNode, ArchivedWeave};
+use crate::{ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedNode, ArchivedWeave};
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, Node, SemiIndependentWeave, Weave,
+    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, Node,
+    SemiIndependentWeave, Weave,
 };
 
 #[cfg(feature = "legacy")]
@@ -94,14 +95,21 @@ where
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K> {
         self.to.iter().copied()
     }
+    fn contents(&self) -> &T {
+        &self.contents
+    }
+}
+
+impl<K, T, S> IntegratedNode<K, T, S> for DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     fn is_active(&self) -> bool {
         self.active
     }
     fn is_bookmarked(&self) -> bool {
         self.bookmarked
-    }
-    fn contents(&self) -> &T {
-        &self.contents
     }
 }
 
@@ -627,14 +635,25 @@ where
     fn to(&self) -> impl Iterator<Item = K::Archived> {
         self.to.iter().copied()
     }
+    fn contents(&self) -> &<T as Archive>::Archived {
+        &self.contents
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, S> ArchivedIntegratedNode<K::Archived, T::Archived>
+    for ArchivedDependentNode<K, T, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    S: BuildHasher + Default + Clone,
+{
     fn is_active(&self) -> bool {
         self.active
     }
     fn is_bookmarked(&self) -> bool {
         self.bookmarked
-    }
-    fn contents(&self) -> &<T as Archive>::Archived {
-        &self.contents
     }
 }
 

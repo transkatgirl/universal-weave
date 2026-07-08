@@ -44,14 +44,22 @@ where
     fn from(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
     /// An iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl ExactSizeIterator<Item = K> + DoubleEndedIterator<Item = K>;
+    /// Returns a reference to the node's contents.
+    fn contents(&self) -> &T;
+}
+
+/// A [`Node`] which contains a copy of its state within the [`Weave`].
+pub trait IntegratedNode<K, T, S>: Node<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     /// Returns `true` if the node is considered "active".
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
     /// Returns `true` if the node is bookmarked.
     fn is_bookmarked(&self) -> bool;
-    /// Returns a reference to the node's contents.
-    fn contents(&self) -> &T;
 }
 
 /// [`Node`] contents which can be split apart or merged together.
@@ -135,7 +143,7 @@ where
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
-    /// This function is meant to be used in user interfaces and it's exact behavior is decided by the Weave implementation. The `alternate` argument should be used in cases where an alternative behavior is desired (such as when shift-clicking a button).
+    /// This function is meant to be used in user interfaces and its exact behavior is decided by the Weave implementation. The `alternate` argument should be used in cases where an alternative behavior is desired (such as when shift-clicking a button).
     ///
     /// This function uses [`Weave::set_node_active_status_in_place`] internally.
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
@@ -256,14 +264,21 @@ where
     fn from(&self) -> impl Iterator<Item = K>;
     /// An iterator over the identifiers corresponding to the node's parents.
     fn to(&self) -> impl Iterator<Item = K>;
+    /// Returns a reference to the node's contents.
+    fn contents(&self) -> &T;
+}
+
+/// An [`ArchivedNode`] which contains a copy of its state within the [`Weave`].
+pub trait ArchivedIntegratedNode<K, T>
+where
+    K: Hash + Copy + Eq,
+{
     /// Returns `true` if the node is considered "active".
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
     /// Returns `true` if the node is bookmarked.
     fn is_bookmarked(&self) -> bool;
-    /// Returns a reference to the node's contents.
-    fn contents(&self) -> &T;
 }
 
 #[cfg(feature = "rkyv")]
