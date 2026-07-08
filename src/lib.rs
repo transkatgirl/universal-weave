@@ -2,8 +2,7 @@
 
 // TODO: Unit tests
 // TODO: Node removal callbacks
-// TODO: Add a Weave implementation that supports multi-user (or add this to the existing implementations?)
-// TODO: Add a Weave implementation that supports unbounded undo/redo
+// TODO: Add a Weave implementation that supports multi-user + unbounded undo/redo
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
 pub mod dependent;
