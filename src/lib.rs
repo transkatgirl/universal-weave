@@ -38,8 +38,6 @@ pub use serde;
 pub trait Node<K, T>
 where
     K: Hash + Copy + Eq,
-    for<'a> &'a Self::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Identifiers corresponding to the node's children.
     type From;
@@ -60,8 +58,6 @@ where
 pub trait IntegratedNode<K, T>: Node<K, T>
 where
     K: Hash + Copy + Eq,
-    for<'a> &'a Self::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns `true` if the node is considered "active".
     ///
@@ -106,11 +102,6 @@ pub trait Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
@@ -180,15 +171,6 @@ pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a N::To:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a Self::Bookmarks:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
@@ -213,11 +195,6 @@ pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns the active node's identifier, if any.
     fn active(&self) -> Option<K>;
@@ -228,12 +205,6 @@ pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Active: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Identifiers of active nodes.
     type Active;
@@ -248,11 +219,6 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
     T: IndependentContents,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Moves a node with the specified identifier to a new set of parent nodes.
     ///
@@ -268,11 +234,6 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
     T: IndependentContents,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Returns a mutable reference to the contents of a node with the specified identifier.
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
@@ -284,11 +245,6 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
     T: DiscreteContents,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// Splits a node with the specified identifier at the given index, creating a new node with the identifier `new_id`.
     ///
@@ -306,11 +262,6 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
     T: DeduplicatableContents,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Nodes: IntoIterator<Item = (&'a K, &'a N), IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Roots: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a Self::Bookmarks: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
 {
     /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
@@ -435,8 +386,8 @@ fn add_node_identifiers<K, N, T, S>(
 ) where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
@@ -461,10 +412,8 @@ fn add_node_identifiers_rev<K, N, T, S>(
 ) where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a N::To:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)

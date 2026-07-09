@@ -321,7 +321,7 @@ where
         output.clear();
 
         for root in &self.roots {
-            add_node_identifiers::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
+            add_node_identifiers(&self.nodes, *root, output);
         }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
@@ -377,7 +377,7 @@ where
     /*#[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]*/
     fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
-        Self::set_node_active_status_in_place(self, id, value) // Compiler limitation
+        self.set_node_active_status_in_place(id, value)
     }
     #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
     #[debug_ensures(self.validate())]
@@ -792,10 +792,8 @@ fn add_node_identifiers<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a N::To:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id) {
@@ -810,10 +808,8 @@ fn add_node_identifiers_rev<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identif
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
-    for<'a> &'a N::From:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
-    for<'a> &'a N::To:
-        IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator + DoubleEndedIterator>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id) {

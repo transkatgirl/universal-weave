@@ -553,25 +553,22 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn from(mut value: DependentWeave<K, T, M, S>) -> Self {
-        let mut identifiers = Vec::with_capacity(DependentWeave::<K, T, M, S>::len(&value)); // Compiler limitation
-        DependentWeave::<K, T, M, S>::get_ordered_node_identifiers(&mut value, &mut identifiers); // Compiler limitation
+        let mut identifiers = Vec::with_capacity(value.len());
+        value.get_ordered_node_identifiers(&mut identifiers);
 
         let mut output = Self::with_capacity(value.capacity(), value.metadata);
 
         for identifier in identifiers {
             let node = value.nodes.remove(&identifier).unwrap();
 
-            assert!(Self::add_node(
-                &mut output,
-                IndependentNode {
-                    id: node.id,
-                    from: IndexSet::from_iter(node.from.into_iter()),
-                    to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
-                    active: node.active,
-                    bookmarked: node.bookmarked,
-                    contents: node.contents,
-                }
-            )); // Compiler limitation
+            assert!(output.add_node(IndependentNode {
+                id: node.id,
+                from: IndexSet::from_iter(node.from.into_iter()),
+                to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
+                active: node.active,
+                bookmarked: node.bookmarked,
+                contents: node.contents,
+            }));
         }
 
         output
@@ -617,12 +614,7 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
-                &self.nodes,
-                *root,
-                output,
-                &mut self.scratchpad_set,
-            ); // Compiler limitation
+            add_node_identifiers(&self.nodes, *root, output, &mut self.scratchpad_set);
         }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
