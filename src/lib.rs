@@ -12,6 +12,7 @@ pub mod independent;
 pub mod versioning;
 
 use std::{
+    borrow::{Borrow, BorrowMut},
     cmp::Ordering,
     collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
@@ -115,11 +116,11 @@ where
     /// Returns `true` if the Weave does not contain any nodes.
     fn is_empty(&self) -> bool;
     /// Returns a reference to the identifier:node mapping.
-    fn nodes(&self) -> &Self::Nodes;
+    fn nodes(&self) -> impl Borrow<Self::Nodes>;
     /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
-    fn roots(&self) -> &Self::Roots;
+    fn roots(&self) -> impl Borrow<Self::Roots>;
     /// Returns a reference to the identifiers of bookmarked nodes.
-    fn bookmarks(&self) -> &Self::Bookmarks;
+    fn bookmarks(&self) -> impl Borrow<Self::Bookmarks>;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
@@ -127,7 +128,7 @@ where
     /// The meaning of this value can depend on the underlying Weave implementation.
     fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
-    fn get_node(&self, id: &K) -> Option<&N>;
+    fn get_node(&self, id: &K) -> Option<impl Borrow<N>>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
@@ -210,7 +211,7 @@ where
     type Active;
 
     /// Returns a reference to the identifiers of active nodes.
-    fn active(&self) -> &Self::Active;
+    fn active(&self) -> impl Borrow<Self::Active>;
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.
@@ -236,11 +237,11 @@ where
     T: IndependentContents,
 {
     /// Returns a mutable reference to the contents of a node with the specified identifier.
-    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
+    fn get_contents_mut(&mut self, id: &K) -> Option<impl BorrowMut<T>>;
 }
 
 /// A [`Weave`] where the contents of [`Node`] objects can be split and merged.
-pub trait DiscreteWeave<K, N, T, S>: Weave<K, N, T>
+pub trait DiscreteWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,

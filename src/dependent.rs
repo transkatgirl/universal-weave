@@ -299,12 +299,15 @@ where
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    #[allow(refining_impl_trait)]
     fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
+    #[allow(refining_impl_trait)]
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
+    #[allow(refining_impl_trait)]
     fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
@@ -314,6 +317,7 @@ where
     fn contains_active(&self, id: &K) -> bool {
         self.active == Some(*id)
     }
+    #[allow(refining_impl_trait)]
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -500,7 +504,7 @@ where
     }
 }
 
-impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T, S> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: DiscreteContents,
@@ -608,6 +612,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[allow(refining_impl_trait)]
     fn get_contents_mut(&mut self, id: &K) -> Option<&mut T> {
         self.nodes.get_mut(id).map(|node| &mut node.contents)
     }
