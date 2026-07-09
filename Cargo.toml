@@ -13,6 +13,11 @@ default = [ "rkyv" ]
 rkyv = [
 	"dep:rkyv",
 ]
+#crdt = [
+#	"rkyv",
+#	"dep:crdts",
+#	"dep:crdt_tree",
+#]
 wincode = [
 	"dep:wincode",
 ]
@@ -31,6 +36,8 @@ rkyv = { version = "0.8.17", features = [
 	"pointer_width_32",
 	"indexmap-2",
 ], optional = true }
+#crdts = { version = "7.3.2", optional = true }
+#crdt_tree = { version = "0.0.16", optional = true }
 wincode = { version = "0.5.5", features = [
 	"indexmap",
 	"derive",
@@ -38,14 +45,6 @@ wincode = { version = "0.5.5", features = [
 serde = { version = "1.0.228", features = [
 	"derive",
 ], optional = true }
-
-# TODO: Implement multi-user + undo/redo using loro
-# See also:
-# - https://loro.dev/docs
-# - https://loro.dev/docs/tutorial/tree
-# - https://loro.dev/docs/advanced/undo
-# - https://www.ditto.com/blog/testing-crdts-in-rust-from-theory-to-practice
-#loro = "1.13.6"
 
 #[dev-dependencies]
 #proptest = "1.11.0"

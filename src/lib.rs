@@ -22,6 +22,12 @@ pub use indexmap;
 #[cfg(feature = "rkyv")]
 pub use rkyv;
 
+/*#[cfg(feature = "crdt")]
+pub use crdts;
+
+#[cfg(feature = "crdt")]
+pub use crdt_tree;*/
+
 #[cfg(feature = "rkyv")]
 use rkyv::option::ArchivedOption;
 
