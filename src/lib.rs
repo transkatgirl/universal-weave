@@ -120,6 +120,8 @@ where
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     fn contains_active(&self, id: &K) -> bool;
+    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    fn contains_bookmark(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
@@ -325,6 +327,8 @@ where
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     fn contains_active(&self, id: &K) -> bool;
+    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    fn contains_bookmark(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.

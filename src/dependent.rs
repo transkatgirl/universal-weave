@@ -314,6 +314,9 @@ where
     fn contains_active(&self, id: &K) -> bool {
         self.active == Some(*id)
     }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.bookmarked.contains(id)
+    }
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -708,6 +711,9 @@ where
     }
     fn contains_active(&self, id: &K::Archived) -> bool {
         self.active == Some(*id)
+    }
+    fn contains_bookmark(&self, id: &K::Archived) -> bool {
+        self.bookmarked.contains(id)
     }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
