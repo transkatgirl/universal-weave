@@ -582,5 +582,3 @@ where
         self.weave.find_duplicates(id)
     }
 }
-
-// TODO: Implement ArchivedWeave
