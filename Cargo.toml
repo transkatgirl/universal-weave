@@ -13,19 +13,21 @@ default = [ "rkyv" ]
 rkyv = [
 	"dep:rkyv",
 ]
-#crdt = [
+#loro = [
 #	"rkyv",
-#	"dep:crdts",
-#	"dep:crdt_tree",
+#	"dep:loro",
 #]
 wincode = [
 	"dep:wincode",
 ]
-legacy = [  ]
 serde = [
 	"dep:serde",
 	"indexmap/serde",
 ]
+
+# A deprecated version of DependentWeave used by `tapestry-weave`'s v0 format; Please don't use this!
+legacy = [  ]
+
 
 [dependencies]
 contracts = "0.6.7"
@@ -36,8 +38,7 @@ rkyv = { version = "0.8.17", features = [
 	"pointer_width_32",
 	"indexmap-2",
 ], optional = true }
-#crdts = { version = "7.3.2", optional = true }
-#crdt_tree = { version = "0.0.16", optional = true }
+#loro = { version = "1.13.6", optional = true }
 wincode = { version = "0.5.5", features = [
 	"indexmap",
 	"derive",

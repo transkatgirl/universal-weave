@@ -7,6 +7,7 @@
 
 pub mod dependent;
 pub mod independent;
+pub mod wrappers;
 
 #[cfg(feature = "rkyv")]
 pub mod versioning;
