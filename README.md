@@ -21,7 +21,7 @@ Features:
 	- Stable node ordering
 		- Node sorting
 	- Tree-based Weave implementation
-		- CRDT-based collaborative editing (uses loro & rkyv, **experimental WIP**)
+		- CRDT-based collaborative editing (uses loro & rkyv, **experimental**)
 	- DAG-based Weave implementation (**experimental**)
 		- Node moving
 	- General-purpose weave wrappers: Action queuing (can be used to implement undo/redo)
