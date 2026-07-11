@@ -314,18 +314,31 @@ where
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
         {
-            self.weave
-                .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true);
+            if !self
+                .weave
+                .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true)
+            {
+                metadata
+                    .insert("active_node", to_bytes(&None::<K>).unwrap().into_vec())
+                    .unwrap();
+            };
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
                 "Malformed node".into(),
             )))?
         }
 
-        for bookmark in bookmarks.to_vec() {
+        let mut offset = 0;
+
+        for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
             if let LoroValue::Binary(binary) = bookmark {
-                self.weave
-                    .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true);
+                if !self
+                    .weave
+                    .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true)
+                {
+                    bookmarks.delete(index - offset, 1).unwrap();
+                    offset += 1;
+                };
             } else {
                 Err(rancor::Error::new(loro::LoroError::Unknown(
                     "Malformed bookmark".into(),
@@ -558,7 +571,7 @@ where
                 )
                 .unwrap();
 
-            let mut offset: usize = 0;
+            let mut offset = 0;
             let bookmarks = self.doc.get_movable_list("bookmarks");
 
             for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate() {
