@@ -752,7 +752,7 @@ where
     N: Node<K, T> + Clone,
     T: IndependentContents,
 {
-    /// Intentionally unimplemented; Use [`LoggedWeave::set_contents()`] instead
+    /// Intentionally unimplemented; Use [`LoggedWeave::set_contents()`] instead!
     fn get_contents_mut(&mut self, _id: &K) -> Option<&mut T> {
         unimplemented!("Intentionally unimplemented; Use LoggedWeave::set_contents() instead");
     }
@@ -765,6 +765,7 @@ where
     N: Node<K, T>,
     T: IndependentContents + Clone,
 {
+    /// Must be used instead of [`SemiIndependentWeave::get_contents_mut()`]
     pub fn set_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         if let Some(contents) = self.weave.get_contents_mut(id) {
             let output = callback(contents);
