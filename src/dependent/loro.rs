@@ -319,8 +319,8 @@ where
                 .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true)
             {
                 metadata
-                    .insert("active_node", to_bytes(&None::<K>).unwrap().into_vec())
-                    .unwrap();
+                    .insert("active_node", to_bytes(&None::<K>)?.into_vec())
+                    .map_err(rancor::Error::new)?;
             };
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
@@ -336,7 +336,9 @@ where
                     .weave
                     .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true)
                 {
-                    bookmarks.delete(index - offset, 1).unwrap();
+                    bookmarks
+                        .delete(index - offset, 1)
+                        .map_err(rancor::Error::new)?;
                     offset += 1;
                 };
             } else {
@@ -370,11 +372,14 @@ where
                 active: false,
                 bookmarked: false,
                 contents: from_bytes_aligned(&binary_contents)?,
-            }) && let Some(children) = tree.children(target)
-            {
-                for child in children {
-                    self.import_subtree(tree, child, Some(id))?;
+            }) {
+                if let Some(children) = tree.children(target) {
+                    for child in children {
+                        self.import_subtree(tree, child, Some(id))?;
+                    }
                 }
+            } else {
+                tree.delete(target).map_err(rancor::Error::new)?;
             }
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
