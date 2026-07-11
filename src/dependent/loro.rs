@@ -44,7 +44,6 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    #[allow(clippy::type_complexity)]
     weave: DependentWeave<K, T, M, S>,
     mapping: HashMap<K, TreeID, S>,
     doc: LoroDoc,
