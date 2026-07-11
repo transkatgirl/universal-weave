@@ -529,22 +529,18 @@ where
         }
     }
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        let bookmark_index = if !value {
-            self.weave.bookmarked.get_index_of(id)
-        } else {
-            None
-        };
+        let bookmark_index = self.weave.bookmarked.get_index_of(id);
 
         if self.weave.set_node_bookmarked_status(id, value) {
-            if value {
+            if value && bookmark_index.is_none() {
                 self.doc
                     .get_movable_list("bookmarks")
                     .push(to_bytes(id).unwrap().into_vec())
                     .unwrap();
-            } else {
+            } else if let Some(bookmark_index) = bookmark_index {
                 self.doc
                     .get_movable_list("bookmarks")
-                    .delete(bookmark_index.unwrap(), 1)
+                    .delete(bookmark_index, 1)
                     .unwrap();
             }
 
