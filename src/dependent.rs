@@ -31,6 +31,9 @@ use crate::{
     SemiIndependentWeave, SortableWeave, Weave,
 };
 
+#[cfg(feature = "loro")]
+pub mod loro;
+
 #[cfg(feature = "legacy")]
 pub mod legacy_dependent;
 

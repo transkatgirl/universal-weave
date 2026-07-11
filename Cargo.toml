@@ -13,10 +13,10 @@ default = [ "rkyv" ]
 rkyv = [
 	"dep:rkyv",
 ]
-#loro = [
-#	"rkyv",
-#	"dep:loro",
-#]
+loro = [
+	"rkyv",
+	"dep:loro",
+]
 wincode = [
 	"dep:wincode",
 ]
@@ -38,7 +38,7 @@ rkyv = { version = "0.8.17", features = [
 	"pointer_width_32",
 	"indexmap-2",
 ], optional = true }
-#loro = { version = "1.13.6", optional = true }
+loro = { version = "1.13.6", optional = true }
 wincode = { version = "0.5.5", features = [
 	"indexmap",
 	"derive",

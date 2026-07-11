@@ -23,6 +23,9 @@ pub use indexmap;
 #[cfg(feature = "rkyv")]
 pub use rkyv;
 
+#[cfg(feature = "loro")]
+pub use loro;
+
 #[cfg(feature = "rkyv")]
 use rkyv::option::ArchivedOption;
 
