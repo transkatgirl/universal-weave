@@ -2,7 +2,6 @@
 
 // TODO: Unit tests and property tests (using proptest)
 // TODO: Node removal callbacks
-// TODO: Add a CRDT-based Weave implementation for multi-user use cases
 // TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
 
 pub mod dependent;

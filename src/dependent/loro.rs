@@ -1,4 +1,4 @@
-//! [`loro`] wrapper for [`DependentWeave`] (WIP)
+//! [`loro`] wrapper for [`DependentWeave`]
 
 use std::{
     collections::HashMap,
@@ -21,7 +21,7 @@ use rkyv::{
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContents,
-    DiscreteWeave, IndependentContents, SemiIndependentWeave, Weave,
+    DiscreteWeave, IndependentContents, SemiIndependentWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
@@ -147,6 +147,8 @@ where
         let tree = doc.get_tree("tree");
         let metadata = doc.get_map("metadata");
         let bookmarks = doc.get_movable_list("bookmarks");
+
+        tree.enable_fractional_index(1);
 
         let mut self_nodes = Vec::with_capacity(value.len());
         value.get_ordered_node_identifiers(&mut self_nodes);
@@ -608,7 +610,7 @@ where
     }
 }
 
-/*impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
+impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
@@ -635,34 +637,104 @@ where
         id: &K,
         cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
     ) -> bool {
-        todo!()
+        if self.weave.sort_node_children_by(id, cmp) {
+            let tree = self.doc.get_tree("tree");
+            let parent = self.mapping.get(id).copied().unwrap();
+
+            for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
+                tree.mov_to(
+                    self.mapping.get(child).copied().unwrap(),
+                    Some(parent),
+                    index,
+                )
+                .unwrap();
+            }
+
+            true
+        } else {
+            false
+        }
     }
     fn sort_node_children_by_id(
         &mut self,
         id: &K,
         cmp: impl FnMut(&K, &K) -> std::cmp::Ordering,
     ) -> bool {
-        todo!()
+        if self.weave.sort_node_children_by_id(id, cmp) {
+            let tree = self.doc.get_tree("tree");
+            let parent = self.mapping.get(id).copied().unwrap();
+
+            for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
+                tree.mov_to(
+                    self.mapping.get(child).copied().unwrap(),
+                    Some(parent),
+                    index,
+                )
+                .unwrap();
+            }
+
+            true
+        } else {
+            false
+        }
     }
     fn sort_roots_by(
         &mut self,
         cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
     ) {
-        todo!()
+        self.weave.sort_roots_by(cmp);
+
+        let tree = self.doc.get_tree("tree");
+
+        for (index, root) in self.weave.roots.iter().enumerate() {
+            tree.mov_to(self.mapping.get(root).copied().unwrap(), None, index)
+                .unwrap();
+        }
     }
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> std::cmp::Ordering) {
-        todo!()
+        self.weave.sort_roots_by_id(cmp);
+
+        let tree = self.doc.get_tree("tree");
+
+        for (index, root) in self.weave.roots.iter().enumerate() {
+            tree.mov_to(self.mapping.get(root).copied().unwrap(), None, index)
+                .unwrap();
+        }
     }
     fn sort_bookmarks_by(
         &mut self,
         cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
     ) {
-        todo!()
+        let bookmarks = self.doc.get_movable_list("bookmarks");
+
+        let mut old_bookmarks = self.weave.bookmarked.clone();
+        self.weave.sort_bookmarks_by(cmp);
+
+        for (index, bookmark) in self.weave.bookmarked.iter().enumerate() {
+            let old_index = old_bookmarks.get_index_of(bookmark).unwrap();
+
+            if index != old_index {
+                bookmarks.mov(old_index, index).unwrap();
+                old_bookmarks.move_index(old_index, index);
+            }
+        }
     }
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> std::cmp::Ordering) {
-        todo!()
+        let bookmarks = self.doc.get_movable_list("bookmarks");
+
+        let mut old_bookmarks = self.weave.bookmarked.clone();
+        self.weave.sort_bookmarks_by_id(cmp);
+
+        for (index, bookmark) in self.weave.bookmarked.iter().enumerate() {
+            let old_index = old_bookmarks.get_index_of(bookmark).unwrap();
+
+            if index != old_index {
+                bookmarks.mov(old_index, index).unwrap();
+                old_bookmarks.move_index(old_index, index);
+            }
+        }
     }
-}*/
+}
 
 impl<K, T, M, S> ActiveSingularWeave<K, DependentNode<K, T, S>, T>
     for DependentLoroWeave<K, T, M, S>
