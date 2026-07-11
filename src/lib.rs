@@ -174,7 +174,9 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
+    /// Returns a mutable reference to the Weave's associated metadata.
     fn metadata_mut(&mut self) -> &mut M;
 }
 
@@ -369,6 +371,7 @@ where
 
 /// An [`ArchivedWeave`] containing document-wide metadata.
 pub trait ArchivedMetadataWeave<K, N, T, M> {
+    /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
 }
 
