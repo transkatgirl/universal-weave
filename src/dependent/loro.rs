@@ -46,6 +46,7 @@ where
 {
     weave: DependentWeave<K, T, M, S>,
     mapping: HashMap<K, TreeID, S>,
+    buffer: AlignedVec,
     doc: LoroDoc,
 }
 
@@ -180,6 +181,7 @@ where
         Ok(Self {
             doc,
             mapping,
+            buffer: AlignedVec::with_capacity(4096),
             weave: value,
         })
     }
@@ -209,10 +211,13 @@ where
         let tree = value.get_tree("tree");
         let metadata = value.get_map("metadata");
 
-        let metadata = if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
+        let (metadata, buffer) = if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("contents")
         {
-            from_bytes_aligned(&binary)?
+            let mut buffer = AlignedVec::with_capacity(binary.len().max(4096));
+            buffer.extend_from_slice(&binary);
+
+            (from_bytes(&buffer)?, buffer)
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
                 "Malformed metadata".into(),
@@ -224,6 +229,7 @@ where
 
         let mut wrapped = Self {
             mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
+            buffer,
             weave,
             doc: value,
         };
@@ -298,7 +304,7 @@ where
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) = metadata.get("contents") {
-            self.weave.metadata = from_bytes_aligned(&binary)?;
+            self.weave.metadata = from_bytes_aligned(&binary, &mut self.buffer)?;
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
                 "Malformed metadata".into(),
@@ -313,9 +319,10 @@ where
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
-            && self
-                .weave
-                .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true)
+            && self.weave.set_node_active_status_in_place(
+                &from_bytes_aligned(&binary, &mut self.buffer)?,
+                true,
+            )
         {
         } else {
             metadata
@@ -327,9 +334,10 @@ where
 
         for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
             if let LoroValue::Binary(binary) = bookmark
-                && self
-                    .weave
-                    .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true)
+                && self.weave.set_node_bookmarked_status(
+                    &from_bytes_aligned(&binary, &mut self.buffer)?,
+                    true,
+                )
             {
             } else {
                 bookmarks
@@ -353,7 +361,7 @@ where
             && let Some(ValueOrContainer::Value(LoroValue::Binary(binary_contents))) =
                 meta.get("contents")
         {
-            let id = from_bytes_aligned(&binary_id)?;
+            let id = from_bytes_aligned(&binary_id, &mut self.buffer)?;
             self.mapping.insert(id, target);
 
             if self.weave.add_node(DependentNode {
@@ -362,7 +370,7 @@ where
                 to: IndexSet::default(),
                 active: false,
                 bookmarked: false,
-                contents: from_bytes_aligned(&binary_contents)?,
+                contents: from_bytes_aligned(&binary_contents, &mut self.buffer)?,
             }) {
                 if let Some(children) = tree.children(target) {
                     for child in children {
@@ -380,15 +388,15 @@ where
     }
 }
 
-fn from_bytes_aligned<T, E>(bytes: &[u8]) -> Result<T, E>
+fn from_bytes_aligned<T, E>(bytes: &[u8], buffer: &mut AlignedVec) -> Result<T, E>
 where
     T: Archive,
     T::Archived: for<'a> CheckBytes<HighValidator<'a, E>> + Deserialize<T, Strategy<Pool, E>>,
     E: Source,
 {
-    let mut aligned = AlignedVec::<16>::with_capacity(bytes.len());
-    aligned.extend_from_slice(bytes);
-    from_bytes(&aligned)
+    buffer.clear();
+    buffer.extend_from_slice(bytes);
+    from_bytes(buffer)
 }
 
 impl<K, T, M, S> Weave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
