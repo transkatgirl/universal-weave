@@ -1,6 +1,6 @@
 # Universal Weave
 
-General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
+General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations written in Rust.
 
 > [!WARNING]
 > Most code contained within this repository has undergone minimal testing and may contain major bugs. Please report any bugs that you find.
@@ -19,10 +19,11 @@ Features:
 	- Format versioning (rkyv only)
 	- Convenient traversal methods
 	- Stable node ordering
+		- Node sorting
 	- Tree-based Weave implementation
 		- CRDT-based collaborative editing (uses loro & rkyv, **experimental WIP**)
 	- DAG-based Weave implementation (**experimental**)
 		- Node moving
-	- Weave action logging wrappers
+	- General-purpose weave wrappers: Action logging and counting (can be used to implement undo/redo)
 
-This library is a rust crate which should be included in your project through the use of git submodules. In the future, once the API has been stabilized and the code has been throughly tested, this crate will be published to crates.io.
+This library is a Rust crate which should be included in your project through the use of git submodules. In the future, once the API has been stabilized and the code has been throughly tested, this crate will be published to crates.io.
