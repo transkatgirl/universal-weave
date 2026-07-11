@@ -95,6 +95,29 @@ where
     }
 }
 
+impl<K, T, M, S> From<DependentLoroWeave<K, T, M, S>> for LoroDoc
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    fn from(value: DependentLoroWeave<K, T, M, S>) -> Self {
+        value.doc
+    }
+}
+
 impl<K, T, M, S> TryFrom<DependentWeave<K, T, M, S>> for DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -234,6 +257,9 @@ where
     }
     pub fn into_weave(self) -> DependentWeave<K, T, M, S> {
         self.weave
+    }
+    pub fn into_doc(self) -> LoroDoc {
+        self.doc
     }
     pub fn metadata(&self) -> &M {
         &self.weave.metadata
