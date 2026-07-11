@@ -24,6 +24,6 @@ Features:
 		- CRDT-based collaborative editing (uses loro & rkyv, **experimental WIP**)
 	- DAG-based Weave implementation (**experimental**)
 		- Node moving
-	- General-purpose weave wrappers: Action logging and counting (can be used to implement undo/redo)
+	- General-purpose weave wrappers: Action queuing (can be used to implement undo/redo)
 
 This library is a Rust crate which should be included in your project through the use of git submodules. In the future, once the API has been stabilized and the code has been throughly tested, this crate will be published to crates.io.
