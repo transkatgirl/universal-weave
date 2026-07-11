@@ -23,11 +23,14 @@ use wincode::{SchemaRead, SchemaWrite};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedNode, ArchivedWeave};
+use crate::{
+    ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
+    ArchivedWeave,
+};
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, Node,
+    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave,
 };
 
@@ -440,6 +443,19 @@ where
     }
 }
 
+impl<K, T, M, S> MetadataWeave<K, DependentNode<K, T, S>, T, M> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn metadata(&self) -> &M {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut M {
+        &mut self.metadata
+    }
+}
+
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
@@ -752,6 +768,22 @@ where
         output.clear();
 
         build_thread_archived(&self.nodes, *id, output);
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    fn metadata(&self) -> &M::Archived {
+        &self.metadata
     }
 }
 

@@ -25,6 +25,9 @@ use crate::{
     dependent::{DependentNode, DependentWeave},
 };
 
+#[allow(unused)]
+use crate::MetadataWeave;
+
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
 pub struct DependentLoroWeave<K, T, M, S>
 where
@@ -270,6 +273,7 @@ where
     pub fn metadata(&self) -> &M {
         &self.weave.metadata
     }
+    /// Replacement for [`MetadataWeave::metadata_mut()`]
     pub fn set_metadata(&mut self, metadata: M) {
         self.weave.metadata = metadata;
         self.doc

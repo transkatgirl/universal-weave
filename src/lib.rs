@@ -168,6 +168,16 @@ where
     fn remove_all_nodes(&mut self);
 }
 
+/// A [`Weave`] containing document-wide metadata.
+pub trait MetadataWeave<K, N, T, M>: Weave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    fn metadata(&self) -> &M;
+    fn metadata_mut(&mut self) -> &mut M;
+}
+
 /// A [`Weave`] where the ordering of nodes can be user-defined.
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
@@ -355,6 +365,11 @@ where
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_thread_from(&self, id: &K, output: &mut Vec<K>);
+}
+
+/// An [`ArchivedWeave`] containing document-wide metadata.
+pub trait ArchivedMetadataWeave<K, N, T, M> {
+    fn metadata(&self) -> &M;
 }
 
 #[cfg(feature = "rkyv")]

@@ -9,7 +9,7 @@ use std::{
 
 use crate::{
     ActivePathWeave, ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave, Node,
+    DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave, dependent, independent,
 };
 
@@ -29,7 +29,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-pub struct LoggedWeave<W, K, N, T>
+pub struct LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -41,10 +41,10 @@ where
     pub weave: W,
 
     /// The list of actions that were performed on the attached [`Weave`] in the order they were performed.
-    pub actions: VecDeque<WeaveAction<K, N, T>>,
+    pub actions: VecDeque<WeaveAction<K, N, T, M>>,
 }
 
-impl<W, K, N, T> AsRef<W> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> AsRef<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -55,7 +55,7 @@ where
     }
 }
 
-impl<W, K, N, T> From<W> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> From<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -69,13 +69,13 @@ where
     }
 }
 
-impl<W, K, N, T> LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
-    pub fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T>>) -> Self {
+    pub fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T, M>>) -> Self {
         Self { weave, actions }
     }
     pub fn into_weave(self) -> W {
@@ -93,7 +93,7 @@ where
 
         count
     }
-    fn push_action(&mut self, action: WeaveAction<K, N, T>) {
+    fn push_action(&mut self, action: WeaveAction<K, N, T, M>) {
         self.actions.push_back(action);
     }
 }
@@ -107,7 +107,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-pub enum WeaveAction<K, N, T>
+pub enum WeaveAction<K, N, T, M>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
@@ -124,6 +124,8 @@ where
     RemoveNode(K),
     /// [`Weave::remove_all_nodes()`]
     RemoveAllNodes,
+    /// Caused by [`MetadataWeave::metadata_mut()`] or [`LoggedWeave::set_metadata()`]
+    SetMetadata(M),
     /// (parent, children)
     /// Caused by [`SortableWeave::sort_node_children_by()`], [`SortableWeave::sort_node_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
     SetNodeChildOrdering(Option<K>, Vec<K>),
@@ -238,6 +240,8 @@ pub struct WeaveActionCount {
     pub remove_node: u64,
     /// [`Weave::remove_all_nodes()`]
     pub remove_all_nodes: u64,
+    /// [`MetadataWeave::metadata_mut()`]
+    pub metadata_mut: u64,
     /// [`SortableWeave::sort_node_children_by()`] or [`SortableWeave::sort_node_children_by_id()`]
     pub sort_node_children: u64,
     /// [`SortableWeave::sort_roots_by()`] or [`SortableWeave::sort_roots_by_id()`]
@@ -263,7 +267,7 @@ impl WeaveActionCount {
         *self = Self::default();
     }
     /// Increments the action count corresponding to the [`WeaveAction`]'s type.
-    pub fn increment<K, N, T>(&mut self, action: &WeaveAction<K, N, T>)
+    pub fn increment<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
         K: Hash + Copy + Eq,
         N: Node<K, T>,
@@ -283,6 +287,9 @@ impl WeaveActionCount {
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_add(1),
             WeaveAction::RemoveAllNodes => {
                 self.remove_all_nodes = self.remove_all_nodes.saturating_add(1)
+            }
+            WeaveAction::SetMetadata(_metadata) => {
+                self.metadata_mut = self.metadata_mut.saturating_add(1)
             }
             WeaveAction::SetNodeChildOrdering(parent_id, _children) => match parent_id {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_add(1),
@@ -306,7 +313,7 @@ impl WeaveActionCount {
         };
     }
     /// Decrements the action count corresponding to the [`WeaveAction`]'s type.
-    pub fn decrement<K, N, T>(&mut self, action: &WeaveAction<K, N, T>)
+    pub fn decrement<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
         K: Hash + Copy + Eq,
         N: Node<K, T>,
@@ -326,6 +333,9 @@ impl WeaveActionCount {
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_sub(1),
             WeaveAction::RemoveAllNodes => {
                 self.remove_all_nodes = self.remove_all_nodes.saturating_sub(1)
+            }
+            WeaveAction::SetMetadata(_metadata) => {
+                self.metadata_mut = self.metadata_mut.saturating_sub(1)
             }
             WeaveAction::SetNodeChildOrdering(parent_id, _children) => match parent_id {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_sub(1),
@@ -351,19 +361,20 @@ impl WeaveActionCount {
 }
 
 /// A [`Weave`] which can have [`WeaveAction`]s applied to it.
-pub trait ActionableWeave<K, N, T, S>
+pub trait ActionableWeave<K, N, T, M, S>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
     S: BuildHasher + Default + Clone,
 {
     /// Applies a [`WeaveAction`] to a [`Weave`], panicking on failure.
-    fn apply(&mut self, action: WeaveAction<K, N, T>);
+    fn apply(&mut self, action: WeaveAction<K, N, T, M>);
 }
 
-/*impl<W, K, N, T, S> ActionableWeave<K, N, T, S> for W
+/*impl<W, K, N, T, M, S> ActionableWeave<K, N, T, M, S> for W
 where
     W: Weave<K, N, T>
+        + MetadataWeave<K, N, T, M>
         + SortableWeave<K, N, T>
         + IndependentWeave<K, N, T>
         + SemiIndependentWeave<K, N, T>
@@ -373,7 +384,7 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    fn apply(&mut self, action: WeaveAction<K, N, T>) {
+    fn apply(&mut self, action: WeaveAction<K, N, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus(id, value, alternate) => {
@@ -387,6 +398,9 @@ where
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::SetMetadata(metadata) => {
+                *self.metadata_mut() = metadata;
+            }
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -429,14 +443,14 @@ where
 }*/
 
 // Replace this if/when specialization lands in stable
-impl<K, T, M, S> ActionableWeave<K, dependent::DependentNode<K, T, S>, T, S>
+impl<K, T, M, S> ActionableWeave<K, dependent::DependentNode<K, T, S>, T, M, S>
     for dependent::DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    fn apply(&mut self, action: WeaveAction<K, dependent::DependentNode<K, T, S>, T>) {
+    fn apply(&mut self, action: WeaveAction<K, dependent::DependentNode<K, T, S>, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus(id, value, alternate) => {
@@ -450,6 +464,9 @@ where
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::SetMetadata(metadata) => {
+                *self.metadata_mut() = metadata;
+            }
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -492,14 +509,14 @@ where
 }
 
 // Replace this if/when specialization lands in stable
-impl<K, T, M, S> ActionableWeave<K, independent::IndependentNode<K, T, S>, T, S>
+impl<K, T, M, S> ActionableWeave<K, independent::IndependentNode<K, T, S>, T, M, S>
     for independent::IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    fn apply(&mut self, action: WeaveAction<K, independent::IndependentNode<K, T, S>, T>) {
+    fn apply(&mut self, action: WeaveAction<K, independent::IndependentNode<K, T, S>, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus(id, value, alternate) => {
@@ -513,6 +530,9 @@ where
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::SetMetadata(metadata) => {
+                *self.metadata_mut() = metadata;
+            }
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -554,7 +574,7 @@ where
     }
 }
 
-impl<W, K, N, T> Weave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> Weave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -646,7 +666,25 @@ where
     }
 }
 
-impl<W, K, N, T> SortableWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
+where
+    W: MetadataWeave<K, N, T, M>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+    M: Clone,
+{
+    pub fn metadata(&self) -> &M {
+        self.weave.metadata()
+    }
+    /// Must be used instead of [`MetadataWeave::metadata()`]
+    pub fn set_metadata(&mut self, metadata: M) {
+        *self.weave.metadata_mut() = metadata;
+        let metadata = self.weave.metadata().clone();
+        self.push_action(WeaveAction::SetMetadata(metadata));
+    }
+}
+
+impl<W, K, N, T, M> SortableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SortableWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -721,7 +759,7 @@ where
     }
 }
 
-impl<W, K, N, T> ActiveSingularWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> ActiveSingularWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActiveSingularWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -732,7 +770,7 @@ where
     }
 }
 
-impl<W, K, N, T> ActivePathWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> ActivePathWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActivePathWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -745,7 +783,7 @@ where
     }
 }
 
-impl<W, K, N, T> IndependentWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> IndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -762,7 +800,7 @@ where
     }
 }
 
-impl<W, K, N, T> SemiIndependentWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> SemiIndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SemiIndependentWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -775,7 +813,7 @@ where
     }
 }
 
-impl<W, K, N, T> LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
 where
     W: SemiIndependentWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -795,7 +833,7 @@ where
     }
 }
 
-impl<W, K, N, T> DiscreteWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> DiscreteWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: DiscreteWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -821,7 +859,7 @@ where
     }
 }
 
-impl<W, K, N, T> DeduplicatableWeave<K, N, T> for LoggedWeave<W, K, N, T>
+impl<W, K, N, T, M> DeduplicatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: DeduplicatableWeave<K, N, T>,
     K: Hash + Copy + Eq,
@@ -924,6 +962,21 @@ where
     fn remove_all_nodes(&mut self) {
         self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
         self.weave.remove_all_nodes();
+    }
+}
+
+impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for CountedWeave<W, K, N, T>
+where
+    W: MetadataWeave<K, N, T, M>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    fn metadata(&self) -> &M {
+        self.weave.metadata()
+    }
+    fn metadata_mut(&mut self) -> &mut M {
+        self.count.metadata_mut = self.count.metadata_mut.saturating_add(1);
+        self.weave.metadata_mut()
     }
 }
 

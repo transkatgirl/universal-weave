@@ -24,12 +24,16 @@ use wincode::{SchemaRead, SchemaWrite};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedActivePathWeave, ArchivedIntegratedNode, ArchivedNode, ArchivedWeave};
+use crate::{
+    ArchivedActivePathWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
+    ArchivedWeave,
+};
 
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, Node, SortableWeave,
-    Weave, add_node_identifiers, add_node_identifiers_rev, dependent::DependentWeave,
+    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
+    SortableWeave, Weave, add_node_identifiers, add_node_identifiers_rev,
+    dependent::DependentWeave,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -856,6 +860,20 @@ where
     }
 }
 
+impl<K, T, M, S> MetadataWeave<K, IndependentNode<K, T, S>, T, M> for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn metadata(&self) -> &M {
+        &self.metadata
+    }
+    fn metadata_mut(&mut self) -> &mut M {
+        &mut self.metadata
+    }
+}
+
 impl<K, T, M, S> SortableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
@@ -1341,6 +1359,22 @@ where
 
             output.extend(alternate_thread_list.into_iter().rev());
         }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedMetadataWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived, M::Archived>
+    for ArchivedIndependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    fn metadata(&self) -> &M::Archived {
+        &self.metadata
     }
 }
 
