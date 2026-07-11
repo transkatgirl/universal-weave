@@ -313,38 +313,29 @@ where
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
-        {
-            if !self
+            && self
                 .weave
                 .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true)
-            {
-                metadata
-                    .insert("active_node", to_bytes(&None::<K>)?.into_vec())
-                    .map_err(rancor::Error::new)?;
-            };
+        {
         } else {
-            Err(rancor::Error::new(loro::LoroError::Unknown(
-                "Malformed node".into(),
-            )))?
+            metadata
+                .insert("active_node", to_bytes(&None::<K>)?.into_vec())
+                .map_err(rancor::Error::new)?;
         }
 
         let mut offset = 0;
 
         for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
-            if let LoroValue::Binary(binary) = bookmark {
-                if !self
+            if let LoroValue::Binary(binary) = bookmark
+                && self
                     .weave
                     .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true)
-                {
-                    bookmarks
-                        .delete(index - offset, 1)
-                        .map_err(rancor::Error::new)?;
-                    offset += 1;
-                };
+            {
             } else {
-                Err(rancor::Error::new(loro::LoroError::Unknown(
-                    "Malformed bookmark".into(),
-                )))?
+                bookmarks
+                    .delete(index - offset, 1)
+                    .map_err(rancor::Error::new)?;
+                offset += 1;
             }
         }
 
@@ -382,9 +373,7 @@ where
                 tree.delete(target).map_err(rancor::Error::new)?;
             }
         } else {
-            Err(rancor::Error::new(loro::LoroError::Unknown(
-                "Malformed node".into(),
-            )))?
+            tree.delete(target).map_err(rancor::Error::new)?;
         };
 
         Ok(())
