@@ -50,6 +50,29 @@ where
     doc: LoroDoc,
 }
 
+impl<K, T, M, S> AsRef<DependentWeave<K, T, M, S>> for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    fn as_ref(&self) -> &DependentWeave<K, T, M, S> {
+        &self.weave
+    }
+}
+
 impl<K, T, M, S> From<DependentLoroWeave<K, T, M, S>> for DependentWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -110,27 +133,24 @@ where
 
             let tree_id = tree
                 .create(node.from.map(|id| mapping.get(&id).copied().unwrap()))
-                .map_err(rancor::Error::new)?;
+                .unwrap();
             mapping.insert(node.id, tree_id);
 
-            let meta = tree.get_meta(tree_id).map_err(rancor::Error::new)?;
-            meta.insert("id", to_bytes(&node.id)?.into_vec())
-                .map_err(rancor::Error::new)?;
+            let meta = tree.get_meta(tree_id).unwrap();
+            meta.insert("id", to_bytes(&node.id)?.into_vec()).unwrap();
             meta.insert("contents", to_bytes(&node.contents)?.into_vec())
-                .map_err(rancor::Error::new)?;
+                .unwrap();
         }
 
         metadata
             .insert("active_node", to_bytes(&value.active)?.into_vec())
-            .map_err(rancor::Error::new)?;
+            .unwrap();
         metadata
             .insert("contents", to_bytes(&value.metadata)?.into_vec())
-            .map_err(rancor::Error::new)?;
+            .unwrap();
 
         for bookmark in &value.bookmarked {
-            bookmarks
-                .push(to_bytes(bookmark)?.into_vec())
-                .map_err(rancor::Error::new)?;
+            bookmarks.push(to_bytes(bookmark)?.into_vec()).unwrap();
         }
 
         doc.commit();
@@ -140,6 +160,55 @@ where
             mapping,
             weave: value,
         })
+    }
+}
+
+impl<K, T, M, S> TryFrom<LoroDoc> for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    type Error = rancor::Error;
+
+    fn try_from(value: LoroDoc) -> Result<Self, Self::Error> {
+        let tree = value.get_tree("tree");
+        let metadata = value.get_map("metadata");
+
+        let metadata = if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
+            metadata.get("contents")
+        {
+            from_bytes_aligned(&binary)?
+        } else {
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Malformed metadata".into(),
+            )))?
+        };
+
+        let weave: DependentWeave<K, T, M, S> =
+            DependentWeave::with_capacity(tree.nodes().len(), metadata);
+
+        let mut wrapped = Self {
+            mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
+            weave,
+            doc: value,
+        };
+
+        wrapped.import()?;
+
+        Ok(wrapped)
     }
 }
 
@@ -180,6 +249,11 @@ where
             )
             .unwrap();
     }
+    /// Update the weave's state by modifying the corresponding [`LoroDoc`]
+    ///
+    /// Attempting to clone the inner [`LoroDoc`] and modify it outside of this function *will* lead to unexpected behavior, including but not limited to panics and data loss.
+    ///
+    /// This function is farly slow, so it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     pub fn update(&mut self, callback: impl FnOnce(&mut LoroDoc)) -> Result<(), rancor::Error> {
         callback(&mut self.doc);
         match self.import() {
@@ -200,6 +274,10 @@ where
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) = metadata.get("contents") {
             self.weave.metadata = from_bytes_aligned(&binary)?;
+        } else {
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Malformed metadata".into(),
+            )))?
         }
 
         self.weave.remove_all_nodes();
@@ -213,12 +291,20 @@ where
         {
             self.weave
                 .set_node_active_status_in_place(&from_bytes_aligned(&binary)?, true);
+        } else {
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Malformed node".into(),
+            )))?
         }
 
         for bookmark in bookmarks.to_vec() {
             if let LoroValue::Binary(binary) = bookmark {
                 self.weave
                     .set_node_bookmarked_status(&from_bytes_aligned(&binary)?, true);
+            } else {
+                Err(rancor::Error::new(loro::LoroError::Unknown(
+                    "Malformed bookmark".into(),
+                )))?
             }
         }
 
@@ -252,6 +338,10 @@ where
                     self.import_subtree(tree, child, Some(id))?;
                 }
             }
+        } else {
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Malformed node".into(),
+            )))?
         };
 
         Ok(())
@@ -606,6 +696,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    /// Replacement for [`SemiIndependentWeave::get_contents_mut()`]
     pub fn set_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         if let Some(contents) = self.weave.get_contents_mut(id) {
             let output = callback(contents);
