@@ -847,6 +847,13 @@ where
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
+    #[debug_ensures(self.validate())]
+    fn remove_all_nodes(&mut self) {
+        self.nodes.clear();
+        self.roots.clear();
+        self.active.clear();
+        self.bookmarked.clear();
+    }
 }
 
 impl<K, T, M, S> SortableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>

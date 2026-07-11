@@ -161,6 +161,8 @@ where
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn remove_node(&mut self, id: &K) -> Option<N>;
+    /// Removes all nodes from the Weave.
+    fn remove_all_nodes(&mut self);
 }
 
 /// A [`Weave`] where the ordering of nodes can be user-defined.

@@ -122,6 +122,8 @@ where
     SetNodeBookmarkedStatus(K, bool),
     /// [`Weave::remove_node()`]
     RemoveNode(K),
+    /// [`Weave::remove_all_nodes()`]
+    RemoveAllNodes,
     /// (parent, children)
     /// Caused by [`SortableWeave::sort_node_children_by()`], [`SortableWeave::sort_node_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
     SetNodeChildOrdering(Option<K>, Vec<K>),
@@ -234,6 +236,8 @@ pub struct WeaveActionCount {
     pub set_node_bookmarked_status: u64,
     /// [`Weave::remove_node()`]
     pub remove_node: u64,
+    /// [`Weave::remove_all_nodes()`]
+    pub remove_all_nodes: u64,
     /// [`SortableWeave::sort_node_children_by()`] or [`SortableWeave::sort_node_children_by_id()`]
     pub sort_node_children: u64,
     /// [`SortableWeave::sort_roots_by()`] or [`SortableWeave::sort_roots_by_id()`]
@@ -277,6 +281,9 @@ impl WeaveActionCount {
                 self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_add(1)
             }
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_add(1),
+            WeaveAction::RemoveAllNodes => {
+                self.remove_all_nodes = self.remove_all_nodes.saturating_add(1)
+            }
             WeaveAction::SetNodeChildOrdering(parent_id, _children) => match parent_id {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_add(1),
                 None => self.sort_roots = self.sort_roots.saturating_add(1),
@@ -317,6 +324,9 @@ impl WeaveActionCount {
                 self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_sub(1)
             }
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_sub(1),
+            WeaveAction::RemoveAllNodes => {
+                self.remove_all_nodes = self.remove_all_nodes.saturating_sub(1)
+            }
             WeaveAction::SetNodeChildOrdering(parent_id, _children) => match parent_id {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_sub(1),
                 None => self.sort_roots = self.sort_roots.saturating_sub(1),
@@ -376,6 +386,7 @@ where
                 assert!(self.set_node_bookmarked_status(&id, value))
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -438,6 +449,7 @@ where
                 assert!(self.set_node_bookmarked_status(&id, value))
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -500,6 +512,7 @@ where
                 assert!(self.set_node_bookmarked_status(&id, value))
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
@@ -626,6 +639,10 @@ where
         } else {
             None
         }
+    }
+    fn remove_all_nodes(&mut self) {
+        self.push_action(WeaveAction::RemoveAllNodes);
+        self.weave.remove_all_nodes();
     }
 }
 
@@ -903,6 +920,10 @@ where
         } else {
             None
         }
+    }
+    fn remove_all_nodes(&mut self) {
+        self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
+        self.weave.remove_all_nodes();
     }
 }
 
