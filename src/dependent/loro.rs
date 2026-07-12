@@ -31,6 +31,8 @@ use crate::MetadataWeave;
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
 ///
 /// Some uncommon combinations of concurrent operations may resolve to states that do not accurately reflect user intent, especially if [`DiscreteWeave::split_node()`] or [`DiscreteWeave::merge_with_parent()`] are involved. However, concurrent operations will never cause the underlying [`DependentWeave`] to become internally inconsistent.
+///
+/// It is strongly recommended (but not necessarily required) that you use globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
 pub struct DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
