@@ -161,7 +161,7 @@ where
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
+    /// This function may update other nodes if it is necessary to keep the Weave internally consistent.
     fn remove_node(&mut self, id: &K) -> Option<N>;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
