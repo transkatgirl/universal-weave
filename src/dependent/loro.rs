@@ -29,6 +29,8 @@ use crate::{
 use crate::MetadataWeave;
 
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
+///
+/// Some uncommon combinations of concurrent operations may resolve to states that do not accurately reflect user intent, especially if [`DiscreteWeave::split_node()`] or [`DiscreteWeave::merge_with_parent()`] are involved. However, concurrent operations will never cause the underlying [`DependentWeave`] to become internally inconsistent.
 pub struct DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -772,7 +774,8 @@ where
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
-        + DiscreteContents,
+        + DiscreteContents
+        + IndependentContents, // Required due to possible failure modes
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
     M: Archive,
