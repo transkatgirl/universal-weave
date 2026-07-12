@@ -290,11 +290,11 @@ where
             )
             .unwrap();
     }
-    /// Update the weave's state by modifying the corresponding [`LoroDoc`]
+    /// Update the weave's state by modifying the corresponding [`LoroDoc`].
     ///
-    /// Attempting to clone the inner [`LoroDoc`] and modify it outside of this function *will* lead to unexpected behavior, including but not limited to panics and data loss.
+    /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
-    /// This function is farly slow, so it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
+    /// This function does not squash generated [`LoroDoc`] operations that cancel out.
     pub fn update(&mut self, callback: impl FnOnce(&mut LoroDoc)) -> Result<(), rancor::Error> {
         callback(&mut self.doc);
         match self.import() {
