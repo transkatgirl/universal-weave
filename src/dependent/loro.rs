@@ -487,7 +487,6 @@ where
             && let Some(ValueOrContainer::Value(LoroValue::Binary(binary_contents))) =
                 meta.get("contents")
             && let Ok(id) = from_bytes_aligned(&binary_id, &mut self.buffer)
-            && self.mapping.get(&id) == Some(&target)
             && let Ok(contents) = from_bytes_aligned(&binary_contents, &mut self.buffer)
             && let Some(node) = self.weave.get_node(&id)
             && node.from == parent
