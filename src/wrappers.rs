@@ -229,35 +229,35 @@ where
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct WeaveActionCount {
     /// [`Weave::add_node()`]
-    pub add_node: u64,
+    pub add_node: usize,
     /// [`Weave::set_node_active_status()`]
-    pub set_node_active_status: u64,
+    pub set_node_active_status: usize,
     /// [`Weave::set_node_active_status_in_place()`]
-    pub set_node_active_status_in_place: u64,
+    pub set_node_active_status_in_place: usize,
     /// [`Weave::set_node_bookmarked_status()`]
-    pub set_node_bookmarked_status: u64,
+    pub set_node_bookmarked_status: usize,
     /// [`Weave::remove_node()`]
-    pub remove_node: u64,
+    pub remove_node: usize,
     /// [`Weave::remove_all_nodes()`]
-    pub remove_all_nodes: u64,
+    pub remove_all_nodes: usize,
     /// [`MetadataWeave::metadata_mut()`]
-    pub metadata_mut: u64,
+    pub metadata_mut: usize,
     /// [`SortableWeave::sort_node_children_by()`] or [`SortableWeave::sort_node_children_by_id()`]
-    pub sort_node_children: u64,
+    pub sort_node_children: usize,
     /// [`SortableWeave::sort_roots_by()`] or [`SortableWeave::sort_roots_by_id()`]
-    pub sort_roots: u64,
+    pub sort_roots: usize,
     /// [`SortableWeave::sort_bookmarks_by()`] or [`SortableWeave::sort_bookmarks_by_id()`]
-    pub sort_bookmarks: u64,
+    pub sort_bookmarks: usize,
     /// [`IndependentWeave::move_node()`]
-    pub move_node: u64,
+    pub move_node: usize,
     /// [`SemiIndependentWeave::get_contents_mut()`]
-    pub get_contents_mut: u64,
+    pub get_contents_mut: usize,
     /// [`DiscreteWeave::split_node()`]
-    pub split_node: u64,
+    pub split_node: usize,
     /// [`DiscreteWeave::merge_with_parent()`]
-    pub merge_with_parent: u64,
+    pub merge_with_parent: usize,
     /// User defined; Not incremented/decremented by the [`CountedWeave`] wrapper or [`WeaveActionCount`] functions
-    pub other: u64,
+    pub other: usize,
 }
 
 impl WeaveActionCount {
@@ -269,7 +269,7 @@ impl WeaveActionCount {
         *self = Self::default();
     }
     /// Returns the sum of all action counts.
-    pub fn total_count(&self) -> u64 {
+    pub fn total_count(&self) -> usize {
         self.add_node
             .saturating_add(self.set_node_active_status)
             .saturating_add(self.set_node_active_status_in_place)
