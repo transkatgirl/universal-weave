@@ -20,13 +20,13 @@ use rkyv::{
 };
 
 use crate::{
-    ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContents,
-    DiscreteWeave, IndependentContents, SemiIndependentWeave, SortableWeave, Weave,
+    ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, IndependentContents,
+    SemiIndependentWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
 #[allow(unused)]
-use crate::{MetadataWeave, Node};
+use crate::{DiscreteWeave, MetadataWeave, Node};
 
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
 ///
