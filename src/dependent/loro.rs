@@ -26,13 +26,13 @@ use crate::{
 };
 
 #[allow(unused)]
-use crate::MetadataWeave;
+use crate::{MetadataWeave, Node};
 
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
 ///
-/// Some uncommon combinations of concurrent operations may resolve to states that do not accurately reflect user intent, especially if [`DiscreteWeave::split_node()`] or [`DiscreteWeave::merge_with_parent()`] are involved. However, concurrent operations will never cause the underlying [`DependentWeave`] to become internally inconsistent.
+/// [`DiscreteWeave::split_node()`] and [`DiscreteWeave::merge_with_parent()`] are left intentionally unimplemented due to algorithmic limitations; Splitting/merging node contents must be done by adding a new [`Node`] with the updated contents to the [`Weave`].
 ///
-/// It is strongly recommended (but not necessarily required) that you use globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
+/// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
 pub struct DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -765,7 +765,7 @@ where
     }
 }
 
-impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
+/*impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
@@ -875,7 +875,7 @@ where
             None
         }
     }
-}
+}*/
 
 impl<K, T, M, S> DependentLoroWeave<K, T, M, S>
 where
