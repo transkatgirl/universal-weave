@@ -564,11 +564,9 @@ where
         };
 
         if let Some(node) = self.weave.remove_node(id) {
-            self.mapping.remove(&node.id);
-
             self.doc
                 .get_tree("tree")
-                .delete(self.mapping.get(id).copied().unwrap())
+                .delete(self.mapping.remove(&node.id).unwrap())
                 .unwrap();
 
             self.doc
