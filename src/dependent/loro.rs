@@ -610,6 +610,7 @@ where
     }
 }
 
+// TODO: Find a way to swap Loro items so that reordering will no longer be O(N^2)
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
