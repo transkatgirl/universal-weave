@@ -256,6 +256,8 @@ pub struct WeaveActionCount {
     pub split_node: u64,
     /// [`DiscreteWeave::merge_with_parent()`]
     pub merge_with_parent: u64,
+    /// User defined; Not incremented/decremented by the [`CountedWeave`] wrapper or [`WeaveActionCount`] functions
+    pub other: u64,
 }
 
 impl WeaveActionCount {
@@ -265,6 +267,24 @@ impl WeaveActionCount {
     /// Resets all action counts to zero.
     pub fn reset(&mut self) {
         *self = Self::default();
+    }
+    /// Returns the sum of all action counts.
+    pub fn total_count(&self) -> u64 {
+        self.add_node
+            .saturating_add(self.set_node_active_status)
+            .saturating_add(self.set_node_active_status_in_place)
+            .saturating_add(self.set_node_bookmarked_status)
+            .saturating_add(self.remove_node)
+            .saturating_add(self.remove_all_nodes)
+            .saturating_add(self.metadata_mut)
+            .saturating_add(self.sort_node_children)
+            .saturating_add(self.sort_roots)
+            .saturating_add(self.sort_bookmarks)
+            .saturating_add(self.move_node)
+            .saturating_add(self.get_contents_mut)
+            .saturating_add(self.split_node)
+            .saturating_add(self.merge_with_parent)
+            .saturating_add(self.other)
     }
     /// Increments the action count corresponding to the [`WeaveAction`]'s type.
     pub fn increment<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
