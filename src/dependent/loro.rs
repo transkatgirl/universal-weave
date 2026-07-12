@@ -544,7 +544,7 @@ where
                     .get_movable_list("bookmarks")
                     .push(to_bytes(id).unwrap().into_vec())
                     .unwrap();
-            } else if let Some(bookmark_index) = bookmark_index {
+            } else if !value && let Some(bookmark_index) = bookmark_index {
                 self.doc
                     .get_movable_list("bookmarks")
                     .delete(bookmark_index, 1)
@@ -764,118 +764,6 @@ where
         self.weave.active()
     }
 }
-
-/*impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
-where
-    for<'a> K: Archive
-        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
-        + Hash
-        + Copy
-        + Eq,
-    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<K, Strategy<Pool, rancor::Error>>,
-    for<'a> T: Archive
-        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
-        + DiscreteContents
-        + IndependentContents, // Required due to possible failure modes
-    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
-    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
-    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<M, Strategy<Pool, rancor::Error>>,
-    S: BuildHasher + Default + Clone,
-{
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.weave.split_node(id, at, new_id) {
-            let tree = self.doc.get_tree("tree");
-
-            let left_id = self.mapping.get(id).copied().unwrap();
-            let left_meta = tree.get_meta(left_id).unwrap();
-            let left_children = tree.children(left_id).unwrap();
-
-            left_meta
-                .insert(
-                    "contents",
-                    to_bytes(&self.weave.get_node(id).unwrap().contents)
-                        .unwrap()
-                        .into_vec(),
-                )
-                .unwrap();
-
-            let right_id = tree.create(Some(left_id)).unwrap();
-            self.mapping.insert(new_id, right_id);
-
-            let right_meta = tree.get_meta(right_id).unwrap();
-
-            right_meta
-                .insert("id", to_bytes(&new_id).unwrap().into_vec())
-                .unwrap();
-            right_meta
-                .insert(
-                    "contents",
-                    to_bytes(&self.weave.get_node(&new_id).unwrap().contents)
-                        .unwrap()
-                        .into_vec(),
-                )
-                .unwrap();
-
-            for child in left_children {
-                tree.mov(child, right_id).unwrap();
-            }
-
-            true
-        } else {
-            false
-        }
-    }
-    fn merge_with_parent(&mut self, id: &K) -> Option<K> {
-        let is_active = self.weave.contains_active(id);
-        let bookmark_index = self.weave.bookmarked.get_index_of(id);
-
-        if let Some(new_id) = self.weave.merge_with_parent(id) {
-            let id_bytes = to_bytes(&new_id).unwrap().into_vec();
-            let mapped_id = self.mapping.get(id).copied().unwrap();
-            let mapped_parent_id = self.mapping.get(&new_id).copied().unwrap();
-
-            let tree = self.doc.get_tree("tree");
-
-            for child in tree.children(mapped_id).unwrap() {
-                tree.mov(child, mapped_parent_id).unwrap();
-            }
-
-            tree.delete(mapped_id).unwrap();
-
-            tree.get_meta(mapped_parent_id)
-                .unwrap()
-                .insert(
-                    "contents",
-                    to_bytes(&self.weave.get_node(&new_id).unwrap().contents)
-                        .unwrap()
-                        .into_vec(),
-                )
-                .unwrap();
-
-            if is_active {
-                self.doc
-                    .get_map("metadata")
-                    .insert("active_node", id_bytes)
-                    .unwrap();
-            }
-
-            if let Some(bookmark_index) = bookmark_index {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .delete(bookmark_index, 1)
-                    .unwrap();
-            }
-
-            Some(new_id)
-        } else {
-            None
-        }
-    }
-}*/
 
 impl<K, T, M, S> DependentLoroWeave<K, T, M, S>
 where
