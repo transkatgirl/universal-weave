@@ -178,8 +178,8 @@ where
 {
     /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
-    /// Returns a mutable reference to the Weave's associated metadata.
-    fn metadata_mut(&mut self) -> &mut M;
+    /// Mutable access to the Weave's associated metadata.
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O;
 }
 
 /// A [`Weave`] where the ordering of nodes can be user-defined.
@@ -251,8 +251,8 @@ where
     N: Node<K, T>,
     T: IndependentContents,
 {
-    /// Returns a mutable reference to the contents of a node with the specified identifier.
-    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T>;
+    /// Mutable access to the contents of a node with the specified identifier.
+    fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O>;
 }
 
 /// A [`Weave`] where the contents of [`Node`] objects can be split and merged.

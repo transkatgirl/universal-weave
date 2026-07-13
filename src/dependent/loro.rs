@@ -277,21 +277,6 @@ where
     pub fn into_doc(self) -> LoroDoc {
         self.doc
     }
-    pub fn metadata(&self) -> &M {
-        &self.weave.metadata
-    }
-    /// Replacement for [`MetadataWeave::metadata_mut()`]
-    pub fn update_metadata<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
-        let output = callback(&mut self.weave.metadata);
-        self.doc
-            .get_map("metadata")
-            .insert(
-                "contents",
-                to_bytes(&self.weave.metadata).unwrap().into_vec(),
-            )
-            .unwrap();
-        output
-    }
     /// Update the weave's state by modifying the corresponding [`LoroDoc`].
     ///
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
@@ -739,6 +724,41 @@ where
     }
 }
 
+impl<K, T, M, S> MetadataWeave<K, DependentNode<K, T, S>, T, M> for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    fn metadata(&self) -> &M {
+        &self.weave.metadata
+    }
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        self.weave.metadata_mut(|metadata| {
+            let output = callback(metadata);
+
+            self.doc
+                .get_map("metadata")
+                .insert("contents", to_bytes(metadata).unwrap().into_vec())
+                .unwrap();
+
+            output
+        })
+    }
+}
+
 // TODO: Find a way to swap Loro items so that reordering will no longer be O(N^2)
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
 where
@@ -890,7 +910,8 @@ where
     }
 }
 
-impl<K, T, M, S> DependentLoroWeave<K, T, M, S>
+impl<K, T, M, S> SemiIndependentWeave<K, DependentNode<K, T, S>, T>
+    for DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
@@ -910,23 +931,19 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    /// Replacement for [`SemiIndependentWeave::get_contents_mut()`]
-    pub fn update_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
-        if let Some(contents) = self.weave.get_contents_mut(id) {
+    fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+        self.weave.get_contents_mut(id, |contents| {
             let output = callback(contents);
 
-            let meta = self
-                .doc
+            self.doc
                 .get_tree("tree")
                 .get_meta(self.mapping.get(id).copied().unwrap())
-                .unwrap();
-            meta.insert("contents", to_bytes(contents).unwrap().into_vec())
+                .unwrap()
+                .insert("contents", to_bytes(contents).unwrap().into_vec())
                 .unwrap();
 
-            Some(output)
-        } else {
-            None
-        }
+            output
+        })
     }
 }
 

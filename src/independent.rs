@@ -875,8 +875,8 @@ where
     fn metadata(&self) -> &M {
         &self.metadata
     }
-    fn metadata_mut(&mut self) -> &mut M {
-        &mut self.metadata
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        callback(&mut self.metadata)
     }
 }
 
@@ -1090,8 +1090,10 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    fn get_contents_mut(&mut self, id: &K) -> Option<&mut T> {
-        self.nodes.get_mut(id).map(|node| &mut node.contents)
+    fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+        self.nodes
+            .get_mut(id)
+            .map(|node| callback(&mut node.contents))
     }
 }
 
