@@ -416,7 +416,7 @@ where
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetMetadata(metadata) => {
-                *self.metadata_mut() = metadata;
+                self.metadata_mut(|m| *m = metadata);
             }
             WeaveAction::SetNodeChildOrdering(parent_id, children) => {
                 let mut id_mapping =
@@ -451,7 +451,7 @@ where
             }
             WeaveAction::MoveNode(id, new_parents) => assert!(self.move_node(&id, &new_parents)),
             WeaveAction::SetNodeContent(id, contents) => {
-                *self.get_contents_mut(&id).unwrap() = contents;
+                self.get_contents_mut(&id, |c| *c = contents).unwrap();
             }
             WeaveAction::SplitNode(id, at, new_id) => assert!(self.split_node(&id, at, new_id)),
             WeaveAction::MergeNodeWithParent(id) => assert!(self.merge_with_parent(&id).is_some()),

@@ -386,8 +386,6 @@ where
 
         true
     }
-    /*#[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
-    #[debug_ensures(self.validate())]*/
     fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
         self.set_node_active_status_in_place(id, value)
     }

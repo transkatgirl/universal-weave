@@ -205,7 +205,6 @@ where
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
         let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
 
-        //self.roots.is_subset(&nodes)
         self.roots.is_subset::<S>(&nodes)
             && self.validate_active()
             && self.active.is_subset(&nodes_std)
@@ -258,7 +257,9 @@ where
             return self.active.is_empty();
         }
 
-        HashSet::from_iter(threads.swap_remove(longest.1)).is_subset(&self.active)
+        let thread = threads.swap_remove(longest.1);
+
+        HashSet::from_iter(thread).is_subset(&self.active)
     }
     #[stacksafe]
     fn build_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
