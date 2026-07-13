@@ -124,7 +124,7 @@ where
     RemoveNode(K),
     /// [`Weave::remove_all_nodes()`]
     RemoveAllNodes,
-    /// Caused by [`MetadataWeave::metadata_mut()`] or [`LoggedWeave::set_metadata()`]
+    /// Caused by [`MetadataWeave::metadata_mut()`] or [`LoggedWeave::update_metadata()`]
     SetMetadata(M),
     /// (parent, children)
     /// Caused by [`SortableWeave::sort_node_children_by()`], [`SortableWeave::sort_node_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
@@ -134,7 +134,7 @@ where
     /// [`IndependentWeave::move_node()`]
     MoveNode(K, Vec<K>),
     /// (id, contents)
-    /// Caused by [`SemiIndependentWeave::get_contents_mut()`] or [`LoggedWeave::set_contents()`]
+    /// Caused by [`SemiIndependentWeave::get_contents_mut()`] or [`LoggedWeave::update_contents()`]
     SetNodeContent(K, T),
     /// [`DiscreteWeave::split_node()`]
     SplitNode(K, usize, K),
@@ -696,11 +696,12 @@ where
     pub fn metadata(&self) -> &M {
         self.weave.metadata()
     }
-    /// Must be used instead of [`MetadataWeave::metadata()`]
-    pub fn set_metadata(&mut self, metadata: M) {
-        *self.weave.metadata_mut() = metadata;
+    /// Must be used instead of [`MetadataWeave::metadata_mut()`]
+    pub fn update_metadata<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        let output = callback(self.weave.metadata_mut());
         let metadata = self.weave.metadata().clone();
         self.push_action(WeaveAction::SetMetadata(metadata));
+        output
     }
 }
 
@@ -827,9 +828,9 @@ where
     N: Node<K, T> + Clone,
     T: IndependentContents,
 {
-    /// Intentionally unimplemented; Use [`LoggedWeave::set_contents()`] instead!
+    /// Intentionally unimplemented; Use [`LoggedWeave::update_contents()`] instead!
     fn get_contents_mut(&mut self, _id: &K) -> Option<&mut T> {
-        unimplemented!("Intentionally unimplemented; Use LoggedWeave::set_contents() instead");
+        unimplemented!("Intentionally unimplemented; Use LoggedWeave::update_contents() instead");
     }
 }
 
@@ -841,7 +842,7 @@ where
     T: IndependentContents + Clone,
 {
     /// Must be used instead of [`SemiIndependentWeave::get_contents_mut()`]
-    pub fn set_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+    pub fn update_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         if let Some(contents) = self.weave.get_contents_mut(id) {
             let output = callback(contents);
             let contents = contents.clone();

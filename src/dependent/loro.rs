@@ -281,8 +281,8 @@ where
         &self.weave.metadata
     }
     /// Replacement for [`MetadataWeave::metadata_mut()`]
-    pub fn set_metadata(&mut self, metadata: M) {
-        self.weave.metadata = metadata;
+    pub fn update_metadata<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        let output = callback(&mut self.weave.metadata);
         self.doc
             .get_map("metadata")
             .insert(
@@ -290,6 +290,7 @@ where
                 to_bytes(&self.weave.metadata).unwrap().into_vec(),
             )
             .unwrap();
+        output
     }
     /// Update the weave's state by modifying the corresponding [`LoroDoc`].
     ///
@@ -910,7 +911,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     /// Replacement for [`SemiIndependentWeave::get_contents_mut()`]
-    pub fn set_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+    pub fn update_contents<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         if let Some(contents) = self.weave.get_contents_mut(id) {
             let output = callback(contents);
 
