@@ -17,6 +17,7 @@ Features:
 	- Serialization and deserialization (supports rkyv, serde, wincode)
 		- Zero-copy deserialization (rkyv only)
 	- Format versioning (rkyv only)
+	- Unbounded depth (unsupported for WASM and [some niche targets](https://github.com/rust-lang/stacker/#platform-support))
 	- Convenient traversal methods
 	- Stable node ordering
 		- Node sorting

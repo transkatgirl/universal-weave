@@ -339,15 +339,6 @@ where
         self.scratchpad_list.shrink_to(min_capacity);
         self.scratchpad_set.shrink_to(min_capacity);
     }
-    /*fn active_parents(
-        &self,
-        node: &IndependentNode<K, T, S>,
-    ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
-        node.from
-            .iter()
-            .filter_map(|id| self.nodes.get(id))
-            .filter(|parent| parent.active)
-    }*/
     fn all_parents(
         &self,
         node: &IndependentNode<K, T, S>,
@@ -364,20 +355,6 @@ where
             Box::new(node.from.iter().copied())
         }
     }
-    /*fn siblings_from_active_parents(
-        &self,
-        node: &IndependentNode<K, T, S>,
-    ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
-        self.active_parents(node)
-            .flat_map(|parent| {
-                parent
-                    .to
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id && !node.from.contains(id) && !node.to.contains(id))
-            })
-            .filter_map(|id| self.nodes.get(&id))
-    }*/
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
@@ -426,25 +403,6 @@ where
                 }
             } else {
                 self.scratchpad_list.extend(node.to.iter().copied());
-                /*let selected_children: Vec<_> = node
-                    .to
-                    .iter()
-                    .copied()
-                    .filter(|id| {
-                        !self
-                            .nodes
-                            .get(id)
-                            .iter()
-                            .flat_map(|child| child.from.iter())
-                            .any(|child_parent| {
-                                self.active.contains(child_parent) && *child_parent != node.id
-                            })
-                    })
-                    .collect();
-
-                for child in selected_children {
-                    self.update_node_activity_in_place_inner(&child, false, false);
-                }*/
             }
         }
         match self.nodes.get_mut(id) {
@@ -465,25 +423,6 @@ where
         }
         true
     }
-    /*fn deactivate_top_level_node_recursive(&mut self, id: &u128) -> bool {
-        if let Some(node) = self.nodes.get_mut(id) {
-            if !node.active {
-                return true;
-            }
-            node.active = false;
-            self.active.remove(&node.id);
-
-            let parents: Vec<u128> = node.from.iter().copied().collect();
-
-            for parent in parents {
-                self.deactivate_top_level_node_recursive(&parent);
-            }
-
-            true
-        } else {
-            false
-        }
-    }*/
     #[debug_ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
     fn remove_node_unverified(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
@@ -808,28 +747,6 @@ where
         } else {
             self.update_node_activity_in_place(id, value)
         }
-
-        /*let top_level_deactivation = if !value && let Some(node) = self.nodes.get(id) {
-            if node.active {
-                let has_active_children = node
-                    .to
-                    .iter()
-                    .filter_map(|id| self.nodes.get(id))
-                    .any(|child| child.active);
-
-                !has_active_children
-            } else {
-                false
-            }
-        } else {
-            false
-        };
-
-        if top_level_deactivation {
-            self.deactivate_top_level_node_recursive(id)
-        } else {
-            self.update_node_activity_in_place(id, value)
-        }*/
     }
     #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
     #[debug_ensures(self.validate())]
@@ -1107,16 +1024,6 @@ where
 {
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.nodes.get(id).into_iter().flat_map(|node| {
-            /*let iter: Box<dyn Iterator<Item = &IndependentNode<K, T, S>>> =
-            if node.active && !node.from.is_empty() {
-                Box::new(self.siblings_from_active_parents(node))
-            } else {
-                Box::new(
-                    self.sibling_ids_from_all_parents_including_roots(node)
-                        .filter_map(|id| self.nodes.get(&id)),
-                )
-            };*/
-
             self.sibling_ids_from_all_parents_including_roots(node)
                 .filter_map(|id| self.nodes.get(&id))
                 .filter_map(|sibling| {
