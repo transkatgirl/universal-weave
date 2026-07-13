@@ -17,7 +17,10 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
+pub use contracts;
 pub use indexmap;
+pub use stacksafe;
+pub use tailcall;
 
 #[cfg(feature = "rkyv")]
 pub use rkyv;
@@ -399,6 +402,7 @@ where
     fn active(&self) -> &Self::Active;
 }
 
+#[tailcall::tailcall]
 fn add_node_identifiers<K, N, T, S>(
     nodes: &HashMap<K, N, S>,
     id: K,
@@ -420,11 +424,12 @@ fn add_node_identifiers<K, N, T, S>(
         identifiers.push(id);
         identifier_set.insert(id);
         for child in node.to().into_iter() {
-            add_node_identifiers(nodes, *child, identifiers, identifier_set);
+            tailcall::call! {add_node_identifiers(nodes, *child, identifiers, identifier_set)};
         }
     }
 }
 
+#[tailcall::tailcall]
 fn add_node_identifiers_rev<K, N, T, S>(
     nodes: &HashMap<K, N, S>,
     id: K,
@@ -446,7 +451,7 @@ fn add_node_identifiers_rev<K, N, T, S>(
         identifiers.push(id);
         identifier_set.insert(id);
         for child in node.to().into_iter().rev() {
-            add_node_identifiers_rev(nodes, *child, identifiers, identifier_set);
+            tailcall::call! {add_node_identifiers_rev(nodes, *child, identifiers, identifier_set)};
         }
     }
 }

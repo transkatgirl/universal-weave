@@ -9,6 +9,8 @@ use std::{
 
 use contracts::*;
 use indexmap::IndexSet;
+use stacksafe::stacksafe;
+use tailcall::tailcall;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -258,6 +260,7 @@ where
 
         HashSet::from_iter(threads.swap_remove(longest.1)).is_subset(&self.active)
     }
+    #[stacksafe]
     fn build_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
         if let Some(node) = self.nodes.get(node) {
             let mut has_active_child = false;
@@ -393,6 +396,7 @@ where
     fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place_inner(id, value, true)
     }
+    #[stacksafe]
     fn update_node_activity_in_place_inner(&mut self, id: &K, value: bool, start: bool) -> bool {
         if let Some(node) = self.nodes.get(id) {
             if node.active == value {
@@ -480,6 +484,7 @@ where
         }
     }*/
     #[debug_ensures(!self.nodes.contains_key(id))]
+    #[stacksafe]
     fn remove_node_unverified(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
@@ -513,6 +518,7 @@ where
     }
 }
 
+#[tailcall]
 fn update_removed_child_activity<K, T, S>(
     nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
     active: &mut HashSet<K, S>,
@@ -540,7 +546,7 @@ where
 
         let children: Vec<_> = node.to.iter().copied().collect();
         for child in &children {
-            update_removed_child_activity(nodes, active, child);
+            tailcall::call! {update_removed_child_activity(nodes, active, child)};
         }
 
         true
@@ -1396,6 +1402,7 @@ where
     }
 }
 
+#[tailcall]
 fn build_thread<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
@@ -1419,12 +1426,13 @@ fn build_thread<K, T, S>(
 
         for child in node.to.iter().copied() {
             if active.contains(&child) {
-                build_thread(nodes, active, child, thread_list, thread_set);
+                tailcall::call! {build_thread(nodes, active, child, thread_list, thread_set)};
             }
         }
     }
 }
 
+#[tailcall]
 fn build_thread_until<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
@@ -1450,13 +1458,14 @@ fn build_thread_until<K, T, S>(
         if !stop_at.contains(&id) {
             for child in node.to.iter().copied() {
                 if active.contains(&child) {
-                    build_thread_until(nodes, active, child, stop_at, thread_list, thread_set);
+                    tailcall::call! {build_thread_until(nodes, active, child, stop_at, thread_list, thread_set)};
                 }
             }
         }
     }
 }
 
+#[tailcall]
 fn build_thread_from<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
@@ -1477,12 +1486,13 @@ fn build_thread_from<K, T, S>(
         }
 
         if let Some(parent) = node.from.first().copied() {
-            build_thread_from(nodes, active, parent, thread_list, thread_set);
+            tailcall::call! {build_thread_from(nodes, active, parent, thread_list, thread_set)};
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
+#[tailcall]
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
@@ -1507,13 +1517,14 @@ fn build_thread_archived<K, K2, T, T2, S>(
 
         for child in node.to.iter().copied() {
             if active.contains(&child) {
-                build_thread_archived(nodes, active, child, thread_list, thread_set);
+                tailcall::call! {build_thread_archived(nodes, active, child, thread_list, thread_set)};
             }
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
+#[tailcall]
 fn build_thread_archived_until<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
@@ -1540,14 +1551,14 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
         if !stop_at.contains(&id) {
             for child in node.to.iter().copied() {
                 if active.contains(&child) {
-                    build_thread_archived_until(
+                    tailcall::call! {build_thread_archived_until(
                         nodes,
                         active,
                         child,
                         stop_at,
                         thread_list,
                         thread_set,
-                    );
+                    )};
                 }
             }
         }
@@ -1555,6 +1566,7 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
 }
 
 #[cfg(feature = "rkyv")]
+#[tailcall]
 fn build_thread_from_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
@@ -1576,12 +1588,13 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
         }
 
         if let Some(parent) = node.from.get_index(0).copied() {
-            build_thread_from_archived(nodes, active, parent, thread_list, thread_set);
+            tailcall::call! {build_thread_from_archived(nodes, active, parent, thread_list, thread_set)};
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
+#[tailcall]
 fn add_archived_node_identifiers<K, N, T, S>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
@@ -1601,12 +1614,13 @@ fn add_archived_node_identifiers<K, N, T, S>(
         identifiers.push(id);
         identifier_set.insert(id);
         for child in node.to().iter() {
-            add_archived_node_identifiers(nodes, *child, identifiers, identifier_set);
+            tailcall::call! {add_archived_node_identifiers(nodes, *child, identifiers, identifier_set)};
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
+#[tailcall]
 fn add_archived_node_identifiers_rev<K, N, T, S>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
@@ -1626,7 +1640,7 @@ fn add_archived_node_identifiers_rev<K, N, T, S>(
         identifiers.push(id);
         identifier_set.insert(id);
         for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(nodes, *child, identifiers, identifier_set);
+            tailcall::call! {add_archived_node_identifiers_rev(nodes, *child, identifiers, identifier_set)};
         }
     }
 }

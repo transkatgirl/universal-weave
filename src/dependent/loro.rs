@@ -18,6 +18,7 @@ use rkyv::{
     to_bytes,
     util::AlignedVec,
 };
+use stacksafe::stacksafe;
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, IndependentContents,
@@ -359,6 +360,7 @@ where
 
         Ok(())
     }
+    #[stacksafe] // may be supported by tailcall in the future
     fn import_subtree(
         &mut self,
         tree: &LoroTree,
@@ -475,6 +477,7 @@ where
 
         true
     }
+    #[stacksafe]
     fn validate_subtree(
         &mut self,
         tree: &LoroTree,

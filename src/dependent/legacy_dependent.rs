@@ -8,6 +8,7 @@ use std::{
 
 use contracts::*;
 use indexmap::IndexSet;
+use stacksafe::stacksafe;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -208,6 +209,7 @@ where
         }
     }
     #[debug_ensures(!self.nodes.contains_key(id))]
+    #[stacksafe]
     fn remove_node_unverified(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);

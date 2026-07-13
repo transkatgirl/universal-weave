@@ -32,6 +32,8 @@ legacy = [  ]
 [dependencies]
 contracts = "0.6.7"
 indexmap = "2.14.0"
+tailcall = "2.3.0"
+stacksafe = "1.0.2"
 rkyv = { version = "0.8.17", features = [
 	"little_endian",
 	"aligned",
