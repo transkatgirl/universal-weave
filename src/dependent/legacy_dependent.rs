@@ -405,7 +405,6 @@ where
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
-    T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
