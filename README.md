@@ -3,7 +3,7 @@
 General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations written in Rust.
 
 > [!WARNING]
-> Most code contained within this repository has undergone minimal testing and may contain major bugs. Please report any bugs that you find.
+> Most code contained within this repository is experimental and may contain major bugs. Please report any bugs that you find.
 
 Features:
 - Nodes:

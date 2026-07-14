@@ -360,8 +360,6 @@ where
                 meta.get("contents")
         {
             let id = from_bytes_aligned(&binary_id, &mut self.buffer)?;
-            self.mapping.insert(id, target);
-
             if self.weave.add_node(DependentNode {
                 id,
                 from: parent,
@@ -370,6 +368,8 @@ where
                 bookmarked: false,
                 contents: from_bytes_aligned(&binary_contents, &mut self.buffer)?,
             }) {
+                self.mapping.insert(id, target);
+
                 if let Some(children) = tree.children(target) {
                     for child in children {
                         self.import_subtree(tree, child, Some(id))?;
@@ -690,13 +690,11 @@ where
                 )
                 .unwrap();
 
-            let mut offset = 0;
             let bookmarks = self.doc.get_movable_list("bookmarks");
 
-            for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate() {
-                if self.weave.bookmarked[index - offset] != bookmark {
-                    bookmarks.delete(index - offset, 1).unwrap();
-                    offset += 1;
+            for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
+                if !self.weave.bookmarked.contains(&bookmark) {
+                    bookmarks.delete(index, 1).unwrap();
                 }
             }
 
