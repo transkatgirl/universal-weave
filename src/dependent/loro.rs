@@ -711,6 +711,42 @@ where
             None
         }
     }
+    fn remove_node_tracked(
+        &mut self,
+        id: &K,
+        on_removal: impl FnMut(DependentNode<K, T, S>),
+    ) -> bool {
+        let old_bookmarks: Option<Vec<K>> = if self.weave.contains(id) {
+            Some(self.weave.bookmarked.iter().copied().collect())
+        } else {
+            None
+        };
+
+        if let Some(node) = self.weave.get_node(id) {
+            self.doc
+                .get_tree("tree")
+                .delete(self.mapping.remove(&node.id).unwrap())
+                .unwrap();
+
+            self.doc
+                .get_map("metadata")
+                .insert(
+                    "active_node",
+                    to_bytes(&self.weave.active).unwrap().into_vec(),
+                )
+                .unwrap();
+
+            let bookmarks = self.doc.get_movable_list("bookmarks");
+
+            for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
+                if !self.weave.bookmarked.contains(&bookmark) {
+                    bookmarks.delete(index, 1).unwrap();
+                }
+            }
+        };
+
+        self.weave.remove_node_tracked(id, on_removal)
+    }
     fn remove_all_nodes(&mut self) {
         self.weave.remove_all_nodes();
         self.mapping.clear();

@@ -9,10 +9,7 @@ description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
 [features]
-default = [
-	"rkyv",
-	"loro",
-]
+default = [ "rkyv" ]
 rkyv = [
 	"dep:rkyv",
 ]

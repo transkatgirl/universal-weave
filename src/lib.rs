@@ -1,7 +1,6 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 // TODO: Unit tests and property tests (using proptest)
-// TODO: Node removal callbacks
 // TODO: Formal verification using Verus once it supports enough of the language features
 
 pub mod dependent;
@@ -164,7 +163,13 @@ where
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may update other nodes if it is necessary to keep the Weave internally consistent.
+    ///
+    /// This function uses [`Weave::remove_node_tracked`] internally.
     fn remove_node(&mut self, id: &K) -> Option<N>;
+    /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
+    ///
+    /// This function may update other nodes if it is necessary to keep the Weave internally consistent. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
+    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
 }

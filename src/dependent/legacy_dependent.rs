@@ -228,10 +228,39 @@ where
             if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
                 parent.to.shift_remove(id);
             }
-
             Some(node)
         } else {
             None
+        }
+    }
+    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[stacksafe]
+    fn remove_node_unverified_tracked(
+        &mut self,
+        id: &K,
+        callback: &mut impl FnMut(DependentNode<K, T, S>),
+    ) -> bool {
+        if let Some(node) = self.nodes.remove(id) {
+            self.roots.shift_remove(id);
+            self.bookmarked.shift_remove(id);
+            for child in node.to.iter() {
+                self.remove_node_unverified_tracked(child, callback);
+            }
+            if node.active {
+                self.active = node.from;
+                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                    parent.active = true;
+                } else {
+                    self.active = None;
+                }
+            }
+            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                parent.to.shift_remove(id);
+            }
+            callback(node);
+            true
+        } else {
+            false
         }
     }
 }
@@ -377,6 +406,15 @@ where
     #[debug_ensures(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
+    }
+    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[debug_ensures(self.validate())]
+    fn remove_node_tracked(
+        &mut self,
+        id: &K,
+        mut on_removal: impl FnMut(DependentNode<K, T, S>),
+    ) -> bool {
+        self.remove_node_unverified_tracked(id, &mut on_removal)
     }
     #[debug_ensures(self.validate())]
     fn remove_all_nodes(&mut self) {

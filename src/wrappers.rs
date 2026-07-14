@@ -117,7 +117,7 @@ where
     SetNodeActiveStatusInPlace(K, bool),
     /// [`Weave::set_node_bookmarked_status()`]
     SetNodeBookmarkedStatus(K, bool),
-    /// [`Weave::remove_node()`]
+    /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
     RemoveNode(K),
     /// [`Weave::remove_all_nodes()`]
     RemoveAllNodes,
@@ -233,7 +233,7 @@ pub struct WeaveActionCount {
     pub set_node_active_status_in_place: usize,
     /// [`Weave::set_node_bookmarked_status()`]
     pub set_node_bookmarked_status: usize,
-    /// [`Weave::remove_node()`]
+    /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
     pub remove_node: usize,
     /// [`Weave::remove_all_nodes()`]
     pub remove_all_nodes: usize,
@@ -680,6 +680,14 @@ where
             None
         }
     }
+    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        if self.weave.remove_node_tracked(id, on_removal) {
+            self.actions.push_back(WeaveAction::RemoveNode(*id));
+            true
+        } else {
+            false
+        }
+    }
     fn remove_all_nodes(&mut self) {
         self.actions.push_back(WeaveAction::RemoveAllNodes);
         self.weave.remove_all_nodes();
@@ -970,6 +978,14 @@ where
             Some(removed)
         } else {
             None
+        }
+    }
+    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        if self.weave.remove_node_tracked(id, on_removal) {
+            self.count.remove_node = self.count.remove_node.saturating_add(1);
+            true
+        } else {
+            false
         }
     }
     fn remove_all_nodes(&mut self) {
