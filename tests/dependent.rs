@@ -22,7 +22,7 @@ prop_state_machine! {
     })]
 
     #[test]
-    fn run_dependent_weave(
+    fn run_state_machine(
         sequential
         1..MAX_TRANSITIONS
         =>

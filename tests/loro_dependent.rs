@@ -1,17 +1,13 @@
-use std::{
-    collections::HashSet,
-    hash::{BuildHasher, RandomState},
-};
+use std::hash::{BuildHasher, RandomState};
 
 use indexmap::IndexSet;
-use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runner::Config};
+use proptest::{prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
+use rkyv::{Archive, Deserialize, Serialize};
 use universal_weave::{
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
-    IndependentWeave as IndependentWeaveTrait, MetadataWeave, SemiIndependentWeave, SortableWeave,
-    Weave,
-    independent::{IndependentNode, IndependentWeave},
+    IndependentContents, MetadataWeave, SemiIndependentWeave, SortableWeave, Weave,
+    dependent::{DependentNode, DependentWeave, loro::DependentLoroWeave},
 };
 
 const CASES: u32 = 1024;
@@ -61,14 +57,10 @@ enum WeaveTransition {
     },
     #[proptest(weight = 8)]
     AddNode {
-        #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
-        to_seeds: Vec<u32>,
-        #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
-        from_seeds: Vec<u32>,
+        from_seed: Option<u32>,
         active: bool,
         bookmarked: bool,
         content_seed: u32,
-        length: u32,
     },
     #[proptest(weight = 3)]
     SetNodeActiveStatus {
@@ -118,71 +110,24 @@ enum WeaveTransition {
     SortBookmarksById {
         sort_seed: u32,
     },
-    #[proptest(weight = 3)]
-    MoveNode {
-        #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
-        new_parents_seeds: Vec<u32>,
-        id_seed: u32,
-    },
     GetContentsMut {
         id_seed: u32,
         content_seed: u32,
     },
-    #[proptest(weight = 3)]
-    SplitNode {
-        at_seed: u32,
-        id_seed: u32,
-    },
-    #[proptest(weight = 3)]
-    MergeNodeWithParent {
-        id_seed: u32,
-    },
 }
 
 struct WeaveWrapper {
-    weave: IndependentWeave<u32, WeaveContent, u32, RandomState>,
+    weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
     id_scratchpad: Vec<u32>,
 }
 
+#[derive(Archive, Deserialize, Serialize, PartialEq, Eq)]
 struct WeaveContent {
     length: u32,
-    content_seed: u32,
 }
 
 impl IndependentContents for WeaveContent {}
-
-impl DiscreteContents for WeaveContent {
-    fn split(self, at: usize) -> DiscreteContentResult<Self> {
-        if at == 0 || at as u64 >= self.length as u64 {
-            DiscreteContentResult::One(self)
-        } else {
-            let left = WeaveContent {
-                length: at as u32,
-                content_seed: self.content_seed,
-            };
-            let right = WeaveContent {
-                length: self.length.saturating_sub(at as u32),
-                content_seed: self.content_seed,
-            };
-            assert_eq!(left.length.saturating_add(right.length), self.length);
-            assert_ne!(left.length, 0);
-            assert_ne!(right.length, 0);
-
-            DiscreteContentResult::Two(left, right)
-        }
-    }
-    fn merge(self, value: Self) -> DiscreteContentResult<Self> {
-        if self.content_seed == value.content_seed && !self.length.overflowing_add(value.length).1 {
-            DiscreteContentResult::One(Self {
-                length: self.length.saturating_add(value.length),
-                content_seed: self.content_seed,
-            })
-        } else {
-            DiscreteContentResult::Two(self, value)
-        }
-    }
-}
 
 // Invariants are validated by the function's contracts
 impl StateMachineTest for WeaveWrapper {
@@ -193,7 +138,11 @@ impl StateMachineTest for WeaveWrapper {
         ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) -> Self::SystemUnderTest {
         WeaveWrapper {
-            weave: IndependentWeave::with_capacity(ref_state.len(), ref_state.len() as u32),
+            weave: DependentLoroWeave::try_from(DependentWeave::with_capacity(
+                ref_state.len(),
+                ref_state.len() as u32,
+            ))
+            .unwrap(),
             counter: 0,
             id_scratchpad: Vec::with_capacity(ref_state.len()),
         }
@@ -218,39 +167,19 @@ impl StateMachineTest for WeaveWrapper {
                 .weave
                 .get_thread_from(&map_id(id_seed), &mut state.id_scratchpad),
             WeaveTransition::AddNode {
-                from_seeds,
-                to_seeds,
+                from_seed,
                 active,
                 bookmarked,
-                length,
                 content_seed,
             } => {
-                let from = IndexSet::from_iter(from_seeds.iter().copied().map(&map_id));
-                let to = IndexSet::from_iter(
-                    from_seeds
-                        .into_iter()
-                        .filter_map(|seed| state.weave.get_node(&map_id(seed)))
-                        .zip(to_seeds)
-                        .filter_map(|(from, seed)| {
-                            from.to
-                                .get_index(
-                                    (seed as usize)
-                                        .checked_rem(from.to.len())
-                                        .unwrap_or_default(),
-                                )
-                                .copied()
-                        }),
-                ); // TODO: Improve node selection
-
-                state.weave.add_node(IndependentNode {
+                state.weave.add_node(DependentNode {
                     id: state.counter,
-                    from,
-                    to,
+                    from: from_seed.map(map_id),
+                    to: IndexSet::default(),
                     active,
                     bookmarked,
                     contents: WeaveContent {
-                        length: length % 64,
-                        content_seed: content_seed % 4,
+                        length: content_seed % 64,
                     },
                 });
             }
@@ -328,43 +257,16 @@ impl StateMachineTest for WeaveWrapper {
                     hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
                 });
             }
-            WeaveTransition::MoveNode {
-                id_seed,
-                new_parents_seeds,
-            } => {
-                let new_parents = Vec::from_iter(HashSet::<u32, RandomState>::from_iter(
-                    new_parents_seeds.iter().copied().map(&map_id),
-                )); // TODO: Improve node selection
-
-                state.weave.move_node(&map_id(id_seed), &new_parents);
-            }
             WeaveTransition::GetContentsMut {
                 id_seed,
                 content_seed,
             } => {
                 state
                     .weave
-                    .get_contents_mut(&map_id(id_seed), |c| c.content_seed = content_seed % 4);
-            }
-            WeaveTransition::SplitNode { id_seed, at_seed } => {
-                state.weave.split_node(
-                    &map_id(id_seed),
-                    state
-                        .weave
-                        .get_node(&map_id(id_seed))
-                        .map(|node| {
-                            (at_seed
-                                .checked_rem(node.contents.length)
-                                .unwrap_or_default()) as usize
-                        })
-                        .unwrap_or_default(),
-                    state.counter,
-                );
-            }
-            WeaveTransition::MergeNodeWithParent { id_seed } => {
-                state.weave.merge_with_parent(&map_id(id_seed));
+                    .get_contents_mut(&map_id(id_seed), |c| c.length = content_seed % 64);
             }
         }
+        assert!(state.weave.validate());
         state.counter += 1;
         state
     }

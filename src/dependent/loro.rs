@@ -153,7 +153,7 @@ where
         let metadata = doc.get_map("metadata");
         let bookmarks = doc.get_movable_list("bookmarks");
 
-        tree.enable_fractional_index(1);
+        tree.enable_fractional_index(0);
 
         let mut self_nodes = Vec::with_capacity(value.len());
         value.get_ordered_node_identifiers(&mut self_nodes);
