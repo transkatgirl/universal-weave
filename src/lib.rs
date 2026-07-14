@@ -2,7 +2,7 @@
 
 // TODO: Unit tests and property tests (using proptest)
 // TODO: Node removal callbacks
-// TODO: Use a formal verifier (such as Creusot, Kani, Verus, etc...) once one of them supports enough of the language features
+// TODO: Formal verification using Verus once it supports enough of the language features
 
 pub mod dependent;
 pub mod independent;
