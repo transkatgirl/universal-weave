@@ -346,7 +346,7 @@ where
 
         Ok(())
     }
-    #[stacksafe] // may be supported by tailcall in the future
+    #[stacksafe]
     fn import_subtree(
         &mut self,
         tree: &LoroTree,

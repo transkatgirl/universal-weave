@@ -9,7 +9,10 @@ description = "A flexible data format intended for \"loom\" implementations."
 edition = "2024"
 
 [features]
-default = [ "rkyv" ]
+default = [
+	"rkyv",
+	"loro",
+]
 rkyv = [
 	"dep:rkyv",
 ]
@@ -32,7 +35,6 @@ legacy = [  ]
 [dependencies]
 contracts = "0.6.7"
 indexmap = "2.14.0"
-tailcall = "2.3.0"
 stacksafe = "1.0.2"
 rkyv = { version = "0.8.17", features = [
 	"little_endian",

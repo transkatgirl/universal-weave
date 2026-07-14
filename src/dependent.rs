@@ -9,7 +9,6 @@ use std::{
 use contracts::*;
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
-use tailcall::tailcall;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -805,7 +804,7 @@ where
     }
 }
 
-#[tailcall]
+#[stacksafe]
 fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: K, thread: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
@@ -814,13 +813,13 @@ where
     if let Some(node) = nodes.get(&id) {
         thread.push(id);
         if let Some(parent) = node.from {
-            tailcall::call! {build_thread(nodes, parent, thread)};
+            build_thread(nodes, parent, thread);
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
-#[tailcall]
+#[stacksafe]
 fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
     id: K::Archived,
@@ -834,12 +833,12 @@ fn build_thread_archived<K, K2, T, T2, S>(
     if let Some(node) = nodes.get(&id) {
         thread.push(id);
         if let ArchivedOption::Some(parent) = node.from {
-            tailcall::call! {build_thread_archived(nodes, parent, thread)};
+            build_thread_archived(nodes, parent, thread);
         }
     }
 }
 
-#[tailcall]
+#[stacksafe]
 fn add_node_identifiers<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
@@ -851,12 +850,12 @@ where
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
         for child in node.to().into_iter() {
-            tailcall::call! {add_node_identifiers(nodes, *child, identifiers)};
+            add_node_identifiers(nodes, *child, identifiers);
         }
     }
 }
 
-#[tailcall]
+#[stacksafe]
 fn add_node_identifiers_rev<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
 where
     K: Hash + Copy + Eq,
@@ -868,13 +867,13 @@ where
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
         for child in node.to().into_iter().rev() {
-            tailcall::call! {add_node_identifiers_rev(nodes, *child, identifiers)};
+            add_node_identifiers_rev(nodes, *child, identifiers);
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
-#[tailcall]
+#[stacksafe]
 fn add_archived_node_identifiers<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
@@ -886,13 +885,13 @@ fn add_archived_node_identifiers<K, N, T>(
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
         for child in node.to().iter() {
-            tailcall::call! {add_archived_node_identifiers(nodes, *child, identifiers)};
+            add_archived_node_identifiers(nodes, *child, identifiers);
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
-#[tailcall]
+#[stacksafe]
 fn add_archived_node_identifiers_rev<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
@@ -904,7 +903,7 @@ fn add_archived_node_identifiers_rev<K, N, T>(
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
         for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
-            tailcall::call! {add_archived_node_identifiers_rev(nodes, *child, identifiers)};
+            add_archived_node_identifiers_rev(nodes, *child, identifiers);
         }
     }
 }
