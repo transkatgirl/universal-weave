@@ -1103,11 +1103,22 @@ where
             self.roots.shift_remove(&node.id);
         }
 
-        if node.active
-            && !has_active_new_parents
-            && let Some(first_parent) = node.from.first().copied()
-        {
-            assert!(self.update_node_activity_in_place(&first_parent, true));
+        if node.active {
+            if node.from.is_empty() {
+                let active_roots: Vec<_> = self
+                    .roots
+                    .iter()
+                    .copied()
+                    .filter(|root| *root != *id && self.active.contains(root))
+                    .collect();
+
+                for root in active_roots {
+                    assert!(self.update_node_activity_in_place(&root, false));
+                }
+            } else if !has_active_new_parents && let Some(first_parent) = node.from.first().copied()
+            {
+                assert!(self.update_node_activity_in_place(&first_parent, true));
+            }
         }
 
         true
