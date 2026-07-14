@@ -612,6 +612,7 @@ where
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
+        self.scratchpad_list.clear();
         self.scratchpad_set.clear();
 
         for active_root in self
@@ -1576,6 +1577,7 @@ fn add_archived_node_identifiers<K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && !identifier_set.contains(&id)
         && node
             .from()
             .iter()
@@ -1602,6 +1604,7 @@ fn add_archived_node_identifiers_rev<K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && !identifier_set.contains(&id)
         && node
             .from()
             .iter()

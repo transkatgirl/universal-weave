@@ -420,6 +420,7 @@ fn add_node_identifiers<K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && !identifier_set.contains(&id)
         && node
             .from()
             .into_iter()
@@ -447,6 +448,7 @@ fn add_node_identifiers_rev<K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
+        && !identifier_set.contains(&id)
         && node
             .from()
             .into_iter()
