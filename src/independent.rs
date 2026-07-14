@@ -693,47 +693,8 @@ where
         }
 
         if node.from.is_empty() {
-            if node.active {
-                let active_roots: Vec<_> = self
-                    .roots
-                    .iter()
-                    .copied()
-                    .filter(|root| self.active.contains(root))
-                    .collect();
-
-                for root in &active_roots {
-                    self.update_node_activity_in_place(root, false);
-                }
-            }
-
             self.roots.insert(node.id);
         } else {
-            if node.active {
-                let has_active_parents =
-                    node.from.iter().any(|parent| self.active.contains(parent));
-
-                if has_active_parents {
-                    let active_siblings: Vec<_> = node
-                        .from
-                        .iter()
-                        .filter_map(|id| self.nodes.get(id))
-                        .flat_map(|parent| {
-                            parent.to.iter().copied().filter(|id| {
-                                *id != node.id && !node.from.contains(id) && !node.to.contains(id)
-                            })
-                        })
-                        .filter(|sibling| self.active.contains(sibling))
-                        .collect();
-
-                    for sibling in active_siblings {
-                        self.update_node_activity_in_place(&sibling, false);
-                    }
-                } else {
-                    let parent = node.from.first().unwrap();
-                    self.update_node_activity_in_place(parent, true);
-                }
-            }
-
             for parent in &node.from {
                 let parent = self.nodes.get_mut(parent).unwrap();
                 parent.to.insert(node.id);
@@ -745,15 +706,19 @@ where
             child.from.insert(node.id);
         }
 
-        if node.active {
-            self.active.insert(node.id);
-        }
-
         if node.bookmarked {
             self.bookmarked.insert(node.id);
         }
 
+        let id = node.id;
+        let active = node.active;
+        node.active = false;
+
         self.nodes.insert(node.id, node);
+
+        if active {
+            self.update_node_activity_in_place(&id, true);
+        }
 
         true
     }
@@ -1090,19 +1055,11 @@ where
 {
     #[debug_ensures(self.validate())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
-        let mut has_active_new_parents = false;
-
-        for new_parent in new_parents {
-            match self.nodes.get(new_parent) {
-                Some(new_parent) => {
-                    if new_parent.active {
-                        has_active_new_parents = true;
-                    }
-                }
-                None => {
-                    return false;
-                }
-            }
+        if new_parents
+            .iter()
+            .any(|new_parent| !self.nodes.contains_key(new_parent))
+        {
+            return false;
         }
 
         let new_parents = IndexSet::from_iter(new_parents.iter().copied());
@@ -1111,14 +1068,14 @@ where
             return false;
         }
 
-        if let Some(node) = self.nodes.get_mut(id) {
+        let old_parents_ex_new = if let Some(node) = self.nodes.get_mut(id) {
             for child in &node.to {
                 if new_parents.contains(child) {
                     return false;
                 }
             }
 
-            let old_parents = mem::take(&mut node.from);
+            let mut old_parents = mem::take(&mut node.from);
 
             for old_parent in &old_parents {
                 if !new_parents.contains(old_parent)
@@ -1133,11 +1090,15 @@ where
                     && let Some(new_parent) = self.nodes.get_mut(new_parent)
                 {
                     new_parent.to.insert(*id);
+                } else {
+                    old_parents.swap_remove(new_parent);
                 }
             }
+
+            old_parents
         } else {
             return false;
-        }
+        };
 
         let node = self.nodes.get_mut(id).unwrap();
         node.from = new_parents;
@@ -1149,20 +1110,11 @@ where
         }
 
         if node.active {
-            if node.from.is_empty() {
-                let active_roots: Vec<_> = self
-                    .roots
-                    .iter()
-                    .copied()
-                    .filter(|root| *root != *id && self.active.contains(root))
-                    .collect();
+            node.active = false;
+            assert!(self.update_node_activity_in_place(id, true));
 
-                for root in active_roots {
-                    assert!(self.update_node_activity_in_place(&root, false));
-                }
-            } else if !has_active_new_parents && let Some(first_parent) = node.from.first().copied()
-            {
-                assert!(self.update_node_activity_in_place(&first_parent, true));
+            for old_parent in old_parents_ex_new {
+                update_removed_child_activity(&mut self.nodes, &mut self.active, &old_parent);
             }
         }
 
