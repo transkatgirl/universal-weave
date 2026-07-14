@@ -293,12 +293,12 @@ where
         build_thread(&self.nodes, *id, output);
     }
     #[debug_ensures(self.validate())]
-    #[requires(self.under_max_size())]
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
-        let is_invalid =
-            self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty();
-
-        if is_invalid {
+        if self.nodes.contains_key(&node.id)
+            || !node.validate()
+            || !node.to.is_empty()
+            || !self.under_max_size()
+        {
             return false;
         }
 
@@ -479,9 +479,8 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[debug_ensures(self.validate())]
-    #[requires(self.under_max_size())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.nodes.contains_key(&new_id) || *id == new_id {
+        if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
             return false;
         }
 
