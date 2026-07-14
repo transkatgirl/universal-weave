@@ -335,16 +335,6 @@ where
     ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
         node.from.iter().filter_map(|id| self.nodes.get(id))
     }
-    fn all_parent_ids_or_roots<'a>(
-        &'a self,
-        node: &'a IndependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = K> + 'a> {
-        if node.from.is_empty() {
-            Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
-        } else {
-            Box::new(node.from.iter().copied())
-        }
-    }
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
         node: &'a IndependentNode<K, T, S>,
@@ -379,20 +369,21 @@ where
             }
 
             if value {
-                let has_active_parents = self
-                    .all_parent_ids_or_roots(node)
+                let has_active_parents = node
+                    .from
+                    .iter()
+                    .copied()
                     .any(|parent| self.active.contains(&parent));
-                if has_active_parents {
-                    let active_siblings: Vec<_> = self
-                        .sibling_ids_from_all_parents_including_roots(node)
-                        .filter(|sibling| self.active.contains(sibling))
-                        .collect();
+                let active_siblings: Vec<_> = self
+                    .sibling_ids_from_all_parents_including_roots(node)
+                    .filter(|sibling| self.active.contains(sibling))
+                    .collect();
 
-                    for sibling in active_siblings {
-                        self.update_node_activity_in_place_inner(&sibling, false, false);
-                    }
-                } else if let Some(parent) = node.from.first().copied() {
+                if !has_active_parents && let Some(parent) = node.from.first().copied() {
                     self.update_node_activity_in_place_inner(&parent, true, false);
+                }
+                for sibling in active_siblings {
+                    self.update_node_activity_in_place_inner(&sibling, false, false);
                 }
             } else {
                 self.scratchpad_list.extend(node.to.iter().copied());
