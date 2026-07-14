@@ -330,12 +330,17 @@ where
         let mut offset = 0;
 
         for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
-            if let LoroValue::Binary(binary) = bookmark
-                && self.weave.set_node_bookmarked_status(
-                    &from_bytes_aligned(&binary, &mut self.buffer)?,
-                    true,
-                )
-            {
+            if let LoroValue::Binary(binary) = bookmark {
+                let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
+
+                if self.weave.contains_bookmark(&bookmark)
+                    || !self.weave.set_node_bookmarked_status(&bookmark, true)
+                {
+                    bookmarks
+                        .delete(index - offset, 1)
+                        .map_err(rancor::Error::new)?;
+                    offset += 1;
+                }
             } else {
                 bookmarks
                     .delete(index - offset, 1)
