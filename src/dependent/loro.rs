@@ -480,9 +480,10 @@ where
             && let Some(node) = self.weave.get_node(&id)
             && node.from == parent
             && node.contents == contents
-            && let Some(children) = tree.children(target)
         {
             *counter += 1;
+
+            let children = tree.children(target).unwrap_or_default();
 
             if node.to.len() != children.len() {
                 return false;
