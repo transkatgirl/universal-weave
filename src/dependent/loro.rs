@@ -722,10 +722,10 @@ where
             None
         };
 
-        if let Some(node) = self.weave.get_node(id) {
+        if self.weave.remove_node_tracked(id, on_removal) {
             self.doc
                 .get_tree("tree")
-                .delete(self.mapping.remove(&node.id).unwrap())
+                .delete(self.mapping.remove(id).unwrap())
                 .unwrap();
 
             self.doc
@@ -743,9 +743,11 @@ where
                     bookmarks.delete(index, 1).unwrap();
                 }
             }
-        };
 
-        self.weave.remove_node_tracked(id, on_removal)
+            true
+        } else {
+            false
+        }
     }
     fn remove_all_nodes(&mut self) {
         self.weave.remove_all_nodes();
