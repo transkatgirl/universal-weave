@@ -616,7 +616,10 @@ where
             if active {
                 self.doc
                     .get_map("metadata")
-                    .insert("active_node", id_bytes)
+                    .insert(
+                        "active_node",
+                        to_bytes(&self.weave.active).unwrap().into_vec(),
+                    )
                     .unwrap();
             }
 
