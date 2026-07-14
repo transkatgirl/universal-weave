@@ -524,7 +524,7 @@ where
 
         if let Some(mut node) = self.nodes.remove(id) {
             match node.contents.split(at) {
-                DiscreteContentResult::Two((left, right)) => {
+                DiscreteContentResult::Two(left, right) => {
                     let left_node = DependentNode {
                         id: node.id,
                         from: node.from,
@@ -571,7 +571,7 @@ where
                 }
 
                 match parent.contents.merge(node.contents) {
-                    DiscreteContentResult::Two((left, right)) => {
+                    DiscreteContentResult::Two(left, right) => {
                         parent.contents = left;
                         node.contents = right;
                         self.nodes.insert(parent.id, parent);

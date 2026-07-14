@@ -80,7 +80,7 @@ pub trait DiscreteContents: Sized {
 /// A type representing the results of an action on a [`DiscreteContents`] item.
 pub enum DiscreteContentResult<T> {
     One(T),
-    Two((T, T)),
+    Two(T, T),
 }
 
 /// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
