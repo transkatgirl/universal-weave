@@ -625,8 +625,9 @@ where
                 &self.nodes,
                 &self.active,
                 active_root,
-                output,
+                &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
+                output,
             );
         }
 
@@ -656,7 +657,7 @@ where
                 .copied()
                 .filter(|root| self.active.contains(root))
             {
-                build_thread_until(
+                if build_thread_until(
                     &self.nodes,
                     &self.active,
                     active_root,
@@ -671,7 +672,9 @@ where
                     ),
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set,
-                );
+                ) {
+                    break;
+                }
             }
 
             output.extend(self.scratchpad_list.drain(..).rev());
@@ -1278,6 +1281,7 @@ where
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        let mut thread_list = Vec::with_capacity(self.len());
         let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
 
         for active_root in self
@@ -1290,8 +1294,9 @@ where
                 &self.nodes,
                 &self.active,
                 active_root,
-                output,
+                &mut thread_list,
                 &mut thread_set,
+                output,
             );
         }
 
@@ -1316,7 +1321,7 @@ where
                 .copied()
                 .filter(|root| self.active.contains(root))
             {
-                build_thread_archived_until(
+                if build_thread_archived_until(
                     &self.nodes,
                     &self.active,
                     active_root,
@@ -1331,7 +1336,9 @@ where
                         .collect::<HashSet<K2, S>>(),
                     &mut alternate_thread_list,
                     &mut thread_set,
-                );
+                ) {
+                    break;
+                }
             }
 
             output.extend(alternate_thread_list.into_iter().rev());
@@ -1378,8 +1385,9 @@ fn build_thread<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     active: &HashSet<K, S>,
     id: K,
-    thread_list: &mut Vec<K>,
+    scratchpad_list: &mut Vec<K>,
     thread_set: &mut HashSet<K, S>,
+    thread_list: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
     T: IndependentContents,
@@ -1391,15 +1399,29 @@ fn build_thread<K, T, S>(
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
+        && thread_set.insert(id)
     {
-        thread_list.push(id);
-        thread_set.insert(id);
+        scratchpad_list.push(id);
+
+        if scratchpad_list.len() > thread_list.len() {
+            thread_list.clone_from(scratchpad_list);
+        }
 
         for child in node.to.iter().copied() {
             if active.contains(&child) {
-                build_thread(nodes, active, child, thread_list, thread_set);
+                build_thread(
+                    nodes,
+                    active,
+                    child,
+                    scratchpad_list,
+                    thread_set,
+                    thread_list,
+                );
             }
         }
+
+        scratchpad_list.pop();
+        thread_set.remove(&id);
     }
 }
 
@@ -1411,7 +1433,8 @@ fn build_thread_until<K, T, S>(
     stop_at: &HashSet<K, S>,
     thread_list: &mut Vec<K>,
     thread_set: &mut HashSet<K, S>,
-) where
+) -> bool
+where
     K: Hash + Copy + Eq,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
@@ -1422,17 +1445,27 @@ fn build_thread_until<K, T, S>(
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
+        && thread_set.insert(id)
     {
         thread_list.push(id);
-        thread_set.insert(id);
 
         if !stop_at.contains(&id) {
             for child in node.to.iter().copied() {
-                if active.contains(&child) {
-                    build_thread_until(nodes, active, child, stop_at, thread_list, thread_set);
+                if active.contains(&child)
+                    && build_thread_until(nodes, active, child, stop_at, thread_list, thread_set)
+                {
+                    return true;
                 }
             }
+
+            thread_list.pop();
+            thread_set.remove(&id);
+            false
+        } else {
+            true
         }
+    } else {
+        false
     }
 }
 
@@ -1468,8 +1501,9 @@ fn build_thread_archived<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
     id: K::Archived,
-    thread_list: &mut Vec<K::Archived>,
+    scratchpad_list: &mut Vec<K::Archived>,
     thread_set: &mut HashSet<K::Archived, S>,
+    thread_list: &mut Vec<K::Archived>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq,
@@ -1482,15 +1516,29 @@ fn build_thread_archived<K, K2, T, T2, S>(
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
+        && thread_set.insert(id)
     {
-        thread_list.push(id);
-        thread_set.insert(id);
+        scratchpad_list.push(id);
+
+        if scratchpad_list.len() > thread_list.len() {
+            thread_list.clone_from(scratchpad_list);
+        }
 
         for child in node.to.iter().copied() {
             if active.contains(&child) {
-                build_thread_archived(nodes, active, child, thread_list, thread_set);
+                build_thread_archived(
+                    nodes,
+                    active,
+                    child,
+                    scratchpad_list,
+                    thread_set,
+                    thread_list,
+                );
             }
         }
+
+        scratchpad_list.pop();
+        thread_set.remove(&id);
     }
 }
 
@@ -1503,7 +1551,8 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
     stop_at: &HashSet<K::Archived, S>,
     thread_list: &mut Vec<K::Archived>,
     thread_set: &mut HashSet<K::Archived, S>,
-) where
+) -> bool
+where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq,
     T: Archive<Archived = T2> + IndependentContents,
@@ -1515,24 +1564,34 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
             .iter()
             .filter(|parent| active.contains(*parent))
             .all(|parent| thread_set.contains(parent))
+        && thread_set.insert(id)
     {
         thread_list.push(id);
-        thread_set.insert(id);
 
         if !stop_at.contains(&id) {
             for child in node.to.iter().copied() {
-                if active.contains(&child) {
-                    build_thread_archived_until(
+                if active.contains(&child)
+                    && build_thread_archived_until(
                         nodes,
                         active,
                         child,
                         stop_at,
                         thread_list,
                         thread_set,
-                    );
+                    )
+                {
+                    return true;
                 }
             }
+
+            thread_list.pop();
+            thread_set.remove(&id);
+            false
+        } else {
+            true
         }
+    } else {
+        false
     }
 }
 
