@@ -648,8 +648,10 @@ where
 
         for child in &node.to {
             let child = self.nodes.get(child).unwrap();
-            if child.from.is_empty() && child.active {
-                node.active = true;
+            if child.from.is_empty() {
+                if child.active {
+                    node.active = true;
+                }
                 self.roots.shift_remove(&child.id);
             }
         }
