@@ -361,13 +361,16 @@ where
         if node.from.is_empty() {
             Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
-            Box::new(self.all_parents(node).flat_map(|parent| {
-                parent
-                    .to
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id && !node.from.contains(id) && !node.to.contains(id))
-            }))
+            Box::new(
+                IndexSet::<K, S>::from_iter(self.all_parents(node).flat_map(|parent| {
+                    {
+                        parent.to.iter().copied().filter(|id| {
+                            *id != node.id && !node.from.contains(id) && !node.to.contains(id)
+                        })
+                    }
+                }))
+                .into_iter(),
+            )
         }
     }
     fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
