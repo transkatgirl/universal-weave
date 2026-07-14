@@ -1,6 +1,7 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
-// TODO: Unit tests and property tests (using proptest)
+// TODO: Write function contracts with test_ensures
+// TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
 
 pub mod dependent;
