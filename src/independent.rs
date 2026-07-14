@@ -258,26 +258,17 @@ where
 
         let thread = threads.swap_remove(longest.1);
 
-        HashSet::from_iter(thread).is_subset(&self.active)
+        thread.len() == self.active.len() && HashSet::from_iter(thread).is_subset(&self.active)
     }
     #[stacksafe]
     fn build_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
         if let Some(node) = self.nodes.get(node) {
-            let mut has_active_child = false;
             threads[index].push(node.id);
 
             for active_child in node.to.iter().filter(|root| self.active.contains(root)) {
-                if !has_active_child {
-                    has_active_child = true;
-                    if !self.build_path(active_child, threads, index) {
-                        return false;
-                    }
-                } else {
-                    threads.push(threads[index].clone());
-                    let index = threads.len() - 1;
-                    if !self.build_path(active_child, threads, index) {
-                        return false;
-                    }
+                threads.push(threads[index].clone());
+                if !self.build_path(active_child, threads, threads.len() - 1) {
+                    return false;
                 }
             }
 
