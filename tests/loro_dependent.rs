@@ -1,6 +1,7 @@
 use std::hash::{BuildHasher, RandomState};
 
 use indexmap::IndexSet;
+use loro::Frontiers;
 use proptest::{prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
@@ -124,12 +125,16 @@ enum WeaveTransition {
         id_seed: u32,
         content_seed: u32,
     },
+    Update,
+    Commit,
+    CommitAndRevert,
 }
 
 struct WeaveWrapper {
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
     id_scratchpad: Vec<u32>,
+    last_commit: Option<Frontiers>,
 }
 
 #[derive(Archive, Deserialize, Serialize, PartialEq, Eq)]
@@ -155,6 +160,7 @@ impl StateMachineTest for WeaveWrapper {
             .unwrap(),
             counter: 0,
             id_scratchpad: Vec::with_capacity(ref_state.len()),
+            last_commit: None,
         }
     }
     fn apply(
@@ -294,6 +300,28 @@ impl StateMachineTest for WeaveWrapper {
                 state
                     .weave
                     .get_contents_mut(&map_id(id_seed), |c| c.length = content_seed % 64);
+            }
+            WeaveTransition::Update => {
+                state.weave.update(|_doc| {}).unwrap();
+            }
+            WeaveTransition::Commit => {
+                state
+                    .weave
+                    .update(|doc| {
+                        doc.commit();
+                    })
+                    .unwrap();
+            }
+            WeaveTransition::CommitAndRevert => {
+                state
+                    .weave
+                    .update(|doc| {
+                        doc.commit();
+                        if let Some(last_commit) = &state.last_commit {
+                            doc.revert_to(last_commit).unwrap();
+                        }
+                    })
+                    .unwrap();
             }
         }
         assert!(state.weave.validate());

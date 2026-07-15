@@ -297,6 +297,7 @@ where
     }
     fn import(&mut self) -> Result<(), rancor::Error> {
         self.mapping.clear();
+        self.weave.remove_all_nodes();
 
         let tree = self.doc.get_tree("tree");
         let metadata = self.doc.get_map("metadata");
@@ -310,19 +311,24 @@ where
             )))?
         }
 
-        self.weave.remove_all_nodes();
-
         for root in tree.roots() {
             self.import_subtree(&tree, root, None)?;
         }
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
-            && self.weave.set_node_active_status_in_place(
-                &from_bytes_aligned(&binary, &mut self.buffer)?,
-                true,
-            )
         {
+            let active = from_bytes_aligned(&binary, &mut self.buffer)?;
+
+            if let Some(active) = active {
+                if !self.weave.set_node_active_status_in_place(&active, true) {
+                    metadata
+                        .insert("active_node", to_bytes(&None::<K>)?.into_vec())
+                        .map_err(rancor::Error::new)?;
+                }
+            } else {
+                self.weave.active = None;
+            }
         } else {
             metadata
                 .insert("active_node", to_bytes(&None::<K>)?.into_vec())
