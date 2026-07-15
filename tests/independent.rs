@@ -1,16 +1,19 @@
 use std::{
-    collections::HashSet,
-    hash::{BuildHasher, RandomState},
+    collections::{HashMap, HashSet},
+    hash::{BuildHasher, Hash, RandomState},
+    iter,
+    ops::Index,
 };
 
 use indexmap::IndexSet;
 use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
+use stacksafe::stacksafe;
 use universal_weave::{
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
-    IndependentWeave as IndependentWeaveTrait, MetadataWeave, SemiIndependentWeave, SortableWeave,
-    Weave,
+    IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node, SemiIndependentWeave,
+    SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
 };
 
@@ -256,7 +259,14 @@ impl StateMachineTest for WeaveWrapper {
                 content_seed,
             } => {
                 let from = IndexSet::from_iter(from_seeds.iter().copied().map(&map_id));
-                let to = IndexSet::from_iter(to_seeds.iter().copied().map(&map_id)); // TODO: Improve node selection
+                let (_, subset) = node_identifiers(state.weave.nodes(), from.iter());
+                let to = IndexSet::from_iter(
+                    to_seeds
+                        .iter()
+                        .copied()
+                        .map(&map_id)
+                        .filter(|id| subset.contains(id)),
+                );
 
                 state.weave.add_node(IndependentNode {
                     id: state.counter,
@@ -348,9 +358,15 @@ impl StateMachineTest for WeaveWrapper {
                 id_seed,
                 new_parents_seeds,
             } => {
-                let new_parents = Vec::from_iter(HashSet::<u32, RandomState>::from_iter(
-                    new_parents_seeds.iter().copied().map(&map_id),
-                )); // TODO: Improve node selection
+                let mut new_parents = Vec::with_capacity(new_parents_seeds.len());
+
+                for seed in new_parents_seeds {
+                    let (_, subset) = node_identifiers(state.weave.nodes(), iter::once(&seed));
+                    let id = map_id(seed);
+                    if subset.contains(&id) {
+                        new_parents.push(id);
+                    }
+                }
 
                 state.weave.move_node(&map_id(id_seed), &new_parents);
             }
@@ -389,4 +405,59 @@ impl StateMachineTest for WeaveWrapper {
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
     }
+}
+
+// Copied from src/lib.rs
+#[stacksafe]
+fn add_node_identifiers<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if !identifier_set.contains(id)
+        && node
+            .from()
+            .into_iter()
+            .all(|parent| identifier_set.contains(parent))
+    {
+        identifiers.push(*id);
+        identifier_set.insert(*id);
+        for child in node.to().into_iter() {
+            add_node_identifiers(nodes, child, identifiers, identifier_set);
+        }
+    }
+}
+
+pub fn node_identifiers<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    ids: impl Iterator<Item = &'a K>,
+) -> (Vec<K>, HashSet<K, S>)
+where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let mut identifiers = Vec::with_capacity(nodes.len());
+    let mut identifier_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
+    for id in ids {
+        if nodes.contains_key(id) {
+            add_node_identifiers(nodes, id, &mut identifiers, &mut identifier_set);
+        }
+    }
+    (identifiers, identifier_set)
 }
