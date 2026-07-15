@@ -146,7 +146,7 @@ where
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Inserts a node into the Weave.
     ///
-    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
+    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn add_node(&mut self, node: N) -> bool;
@@ -244,7 +244,7 @@ where
 {
     /// Moves a node with the specified identifier to a new set of parent nodes.
     ///
-    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will cause unexpected behavior including but not limited to infinite loops and stack overflows.
+    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
     ///
     /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
