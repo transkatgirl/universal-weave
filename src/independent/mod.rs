@@ -509,12 +509,14 @@ where
         output.clear();
         self.scratchpad_set.clear();
 
-        add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
-            &self.nodes,
-            id,
-            output,
-            &mut self.scratchpad_set,
-        ); // Compiler limitation
+        if self.nodes.contains_key(id) {
+            add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
+                &self.nodes,
+                id,
+                output,
+                &mut self.scratchpad_set,
+            ); // Compiler limitation
+        }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
@@ -746,12 +748,14 @@ where
         output.clear();
         self.scratchpad_set.clear();
 
-        add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
-            &self.nodes,
-            id,
-            output,
-            &mut self.scratchpad_set,
-        ); // Compiler limitation
+        if self.nodes.contains_key(id) {
+            add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
+                &self.nodes,
+                id,
+                output,
+                &mut self.scratchpad_set,
+            ); // Compiler limitation
+        }
     }
     fn sort_node_children_by(
         &mut self,
@@ -1144,7 +1148,9 @@ where
         output.clear();
         let mut identifier_set = HashSet::with_capacity(self.len());
 
-        add_archived_node_identifiers(&self.nodes, *id, output, &mut identifier_set);
+        if self.nodes.contains_key(id) {
+            add_archived_node_identifiers(&self.nodes, *id, output, &mut identifier_set);
+        }
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
@@ -1256,7 +1262,9 @@ where
         output.clear();
         let mut identifier_set = HashSet::with_capacity(self.len());
 
-        add_archived_node_identifiers_rev(&self.nodes, *id, output, &mut identifier_set);
+        if self.nodes.contains_key(id) {
+            add_archived_node_identifiers_rev(&self.nodes, *id, output, &mut identifier_set);
+        }
     }
 }
 

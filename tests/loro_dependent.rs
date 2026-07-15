@@ -52,7 +52,13 @@ impl ReferenceStateMachine for WeaveStateMachine {
 
 #[derive(Arbitrary, Debug, Clone)]
 enum WeaveTransition {
-    GetOrderedNodeIdentifiers,
+    GetOrderedNodeIdentifiers {
+        reversed: bool,
+    },
+    GetOrderedNodeIdentifiersFrom {
+        reversed: bool,
+        id_seed: u32,
+    },
     GetActiveThread,
     GetThreadFrom {
         id_seed: u32,
@@ -91,7 +97,6 @@ enum WeaveTransition {
     MetadataMut {
         content_seed: u32,
     },
-    GetOrderedNodeIdentifiersReversedChildren,
     SortNodeChildrenBy {
         id_seed: u32,
         sort_seed: u32,
@@ -159,9 +164,32 @@ impl StateMachineTest for WeaveWrapper {
         let map_id = |seed: u32| seed.checked_rem(state.counter).unwrap_or_default();
 
         match transition {
-            WeaveTransition::GetOrderedNodeIdentifiers => state
-                .weave
-                .get_ordered_node_identifiers(&mut state.id_scratchpad),
+            WeaveTransition::GetOrderedNodeIdentifiers { reversed } => {
+                if reversed {
+                    state
+                        .weave
+                        .get_ordered_node_identifiers_reversed_children(&mut state.id_scratchpad);
+                } else {
+                    state
+                        .weave
+                        .get_ordered_node_identifiers(&mut state.id_scratchpad);
+                }
+            }
+            WeaveTransition::GetOrderedNodeIdentifiersFrom { id_seed, reversed } => {
+                if reversed {
+                    state
+                        .weave
+                        .get_ordered_node_identifiers_from_reversed_children(
+                            &map_id(id_seed),
+                            &mut state.id_scratchpad,
+                        );
+                } else {
+                    state.weave.get_ordered_node_identifiers_from(
+                        &map_id(id_seed),
+                        &mut state.id_scratchpad,
+                    );
+                }
+            }
             WeaveTransition::GetActiveThread => {
                 state.weave.get_active_thread(&mut state.id_scratchpad)
             }
@@ -215,11 +243,6 @@ impl StateMachineTest for WeaveWrapper {
             }*/
             WeaveTransition::MetadataMut { content_seed } => {
                 state.weave.metadata_mut(|m| *m = content_seed)
-            }
-            WeaveTransition::GetOrderedNodeIdentifiersReversedChildren => {
-                state
-                    .weave
-                    .get_ordered_node_identifiers_reversed_children(&mut state.id_scratchpad);
             }
             WeaveTransition::SortNodeChildrenBy { id_seed, sort_seed } => {
                 let sort_seed = sort_seed as u64;
