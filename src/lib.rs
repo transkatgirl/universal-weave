@@ -151,7 +151,7 @@ where
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
+    /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
@@ -161,19 +161,19 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
-    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to keep the Weave internally consistent.
+    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to preserve internal consistency.
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
-    /// This function may update other nodes if it is necessary to keep the Weave internally consistent.
+    /// This function may update other nodes if it is necessary to preserve internal consistency.
     ///
     /// This function uses [`Weave::remove_node_tracked`] internally.
     fn remove_node(&mut self, id: &K) -> Option<N>;
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
-    /// This function may update other nodes if it is necessary to keep the Weave internally consistent. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
+    /// This function may update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
     fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
@@ -253,7 +253,7 @@ where
     ///
     /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
     ///
-    /// This function may change the active status of other nodes if it is necessary to keep the Weave internally consistent.
+    /// This function may change the active status of other nodes if it is necessary to preserve internal consistency.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
