@@ -7,7 +7,7 @@ use std::{
     mem,
 };
 
-use ::contracts::ensures;
+use ::contracts::{ensures, invariant};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -598,7 +598,8 @@ where
             output.extend(self.scratchpad_list.drain(..).rev());
         }
     }
-    #[ensures(self.validate())]
+    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len())) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
+    #[invariant(self.validate())]
     fn add_node(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
             || !node.validate()
@@ -650,7 +651,7 @@ where
         true
     }
     #[ensures((ret && value == self.active.contains(id)) || !ret)]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
         if value
             && let Some(node) = self.nodes.get(id)
@@ -677,12 +678,12 @@ where
         }
     }
     #[ensures((ret && value == self.active.contains(id)) || !ret)]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
     #[ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -699,12 +700,12 @@ where
         }
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn remove_node_tracked(
         &mut self,
         id: &K,
@@ -713,7 +714,7 @@ where
         self.remove_node_unverified_tracked(id, &mut on_removal)
     }
     #[ensures(self.nodes.is_empty())]
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn remove_all_nodes(&mut self) {
         self.nodes.clear();
         self.roots.clear();
@@ -775,7 +776,8 @@ where
             ); // Compiler limitation
         }
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[invariant(self.validate())]
     fn sort_node_children_by(
         &mut self,
         id: &K,
@@ -791,7 +793,8 @@ where
             false
         }
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[invariant(self.validate())]
     fn sort_node_children_by_id(
         &mut self,
         id: &K,
@@ -805,7 +808,8 @@ where
             false
         }
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[invariant(self.validate())]
     fn sort_roots_by(
         &mut self,
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -813,11 +817,13 @@ where
         self.roots
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[invariant(self.validate())]
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.bookmarked.len()) == self.bookmarked.len())]
+    #[invariant(self.validate())]
     fn sort_bookmarks_by(
         &mut self,
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -825,7 +831,8 @@ where
         self.bookmarked
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
-    #[ensures(self.validate())]
+    #[ensures(old(self.bookmarked.len()) == self.bookmarked.len())]
+    #[invariant(self.validate())]
     fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(compare);
     }
@@ -850,7 +857,7 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
             return false;
@@ -905,7 +912,7 @@ where
             false
         }
     }
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
@@ -1007,7 +1014,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(self.validate())]
+    #[invariant(self.validate())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
         if new_parents
             .iter()
