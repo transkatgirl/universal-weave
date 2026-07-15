@@ -1,4 +1,4 @@
-//! A deprecated version of DependentWeave used by `tapestry-weave`'s v0 format
+//! A deprecated version of DependentWeave used by `tapestry-weave`'s v0 format; Please don't use this!
 
 use std::{
     cmp::Ordering,
@@ -6,7 +6,7 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use contracts::*;
+use contracts::debug_ensures;
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -113,6 +113,7 @@ where
     /// If this returns `false`, further actions on the weave will result in unexpected behavior, including but not limited to panics. However, since this function is fairly slow, it should only be called occasionally (such as when saving the weave to disk).
     ///
     /// This function will be removed in the future once this [`Weave`] implementation has undergone formal verification.
+    #[must_use]
     pub fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
@@ -147,6 +148,7 @@ where
                         .all(|p| p.from == Some(*key))
             })
     }
+    #[must_use]
     fn under_max_size(&self) -> bool {
         (self.nodes.len() as u64) < (i32::MAX as u64)
     }
