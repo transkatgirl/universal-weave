@@ -27,7 +27,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActivePathWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
-    ArchivedWeave,
+    ArchivedSortableWeave, ArchivedWeave,
 };
 
 use crate::{
@@ -505,6 +505,17 @@ where
             ); // Compiler limitation
         }
     }
+    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
+        self.scratchpad_set.clear();
+
+        add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
+            &self.nodes,
+            id,
+            output,
+            &mut self.scratchpad_set,
+        ); // Compiler limitation
+    }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -730,6 +741,17 @@ where
                 &mut self.scratchpad_set,
             ); // Compiler limitation
         }
+    }
+    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
+        self.scratchpad_set.clear();
+
+        add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
+            &self.nodes,
+            id,
+            output,
+            &mut self.scratchpad_set,
+        ); // Compiler limitation
     }
     fn sort_node_children_by(
         &mut self,
@@ -1118,18 +1140,16 @@ where
             add_archived_node_identifiers(&self.nodes, *root, output, &mut identifier_set);
         }
     }
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut identifier_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
+        let mut identifier_set = HashSet::with_capacity(self.len());
 
-        for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
-        }
+        add_archived_node_identifiers(&self.nodes, *id, output, &mut identifier_set);
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut thread_list = Vec::with_capacity(self.len());
-        let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
+        let mut thread_set = HashSet::with_capacity(self.len());
 
         for active_root in self
             .roots
@@ -1151,7 +1171,7 @@ where
     }
     fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut thread_set = HashSet::with_capacity_and_hasher(self.len(), S::default());
+        let mut thread_set = HashSet::with_capacity(self.len());
 
         build_thread_from_archived(&self.nodes, &self.active, *id, output, &mut thread_set);
 
@@ -1180,7 +1200,7 @@ where
                         .iter()
                         .copied()
                         .filter(|parent| self.active.contains(parent))
-                        .collect::<HashSet<K2, S>>(),
+                        .collect::<HashSet<K2>>(),
                     &mut alternate_thread_list,
                     &mut thread_set,
                 ) {
@@ -1206,6 +1226,37 @@ where
 {
     fn metadata(&self) -> &M::Archived {
         &self.metadata
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+    for ArchivedIndependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
+        let mut identifier_set = HashSet::with_capacity(self.len());
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
+        }
+    }
+    fn get_ordered_node_identifiers_from_reversed_children(
+        &mut self,
+        id: &K::Archived,
+        output: &mut Vec<K::Archived>,
+    ) {
+        output.clear();
+        let mut identifier_set = HashSet::with_capacity(self.len());
+
+        add_archived_node_identifiers_rev(&self.nodes, *id, output, &mut identifier_set);
     }
 }
 
@@ -1349,7 +1400,7 @@ fn build_thread_archived<K, K2, T, T2, S>(
     active: &ArchivedHashSet<K::Archived>,
     id: K::Archived,
     scratchpad_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived, S>,
+    thread_set: &mut HashSet<K::Archived>,
     thread_list: &mut Vec<K::Archived>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
@@ -1395,9 +1446,9 @@ fn build_thread_archived_until<K, K2, T, T2, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
     active: &ArchivedHashSet<K::Archived>,
     id: K::Archived,
-    stop_at: &HashSet<K::Archived, S>,
+    stop_at: &HashSet<K::Archived>,
     thread_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived, S>,
+    thread_set: &mut HashSet<K::Archived>,
 ) -> bool
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
@@ -1449,7 +1500,7 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
     active: &ArchivedHashSet<K::Archived>,
     id: K::Archived,
     thread_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived, S>,
+    thread_set: &mut HashSet<K::Archived>,
 ) where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq,
@@ -1472,15 +1523,14 @@ fn build_thread_from_archived<K, K2, T, T2, S>(
 
 #[cfg(feature = "rkyv")]
 #[stacksafe]
-fn add_archived_node_identifiers<K, N, T, S>(
+fn add_archived_node_identifiers<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
-    S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
         && !identifier_set.contains(&id)
@@ -1499,15 +1549,14 @@ fn add_archived_node_identifiers<K, N, T, S>(
 
 #[cfg(feature = "rkyv")]
 #[stacksafe]
-fn add_archived_node_identifiers_rev<K, N, T, S>(
+fn add_archived_node_identifiers_rev<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
+    identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
     N: ArchivedNode<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
-    S: BuildHasher + Default + Clone,
 {
     if let Some(node) = nodes.get(&id)
         && !identifier_set.contains(&id)

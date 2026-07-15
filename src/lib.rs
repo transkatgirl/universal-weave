@@ -132,6 +132,8 @@ where
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
+    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
     /// A thread is an identifier list of directly connected nodes which always ends at a root node.
@@ -188,7 +190,7 @@ where
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O;
 }
 
-/// A [`Weave`] where the ordering of nodes can be user-defined.
+/// A [`Weave`] where the ordering of nodes is stable and can be user-defined.
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
@@ -198,6 +200,10 @@ where
     ///
     /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>);
+    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    ///
+    /// Unlike [`Weave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>);
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
     fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts the identifiers of a parent node's children with the specified identifier using the comparison function `cmp`.
@@ -359,10 +365,8 @@ where
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
-    /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    ///
-    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K>);
+    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    fn get_ordered_node_identifiers_from(&self, id: &K, output: &mut Vec<K>);
     /// Builds a thread starting at the deepest active node within the Weave.
     ///
     /// A thread is an identifier list of directly connected nodes which always ends at a root node.
@@ -381,6 +385,22 @@ where
 pub trait ArchivedMetadataWeave<K, N, T, M> {
     /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
+}
+
+/// An [`ArchivedWeave`] where the ordering of nodes is stable and can be user-defined.
+pub trait ArchivedSortableWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: ArchivedNode<K, T>,
+{
+    /// Builds a list of all node identifiers ordered by their positions in the Weave.
+    ///
+    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K>);
+    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    ///
+    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
+    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>);
 }
 
 #[cfg(feature = "rkyv")]

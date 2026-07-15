@@ -26,7 +26,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
-    ArchivedWeave,
+    ArchivedSortableWeave, ArchivedWeave,
 };
 
 use crate::{
@@ -317,6 +317,10 @@ where
             add_node_identifiers(&self.nodes, *root, output);
         }
     }
+    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
+        add_node_identifiers(&self.nodes, *id, output);
+    }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -458,6 +462,10 @@ where
         for root in &self.roots {
             add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
         }
+    }
+    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+        output.clear();
+        add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *id, output); // Compiler limitation
     }
     fn sort_node_children_by(
         &mut self,
@@ -742,12 +750,9 @@ where
             add_archived_node_identifiers(&self.nodes, *root, output);
         }
     }
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-
-        for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(&self.nodes, *root, output);
-        }
+        add_archived_node_identifiers(&self.nodes, *id, output);
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
@@ -776,6 +781,34 @@ where
 {
     fn metadata(&self) -> &M::Archived {
         &self.metadata
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+        output.clear();
+
+        for root in self.roots().iter() {
+            add_archived_node_identifiers_rev(&self.nodes, *root, output);
+        }
+    }
+    fn get_ordered_node_identifiers_from_reversed_children(
+        &mut self,
+        id: &K::Archived,
+        output: &mut Vec<K::Archived>,
+    ) {
+        output.clear();
+        add_archived_node_identifiers_rev(&self.nodes, *id, output);
     }
 }
 
