@@ -526,7 +526,7 @@ where
             ); // Compiler limitation
         }
     }
-    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.iter().all(|item| self.active.contains(item)) && output.len() == self.active.len())]
+    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.len() == self.active.len() && output.iter().all(|item| self.active.contains(item)))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();

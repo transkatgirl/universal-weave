@@ -363,3 +363,19 @@ impl StateMachineTest for WeaveWrapper {
     ) {
     }
 }
+
+/*
+#[test]
+fn transition_set() {
+    let items = vec![];
+
+    let mut state = WeaveWrapper {
+        weave: DependentWeave::with_capacity(items.len(), items.len() as u32),
+        counter: 0,
+        id_scratchpad: Vec::with_capacity(items.len()),
+    };
+    for item in items {
+        state = WeaveWrapper::apply(state, &vec![], item);
+    }
+}
+*/

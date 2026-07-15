@@ -499,3 +499,19 @@ where
     }
     (identifiers, identifier_set)
 }
+
+/*
+#[test]
+fn transition_set() {
+    let items = vec![];
+
+    let mut state = WeaveWrapper {
+        weave: IndependentWeave::with_capacity(items.len(), items.len() as u32),
+        counter: 0,
+        id_scratchpad: Vec::with_capacity(items.len()),
+    };
+    for item in items {
+        state = WeaveWrapper::apply(state, &vec![], item);
+    }
+}
+*/
