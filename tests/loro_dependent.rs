@@ -170,7 +170,8 @@ impl StateMachineTest for WeaveWrapper {
     ) -> Self::SystemUnderTest {
         let s = RandomState::default();
         let hash_value = |value: u64| s.hash_one(value);
-        let map_id = |seed: u32| seed.checked_rem(state.counter).unwrap_or_default();
+        let map_id = |seed: u32| seed % (state.counter + 2);
+        let old_node_count = state.weave.nodes().len();
 
         match transition {
             WeaveTransition::GetOrderedNodeIdentifiers { reversed } => {
@@ -325,7 +326,9 @@ impl StateMachineTest for WeaveWrapper {
             }
         }
         assert!(state.weave.validate());
-        state.counter += 1;
+        if state.weave.nodes().len() != old_node_count {
+            state.counter += 1;
+        }
         state
     }
     fn check_invariants(
