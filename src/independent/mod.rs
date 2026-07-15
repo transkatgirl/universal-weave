@@ -40,7 +40,7 @@ use crate::{
 
 mod contracts;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
@@ -78,6 +78,30 @@ where
     pub bookmarked: bool,
     /// The node's contents.
     pub contents: T,
+}
+
+impl<K, T, S> PartialEq for IndependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents + PartialEq,
+    S: BuildHasher + Default + Clone,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.id.eq(&other.id)
+            && self.from.eq(&other.from)
+            && self.to.eq(&other.to)
+            && self.active.eq(&other.active)
+            && self.bookmarked.eq(&other.bookmarked)
+            && self.contents.eq(&other.contents)
+    }
+}
+
+impl<K, T, S> Eq for IndependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents + Eq,
+    S: BuildHasher + Default + Clone,
+{
 }
 
 impl<K, T, S> IndependentNode<K, T, S>

@@ -137,7 +137,7 @@ struct WeaveWrapper {
     last_commit: Option<Frontiers>,
 }
 
-#[derive(Archive, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 struct WeaveContent {
     length: u32,
 }
@@ -212,7 +212,7 @@ impl StateMachineTest for WeaveWrapper {
                 bookmarked,
                 content_seed,
             } => {
-                state.weave.add_node(DependentNode {
+                let node = DependentNode {
                     id: state.counter,
                     from: from_seed.map(map_id),
                     to: IndexSet::default(),
@@ -221,7 +221,12 @@ impl StateMachineTest for WeaveWrapper {
                     contents: WeaveContent {
                         length: content_seed % 64,
                     },
-                });
+                };
+                if state.weave.add_node(node.clone())
+                    && let Some(weave_node) = state.weave.get_node(&node.id)
+                {
+                    assert_eq!(&node, weave_node);
+                };
             }
             WeaveTransition::SetNodeActiveStatus {
                 id_seed,
