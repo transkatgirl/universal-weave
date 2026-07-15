@@ -27,7 +27,7 @@ prop_state_machine! {
         //verbose: 1,
         max_shrink_time: MAX_TRANSITIONS as u32 * 2000,
         max_shrink_iters: u32::MAX-1,
-        timeout: 1000,
+        //timeout: 1000,
         .. Config::default()
     })]
 

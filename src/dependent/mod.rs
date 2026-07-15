@@ -34,7 +34,10 @@ use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave,
-    contract::{lacks_duplicates, matches_add_node_identifiers, matches_add_node_identifiers_rev},
+    contract::{
+        lacks_duplicates, matches_add_node_identifiers, matches_add_node_identifiers_rev,
+        valid_thread,
+    },
 };
 
 mod contracts;
@@ -333,7 +336,7 @@ where
         output.clear();
         add_node_identifiers(&self.nodes, *id, output);
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.is_empty() == self.active.is_none())]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -341,7 +344,7 @@ where
             build_thread(&self.nodes, active, output);
         }
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
 
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();

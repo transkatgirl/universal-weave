@@ -73,3 +73,33 @@ where
 
     identifiers == value
 }
+
+pub(crate) fn valid_thread<'a, K, N, T>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    value: &'a [K],
+) -> bool
+where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+{
+    let mut last_id = None;
+
+    for item in value.iter().rev() {
+        let node = &nodes[item];
+
+        if let Some(last) = last_id {
+            if node.from().into_iter().find(|a| *a == &last).is_none() {
+                return false;
+            }
+        } else if node.from().into_iter().next().is_some() {
+            return false;
+        }
+        last_id = Some(*item);
+    }
+
+    true
+}

@@ -34,7 +34,8 @@ use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SortableWeave, Weave, add_node_identifiers, add_node_identifiers_rev,
-    contract::lacks_duplicates, dependent::DependentWeave,
+    contract::{lacks_duplicates, valid_thread},
+    dependent::DependentWeave,
 };
 
 mod contracts;
@@ -525,7 +526,7 @@ where
             ); // Compiler limitation
         }
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.iter().all(|item| self.active.contains(item) && output.len() == self.active.len()))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -549,7 +550,7 @@ where
 
         output.reverse();
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
