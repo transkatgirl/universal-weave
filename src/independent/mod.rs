@@ -497,7 +497,12 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            add_node_identifiers(&self.nodes, *root, output, &mut self.scratchpad_set);
+            add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
+                &self.nodes,
+                root,
+                output,
+                &mut self.scratchpad_set,
+            ); // Compiler limitation
         }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
@@ -720,7 +725,7 @@ where
         for root in &self.roots {
             add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
-                *root,
+                root,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation

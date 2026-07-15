@@ -13,8 +13,9 @@ pub mod versioning;
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     hash::{BuildHasher, Hash},
+    ops::Index,
 };
 
 pub use contracts;
@@ -408,57 +409,63 @@ where
 }
 
 #[stacksafe::stacksafe]
-fn add_node_identifiers<K, N, T, S>(
-    nodes: &HashMap<K, N, S>,
-    id: K,
+fn add_node_identifiers<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(&id)
-        && !identifier_set.contains(&id)
+    let node = nodes.index(id);
+
+    if !identifier_set.contains(id)
         && node
             .from()
             .into_iter()
             .all(|parent| identifier_set.contains(parent))
     {
-        identifiers.push(id);
-        identifier_set.insert(id);
+        identifiers.push(*id);
+        identifier_set.insert(*id);
         for child in node.to().into_iter() {
-            add_node_identifiers(nodes, *child, identifiers, identifier_set);
+            add_node_identifiers(nodes, child, identifiers, identifier_set);
         }
     }
 }
 
 #[stacksafe::stacksafe]
-fn add_node_identifiers_rev<K, N, T, S>(
-    nodes: &HashMap<K, N, S>,
-    id: K,
+fn add_node_identifiers_rev<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    if let Some(node) = nodes.get(&id)
-        && !identifier_set.contains(&id)
+    let node = nodes.index(id);
+
+    if !identifier_set.contains(id)
         && node
             .from()
             .into_iter()
             .all(|parent| identifier_set.contains(parent))
     {
-        identifiers.push(id);
-        identifier_set.insert(id);
+        identifiers.push(*id);
+        identifier_set.insert(*id);
         for child in node.to().into_iter().rev() {
-            add_node_identifiers_rev(nodes, *child, identifiers, identifier_set);
+            add_node_identifiers_rev(nodes, child, identifiers, identifier_set);
         }
     }
 }

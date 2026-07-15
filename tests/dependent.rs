@@ -18,6 +18,8 @@ prop_state_machine! {
         cases: CASES,
         failure_persistence: None,
         //verbose: 1,
+        max_shrink_time: MAX_TRANSITIONS as u32 * 1000,
+        timeout: 1000,
         .. Config::default()
     })]
 

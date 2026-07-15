@@ -22,6 +22,8 @@ prop_state_machine! {
         cases: CASES,
         failure_persistence: None,
         //verbose: 1,
+        max_shrink_time: MAX_TRANSITIONS as u32 * 1000,
+        timeout: 1000,
         .. Config::default()
     })]
 
@@ -61,6 +63,15 @@ enum WeaveTransition {
     },
     #[proptest(weight = 8)]
     AddNode {
+        #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
+        from_seeds: Vec<u32>,
+        active: bool,
+        bookmarked: bool,
+        content_seed: u32,
+        length: u32,
+    },
+    #[proptest(weight = 3)]
+    AddNodeTo {
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
         to_seeds: Vec<u32>,
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
@@ -219,6 +230,25 @@ impl StateMachineTest for WeaveWrapper {
                 .get_thread_from(&map_id(id_seed), &mut state.id_scratchpad),
             WeaveTransition::AddNode {
                 from_seeds,
+                active,
+                bookmarked,
+                length,
+                content_seed,
+            } => {
+                state.weave.add_node(IndependentNode {
+                    id: state.counter,
+                    from: IndexSet::from_iter(from_seeds.iter().copied().map(&map_id)),
+                    to: IndexSet::default(),
+                    active,
+                    bookmarked,
+                    contents: WeaveContent {
+                        length: length % 64,
+                        content_seed: content_seed % 4,
+                    },
+                });
+            }
+            WeaveTransition::AddNodeTo {
+                from_seeds,
                 to_seeds,
                 active,
                 bookmarked,
@@ -226,21 +256,7 @@ impl StateMachineTest for WeaveWrapper {
                 content_seed,
             } => {
                 let from = IndexSet::from_iter(from_seeds.iter().copied().map(&map_id));
-                let to = IndexSet::from_iter(
-                    from_seeds
-                        .into_iter()
-                        .filter_map(|seed| state.weave.get_node(&map_id(seed)))
-                        .zip(to_seeds)
-                        .filter_map(|(from, seed)| {
-                            from.to
-                                .get_index(
-                                    (seed as usize)
-                                        .checked_rem(from.to.len())
-                                        .unwrap_or_default(),
-                                )
-                                .copied()
-                        }),
-                ); // TODO: Improve node selection
+                let to = IndexSet::from_iter(to_seeds.iter().copied().map(&map_id)); // TODO: Improve node selection
 
                 state.weave.add_node(IndependentNode {
                     id: state.counter,
