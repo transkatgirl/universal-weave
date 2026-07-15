@@ -7,7 +7,7 @@ use std::{
     iter,
 };
 
-use ::contracts::{ensures};
+use ::contracts::ensures;
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -36,7 +36,7 @@ use crate::{
     SemiIndependentWeave, SortableWeave, Weave,
     contract::{
         lacks_duplicates, matches_add_node_identifiers, matches_add_node_identifiers_rev,
-        valid_thread,
+        valid_ordered_nodes, valid_thread,
     },
 };
 
@@ -315,7 +315,7 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output) && matches_add_node_identifiers(
+    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output) && matches_add_node_identifiers(
             &self.nodes,
             &self.roots,
             output,
@@ -474,7 +474,7 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output) && matches_add_node_identifiers_rev(
+    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output) && matches_add_node_identifiers_rev(
             &self.nodes,
             &self.roots,
             output,

@@ -10,8 +10,8 @@ use universal_weave::{
     dependent::{DependentNode, DependentWeave},
 };
 
-const CASES: u32 = 1024;
-const MAX_TRANSITIONS: usize = 256;
+const CASES: u32 = 16384;
+const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
     #![proptest_config(Config {

@@ -7,7 +7,7 @@ use std::{
     mem,
 };
 
-use ::contracts::{ensures};
+use ::contracts::ensures;
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -34,7 +34,7 @@ use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SortableWeave, Weave, add_node_identifiers, add_node_identifiers_rev,
-    contract::{lacks_duplicates, valid_thread},
+    contract::{lacks_duplicates, valid_ordered_nodes, valid_thread},
     dependent::DependentWeave,
 };
 
@@ -493,7 +493,7 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output))]
+    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -742,7 +742,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output))]
+    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();

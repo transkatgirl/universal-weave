@@ -74,6 +74,35 @@ where
     identifiers == value
 }
 
+pub(crate) fn valid_ordered_nodes<'a, K, N, T>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    value: &'a [K],
+) -> bool
+where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+{
+    let mut visited = HashSet::with_capacity(value.len());
+
+    for item in value {
+        let node = &nodes[item];
+
+        if !((node
+            .from()
+            .into_iter()
+            .any(|parent| visited.contains(parent))
+            || node.from().into_iter().next().is_none())
+            && visited.insert(node.id()))
+        {
+            return false;
+        }
+    }
+
+    true
+}
+
 pub(crate) fn valid_thread<'a, K, N, T>(
     nodes: &'a impl Index<&'a K, Output = N>,
     value: &'a [K],
