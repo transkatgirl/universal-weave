@@ -34,7 +34,7 @@ use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SortableWeave, Weave, add_node_identifiers, add_node_identifiers_rev,
-    dependent::DependentWeave,
+    contract::lacks_duplicates, dependent::DependentWeave,
 };
 
 mod contracts;
@@ -492,6 +492,7 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
+    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len())]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -505,11 +506,17 @@ where
             ); // Compiler limitation
         }
     }
+    #[debug_ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
 
         if self.nodes.contains_key(id) {
+            if let Some(node) = self.nodes.get(id) {
+                for parent in &node.from {
+                    self.scratchpad_set.insert(*parent);
+                }
+            }
             add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
@@ -518,6 +525,7 @@ where
             ); // Compiler limitation
         }
     }
+    #[debug_ensures(lacks_duplicates(output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -541,6 +549,7 @@ where
 
         output.reverse();
     }
+    #[debug_ensures(lacks_duplicates(output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -731,6 +740,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len())]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -744,11 +754,17 @@ where
             ); // Compiler limitation
         }
     }
+    #[debug_ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
 
         if self.nodes.contains_key(id) {
+            if let Some(node) = self.nodes.get(id) {
+                for parent in &node.from {
+                    self.scratchpad_set.insert(*parent);
+                }
+            }
             add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,

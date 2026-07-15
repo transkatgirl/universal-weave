@@ -4,6 +4,7 @@ use std::{
     cmp::Ordering,
     collections::HashMap,
     hash::{BuildHasher, Hash},
+    iter,
 };
 
 use ::contracts::debug_ensures;
@@ -33,6 +34,7 @@ use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave,
+    contract::{lacks_duplicates, matches_add_node_identifiers, matches_add_node_identifiers_rev},
 };
 
 mod contracts;
@@ -310,6 +312,11 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
+    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len() && matches_add_node_identifiers(
+            &self.nodes,
+            &self.roots,
+            output,
+        ))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -317,10 +324,16 @@ where
             add_node_identifiers(&self.nodes, *root, output);
         }
     }
+    #[debug_ensures(lacks_duplicates(output) && matches_add_node_identifiers(
+            &self.nodes,
+            iter::once(id).filter(|id| self.nodes.contains_key(id)),
+            output,
+        ))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers(&self.nodes, *id, output);
     }
+    #[debug_ensures(lacks_duplicates(output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -328,6 +341,7 @@ where
             build_thread(&self.nodes, active, output);
         }
     }
+    #[debug_ensures(lacks_duplicates(output))]
 
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
@@ -456,6 +470,11 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len() && matches_add_node_identifiers_rev(
+            &self.nodes,
+            &self.roots,
+            output,
+        ))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -463,6 +482,11 @@ where
             add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
         }
     }
+    #[debug_ensures(lacks_duplicates(output) && matches_add_node_identifiers_rev(
+            &self.nodes,
+            iter::once(id).filter(|id| self.nodes.contains_key(id)),
+            output,
+        ))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *id, output); // Compiler limitation

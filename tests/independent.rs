@@ -25,7 +25,8 @@ prop_state_machine! {
         cases: CASES,
         failure_persistence: None,
         //verbose: 1,
-        max_shrink_time: MAX_TRANSITIONS as u32 * 1000,
+        max_shrink_time: MAX_TRANSITIONS as u32 * 2000,
+        max_shrink_iters: u32::MAX-1,
         timeout: 1000,
         .. Config::default()
     })]
@@ -483,7 +484,17 @@ where
     let mut identifier_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
     for id in ids {
         if nodes.contains_key(id) {
+            if let Some(node) = nodes.get(id) {
+                for parent in node.from() {
+                    identifier_set.insert(*parent);
+                }
+            }
             add_node_identifiers(nodes, id, &mut identifiers, &mut identifier_set);
+            if let Some(node) = nodes.get(id) {
+                for parent in node.from() {
+                    identifier_set.remove(parent);
+                }
+            }
         }
     }
     (identifiers, identifier_set)

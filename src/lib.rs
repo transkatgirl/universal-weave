@@ -4,6 +4,7 @@
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
 
+mod contract;
 pub mod dependent;
 pub mod independent;
 pub mod wrappers;
