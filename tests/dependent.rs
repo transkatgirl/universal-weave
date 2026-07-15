@@ -94,7 +94,9 @@ enum WeaveTransition {
     RemoveNodeTracked {
         id_seed: u32,
     },
-    //RemoveAllNodes,
+    RemoveAllNodes {
+        apply_seed: u16,
+    },
     MetadataMut {
         content_seed: u32,
     },
@@ -278,9 +280,11 @@ impl StateMachineTest for WeaveWrapper {
             WeaveTransition::RemoveNodeTracked { id_seed } => {
                 state.weave.remove_node_tracked(&map_id(id_seed), |_r| {});
             }
-            /*WeaveTransition::RemoveAllNodes => {
-                state.weave.remove_all_nodes();
-            }*/
+            WeaveTransition::RemoveAllNodes { apply_seed } => {
+                if apply_seed == 0 {
+                    state.weave.remove_all_nodes();
+                }
+            }
             WeaveTransition::MetadataMut { content_seed } => {
                 state.weave.metadata_mut(|m| *m = content_seed)
             }
