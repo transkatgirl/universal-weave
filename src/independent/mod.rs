@@ -7,7 +7,7 @@ use std::{
     mem,
 };
 
-use ::contracts::debug_ensures;
+use ::contracts::{ensures};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -316,7 +316,7 @@ where
         }
         true
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
     fn remove_node_unverified(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
@@ -349,7 +349,7 @@ where
             None
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
     fn remove_node_unverified_tracked(
         &mut self,
@@ -493,7 +493,7 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len())]
+    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -507,7 +507,7 @@ where
             ); // Compiler limitation
         }
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -526,7 +526,7 @@ where
             ); // Compiler limitation
         }
     }
-    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.len() == self.active.len() && output.iter().all(|item| self.active.contains(item)))]
+    #[ensures(output.len() == self.active.len() && lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.iter().all(|item| self.active.contains(item)))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -550,7 +550,7 @@ where
 
         output.reverse();
     }
-    #[debug_ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
+    #[ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -598,7 +598,7 @@ where
             output.extend(self.scratchpad_list.drain(..).rev());
         }
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn add_node(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
             || !node.validate()
@@ -649,8 +649,8 @@ where
 
         true
     }
-    #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
-    #[debug_ensures(self.validate())]
+    #[ensures((ret && value == self.active.contains(id)) || !ret)]
+    #[ensures(self.validate())]
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
         if value
             && let Some(node) = self.nodes.get(id)
@@ -676,13 +676,13 @@ where
             self.update_node_activity_in_place(id, value)
         }
     }
-    #[debug_ensures((ret && value == self.active.contains(id)) || !ret)]
-    #[debug_ensures(self.validate())]
+    #[ensures((ret && value == self.active.contains(id)) || !ret)]
+    #[ensures(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
-    #[debug_ensures(self.validate())]
+    #[ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
+    #[ensures(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -698,13 +698,13 @@ where
             None => false,
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.validate())]
+    #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.validate())]
+    #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(self.validate())]
     fn remove_node_tracked(
         &mut self,
         id: &K,
@@ -712,7 +712,8 @@ where
     ) -> bool {
         self.remove_node_unverified_tracked(id, &mut on_removal)
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.nodes.is_empty())]
+    #[ensures(self.validate())]
     fn remove_all_nodes(&mut self) {
         self.nodes.clear();
         self.roots.clear();
@@ -741,7 +742,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[debug_ensures(lacks_duplicates(output) && output.len() == self.nodes.len())]
+    #[ensures(output.len() == self.nodes.len() && lacks_duplicates(output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -755,7 +756,7 @@ where
             ); // Compiler limitation
         }
     }
-    #[debug_ensures(lacks_duplicates(output))]
+    #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -774,6 +775,7 @@ where
             ); // Compiler limitation
         }
     }
+    #[ensures(self.validate())]
     fn sort_node_children_by(
         &mut self,
         id: &K,
@@ -789,6 +791,7 @@ where
             false
         }
     }
+    #[ensures(self.validate())]
     fn sort_node_children_by_id(
         &mut self,
         id: &K,
@@ -802,6 +805,7 @@ where
             false
         }
     }
+    #[ensures(self.validate())]
     fn sort_roots_by(
         &mut self,
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -809,9 +813,11 @@ where
         self.roots
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
+    #[ensures(self.validate())]
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
     }
+    #[ensures(self.validate())]
     fn sort_bookmarks_by(
         &mut self,
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -819,6 +825,7 @@ where
         self.bookmarked
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
+    #[ensures(self.validate())]
     fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(compare);
     }
@@ -843,7 +850,7 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
             return false;
@@ -898,7 +905,7 @@ where
             false
         }
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
@@ -1000,7 +1007,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
         if new_parents
             .iter()

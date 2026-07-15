@@ -2,10 +2,10 @@ use std::{collections::HashSet, hash::Hash, ops::Index};
 
 use crate::{Node, add_node_identifiers, add_node_identifiers_rev};
 
-pub(crate) fn lacks_duplicates<'a, T, I>(value: &'a T) -> bool
+pub(crate) fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
 where
-    &'a T: IntoIterator<Item = I, IntoIter: ExactSizeIterator>,
-    I: Hash + Eq,
+    &'a I: IntoIterator<Item = T, IntoIter: ExactSizeIterator>,
+    T: Hash + Eq,
 {
     let value = value.into_iter();
 

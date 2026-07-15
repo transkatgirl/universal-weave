@@ -6,7 +6,7 @@ use std::{
     hash::{BuildHasher, Hash},
 };
 
-use contracts::debug_ensures;
+use contracts::ensures;
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -210,7 +210,7 @@ where
             ),
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
     fn remove_node_unverified(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         if let Some(node) = self.nodes.remove(id) {
@@ -235,7 +235,7 @@ where
             None
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
+    #[ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
     fn remove_node_unverified_tracked(
         &mut self,
@@ -327,7 +327,7 @@ where
 
         build_thread(&self.nodes, *id, output);
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
             || !node.validate()
@@ -367,8 +367,8 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
         self.set_node_active_status_in_place(id, value)
     }
-    #[debug_ensures((ret && value == (self.active == Some(*id))) || !ret)]
-    #[debug_ensures(self.validate())]
+    #[ensures((ret && value == (self.active == Some(*id))) || !ret)]
+    #[ensures(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -391,8 +391,8 @@ where
             None => false,
         }
     }
-    #[debug_ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
-    #[debug_ensures(self.validate())]
+    #[ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
+    #[ensures(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -408,13 +408,13 @@ where
             None => false,
         }
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.validate())]
+    #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
-    #[debug_ensures(!self.nodes.contains_key(id))]
-    #[debug_ensures(self.validate())]
+    #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(self.validate())]
     fn remove_node_tracked(
         &mut self,
         id: &K,
@@ -422,7 +422,7 @@ where
     ) -> bool {
         self.remove_node_unverified_tracked(id, &mut on_removal)
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn remove_all_nodes(&mut self) {
         self.nodes.clear();
         self.roots.clear();
@@ -526,7 +526,7 @@ where
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
             return false;
@@ -570,7 +570,7 @@ where
             false
         }
     }
-    #[debug_ensures(self.validate())]
+    #[ensures(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
             if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
