@@ -674,7 +674,8 @@ where
 
         true
     }
-    #[ensures((ret && value == self.active.contains(id)) || !ret)]
+    #[ensures((ret && value == self.active.contains(id)) || (!ret && old(self.active.clone()) == self.active))]
+    #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
         if value
@@ -701,12 +702,14 @@ where
             self.update_node_activity_in_place(id, value)
         }
     }
-    #[ensures((ret && value == self.active.contains(id)) || !ret)]
+    #[ensures((ret && value == self.active.contains(id)) || (!ret && old(self.active.clone()) == self.active))]
+    #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[ensures((ret && value == self.bookmarked.contains(id)) || !ret)]
+    #[ensures((ret && value == self.bookmarked.contains(id)) || (!ret && old(self.bookmarked.clone() == self.bookmarked)))]
+    #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
