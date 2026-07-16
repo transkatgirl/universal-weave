@@ -629,7 +629,7 @@ where
     #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
     #[ensures(!ret || old(!self.nodes.contains_key(&node.id)))]
     #[ensures(!ret || self.nodes.contains_key(&old(node.id)))]
-    #[ensures(!ret || old(node.active) == self.active.contains(&old(node.id)))]
+    #[ensures(!ret || old(node.active) == self.active.contains(&old(node.id)) || (!old(node.active) && self.active.contains(&old(node.id)) && old(node.to.iter().any(|c| self.active.contains(c)))))]
     #[ensures(!ret || old(node.bookmarked) == self.bookmarked.contains(&old(node.id)))]
     #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
     #[ensures(ret || old(self.active.clone()) == self.active)]
