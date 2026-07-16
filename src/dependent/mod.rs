@@ -373,8 +373,14 @@ where
 
         build_thread(&self.nodes, *id, output);
     }
-    #[ensures(!ret || (old(self.nodes.len()) + 1 == self.nodes.len() && old(!self.nodes.contains_key(&node.id)) && self.nodes.contains_key(&old(node.id)) && old(node.active) == (self.active == Some(old(node.id))) && old(node.bookmarked) == self.bookmarked.contains(&old(node.id))))]
-    #[ensures(ret || (old(self.nodes.len()) == self.nodes.len() && old(self.active) == self.active) && old(self.bookmarked.clone()) == self.bookmarked)]
+    #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
+    #[ensures(!ret || old(!self.nodes.contains_key(&node.id)))]
+    #[ensures(!ret || self.nodes.contains_key(&old(node.id)))]
+    #[ensures(!ret || old(node.active) == (self.active == Some(old(node.id))))]
+    #[ensures(!ret || old(node.bookmarked) == self.bookmarked.contains(&old(node.id)))]
+    #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret || old(self.active) == self.active)]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
@@ -610,7 +616,13 @@ where
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len()) && self.nodes.contains_key(id) && self.nodes.contains_key(&new_id) && old(!self.nodes.contains_key(&new_id))) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
+    #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
+    #[ensures(!ret || self.nodes.contains_key(id))]
+    #[ensures(!ret || self.nodes.contains_key(&new_id))]
+    #[ensures(!ret || old(!self.nodes.contains_key(&new_id)))]
+    #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret || old(self.active) == self.active)]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
@@ -655,7 +667,14 @@ where
             false
         }
     }
-    #[ensures((ret.is_some() && (old(self.nodes.len()) - 1 == self.nodes.len()) && !self.nodes.contains_key(id) && old(self.nodes.contains_key(id)) && self.nodes.contains_key(&ret.unwrap())) || (ret.is_none() && (old(self.nodes.len()) == self.nodes.len())))]
+    #[ensures(ret.is_none() || old(self.nodes.len()) - 1 == self.nodes.len())]
+    #[ensures(ret.is_none() || !self.nodes.contains_key(id))]
+    #[ensures(ret.is_none() || old(self.nodes.contains_key(id)))]
+    #[ensures(ret.is_none() || self.nodes.contains_key(&ret.unwrap()))]
+    #[ensures(ret.is_none() || ret == old(self.nodes.get(id).and_then(|node| node.from)))]
+    #[ensures(ret.is_some() || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret.is_some() || old(self.active) == self.active)]
+    #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {

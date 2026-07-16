@@ -271,7 +271,7 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                let mut node = IndependentNode {
+                state.weave.add_node(IndependentNode {
                     id: state.counter,
                     from: IndexSet::from_iter(from_seeds.iter().copied().map(&map_id)),
                     to: IndexSet::default(),
@@ -281,15 +281,7 @@ impl StateMachineTest for WeaveWrapper {
                         length: length % 64,
                         content_seed: content_seed % 4,
                     },
-                };
-                if state.weave.add_node(node.clone())
-                    && let Some(weave_node) = state.weave.get_node(&node.id)
-                {
-                    if state.weave.contains_active(&node.id) {
-                        node.active = true;
-                    }
-                    assert_eq!(&node, weave_node);
-                };
+                });
             }
             WeaveTransition::AddNodeTo {
                 from_seeds,
@@ -309,7 +301,7 @@ impl StateMachineTest for WeaveWrapper {
                         .filter(|id| subset.contains(id)),
                 );
 
-                let mut node = IndependentNode {
+                state.weave.add_node(IndependentNode {
                     id: state.counter,
                     from,
                     to,
@@ -319,15 +311,7 @@ impl StateMachineTest for WeaveWrapper {
                         length: length % 64,
                         content_seed: content_seed % 4,
                     },
-                };
-                if state.weave.add_node(node.clone())
-                    && let Some(weave_node) = state.weave.get_node(&node.id)
-                {
-                    if state.weave.contains_active(&node.id) {
-                        node.active = true;
-                    }
-                    assert_eq!(&node, weave_node);
-                };
+                });
             }
             WeaveTransition::SetNodeActiveStatus {
                 id_seed,

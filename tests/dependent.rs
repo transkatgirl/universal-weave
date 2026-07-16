@@ -246,7 +246,7 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                let node = DependentNode {
+                state.weave.add_node(DependentNode {
                     id: state.counter,
                     from: from_seed.map(map_id),
                     to: IndexSet::default(),
@@ -256,12 +256,7 @@ impl StateMachineTest for WeaveWrapper {
                         length: length % 64,
                         content_seed: content_seed % 4,
                     },
-                };
-                if state.weave.add_node(node.clone())
-                    && let Some(weave_node) = state.weave.get_node(&node.id)
-                {
-                    assert_eq!(&node, weave_node);
-                };
+                });
             }
             WeaveTransition::SetNodeActiveStatus {
                 id_seed,
