@@ -326,7 +326,7 @@ impl StateMachineTest for WeaveWrapper {
             }
         }
         assert!(state.weave.validate());
-        if state.weave.nodes().len() != old_node_count {
+        if state.weave.nodes().len() > old_node_count {
             state.counter += 1;
         }
         state

@@ -356,7 +356,7 @@ impl StateMachineTest for WeaveWrapper {
                 state.weave.merge_with_parent(&map_id(id_seed));
             }
         }
-        if state.weave.nodes().len() != old_node_count {
+        if state.weave.nodes().len() > old_node_count {
             state.counter += 1;
         }
         state
