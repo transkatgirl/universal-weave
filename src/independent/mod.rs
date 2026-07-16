@@ -727,11 +727,13 @@ where
         }
     }
     #[ensures(!self.nodes.contains_key(id))]
+    #[ensures((ret.is_some() && old(self.nodes.len()) > self.nodes.len()) || (ret.is_none() && old(self.nodes.len()) == self.nodes.len()))]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
     #[ensures(!self.nodes.contains_key(id))]
+    #[ensures((ret && old(self.nodes.len()) > self.nodes.len()) || (!ret && old(self.nodes.len()) == self.nodes.len()))]
     #[invariant(self.validate())]
     fn remove_node_tracked(
         &mut self,
@@ -804,6 +806,7 @@ where
         }
     }
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn sort_node_children_by(
         &mut self,
@@ -821,6 +824,7 @@ where
         }
     }
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn sort_node_children_by_id(
         &mut self,
