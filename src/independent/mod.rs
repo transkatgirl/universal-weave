@@ -517,7 +517,8 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(output.len() == self.nodes.len())]
+    #[ensures(valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -550,7 +551,9 @@ where
             ); // Compiler limitation
         }
     }
-    #[ensures(output.len() == self.active.len() && lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.iter().all(|item| self.active.contains(item)))]
+    #[ensures(output.len() == self.active.len())]
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(valid_thread(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -574,7 +577,8 @@ where
 
         output.reverse();
     }
-    #[ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(valid_thread(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -622,7 +626,8 @@ where
             output.extend(self.scratchpad_list.drain(..).rev());
         }
     }
-    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len())) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
+    #[ensures(!ret || (old(self.nodes.len()) + 1 == self.nodes.len() && old(!self.nodes.contains_key(&node.id)) && self.nodes.contains_key(&old(node.id)) && old(node.active) == self.active.contains(&old(node.id)) && old(node.bookmarked) == self.bookmarked.contains(&old(node.id))))]
+    #[ensures(ret || (old(self.nodes.len()) == self.nodes.len() && old(self.active.clone()) == self.active) && old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn add_node(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
@@ -674,7 +679,8 @@ where
 
         true
     }
-    #[ensures((ret && value == self.active.contains(id)) || (!ret && old(self.active.clone()) == self.active))]
+    #[ensures(!ret || value == self.active.contains(id))]
+    #[ensures(ret || old(self.active.clone()) == self.active)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
@@ -702,13 +708,15 @@ where
             self.update_node_activity_in_place(id, value)
         }
     }
-    #[ensures((ret && value == self.active.contains(id)) || (!ret && old(self.active.clone()) == self.active))]
+    #[ensures(!ret || value == self.active.contains(id))]
+    #[ensures(ret || old(self.active.clone()) == self.active)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[ensures((ret && value == self.bookmarked.contains(id)) || (!ret && old(self.bookmarked.clone()) == self.bookmarked))]
+    #[ensures(!ret || value == self.bookmarked.contains(id))]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
@@ -727,13 +735,23 @@ where
         }
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures((ret.is_some() && old(self.nodes.len()) > self.nodes.len()) || (ret.is_none() && old(self.nodes.len()) == self.nodes.len()))]
+    #[ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len())]
+    #[ensures(ret.is_none() || old(self.active.len()) >= self.active.len())]
+    #[ensures(ret.is_none() || old(self.bookmarked.len()) >= self.bookmarked.len())]
+    #[ensures(ret.is_some() || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret.is_some() || old(self.active.clone()) == self.active)]
+    #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures((ret && old(self.nodes.len()) > self.nodes.len()) || (!ret && old(self.nodes.len()) == self.nodes.len()))]
+    #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
+    #[ensures(!ret || old(self.active.len()) >= self.active.len())]
+    #[ensures(!ret || old(self.bookmarked.len()) >= self.bookmarked.len())]
+    #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret || old(self.active.clone()) == self.active)]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node_tracked(
         &mut self,
@@ -772,7 +790,8 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(output.len() == self.nodes.len())]
+    #[ensures(valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -839,7 +858,8 @@ where
             false
         }
     }
-    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(old(self.roots.len()) == self.roots.len())]
     #[invariant(self.validate())]
     fn sort_roots_by(
         &mut self,
@@ -848,7 +868,8 @@ where
         self.roots
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
-    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(old(self.roots.len()) == self.roots.len())]
     #[invariant(self.validate())]
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
@@ -888,6 +909,7 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
+    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len()) && self.nodes.contains_key(id) && self.nodes.contains_key(&new_id) && old(!self.nodes.contains_key(&new_id))) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
     #[invariant(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
@@ -943,6 +965,7 @@ where
             false
         }
     }
+    #[ensures((ret.is_some() && (old(self.nodes.len()) - 1 == self.nodes.len()) && !self.nodes.contains_key(id) && old(self.nodes.contains_key(id)) && self.nodes.contains_key(&ret.unwrap())) || (ret.is_none() && (old(self.nodes.len()) == self.nodes.len())))]
     #[invariant(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
@@ -1046,6 +1069,11 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[invariant(self.validate())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
+    #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<Vec<_>>() == new_parents)]
+    #[ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())) == self.nodes().get(id).map(|node| node.from.clone()))]
+    #[ensures(ret || old(self.active.len()) == self.active.len())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
         if new_parents
             .iter()

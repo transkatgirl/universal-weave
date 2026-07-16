@@ -7,6 +7,7 @@ use std::{
     iter,
 };
 
+#[allow(unused_imports)] // false positive warning
 use ::contracts::{ensures, invariant};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
@@ -339,11 +340,9 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output) && matches_add_node_identifiers(
-            &self.nodes,
-            &self.roots,
-            output,
-        ))]
+    #[ensures(output.len() == self.nodes.len())]
+    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(matches_add_node_identifiers(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -351,16 +350,15 @@ where
             add_node_identifiers(&self.nodes, *root, output);
         }
     }
-    #[ensures(lacks_duplicates(output) && matches_add_node_identifiers(
-            &self.nodes,
-            iter::once(id).filter(|id| self.nodes.contains_key(id)),
-            output,
-        ))]
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(matches_add_node_identifiers(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers(&self.nodes, *id, output);
     }
-    #[ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output) && output.is_empty() == self.active.is_none())]
+    #[ensures(output.is_empty() == self.active.is_none())]
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(valid_thread(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -368,14 +366,15 @@ where
             build_thread(&self.nodes, active, output);
         }
     }
-    #[ensures(lacks_duplicates(output) && valid_thread(&self.nodes, output))]
-
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(valid_thread(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         build_thread(&self.nodes, *id, output);
     }
-    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len())) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
+    #[ensures(!ret || (old(self.nodes.len()) + 1 == self.nodes.len() && old(!self.nodes.contains_key(&node.id)) && self.nodes.contains_key(&old(node.id)) && old(node.active) == (self.active == Some(old(node.id))) && old(node.bookmarked) == self.bookmarked.contains(&old(node.id))))]
+    #[ensures(ret || (old(self.nodes.len()) == self.nodes.len() && old(self.active) == self.active) && old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
@@ -416,7 +415,8 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
         self.set_node_active_status_in_place(id, value)
     }
-    #[ensures((ret && value == (self.active == Some(*id))) || (!ret && old(self.active) == self.active))]
+    #[ensures(!ret || value == (self.active == Some(*id)))]
+    #[ensures(ret || old(self.active) == self.active)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
@@ -441,7 +441,8 @@ where
             None => false,
         }
     }
-    #[ensures((ret && value == self.bookmarked.contains(id)) || (!ret && old(self.bookmarked.clone()) == self.bookmarked))]
+    #[ensures(!ret || value == self.bookmarked.contains(id))]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
@@ -460,13 +461,21 @@ where
         }
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures((ret.is_some() && old(self.nodes.len()) > self.nodes.len()) || (ret.is_none() && old(self.nodes.len()) == self.nodes.len()))]
+    #[ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len())]
+    #[ensures(ret.is_none() || old(self.bookmarked.len()) >= self.bookmarked.len())]
+    #[ensures(ret.is_some() || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret.is_some() || old(self.active) == self.active)]
+    #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
     #[ensures(!self.nodes.contains_key(id))]
-    #[ensures((ret && old(self.nodes.len()) > self.nodes.len()) || (!ret && old(self.nodes.len()) == self.nodes.len()))]
+    #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
+    #[ensures(!ret || old(self.bookmarked.len()) >= self.bookmarked.len())]
+    #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(ret || old(self.active) == self.active)]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node_tracked(
         &mut self,
@@ -503,11 +512,9 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(output.len() == self.nodes.len() && valid_ordered_nodes(&self.nodes, output) && matches_add_node_identifiers_rev(
-            &self.nodes,
-            &self.roots,
-            output,
-        ))]
+    #[ensures(output.len() == self.nodes.len())]
+    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(matches_add_node_identifiers_rev(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -515,11 +522,8 @@ where
             add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
         }
     }
-    #[ensures(lacks_duplicates(output) && matches_add_node_identifiers_rev(
-            &self.nodes,
-            iter::once(id).filter(|id| self.nodes.contains_key(id)),
-            output,
-        ))]
+    #[ensures(lacks_duplicates(output))]
+    #[ensures(matches_add_node_identifiers_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *id, output); // Compiler limitation
@@ -558,7 +562,8 @@ where
             false
         }
     }
-    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(old(self.roots.len()) == self.roots.len())]
     #[invariant(self.validate())]
     fn sort_roots_by(
         &mut self,
@@ -567,7 +572,8 @@ where
         self.roots
             .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
     }
-    #[ensures(old(self.nodes.len()) == self.nodes.len() && old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.nodes.len()) == self.nodes.len())]
+    #[ensures(old(self.roots.len()) == self.roots.len())]
     #[invariant(self.validate())]
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
@@ -604,6 +610,7 @@ where
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
+    #[ensures((ret && (old(self.nodes.len()) + 1 == self.nodes.len()) && self.nodes.contains_key(id) && self.nodes.contains_key(&new_id) && old(!self.nodes.contains_key(&new_id))) || (!ret && (old(self.nodes.len()) == self.nodes.len())))]
     #[invariant(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
@@ -648,6 +655,7 @@ where
             false
         }
     }
+    #[ensures((ret.is_some() && (old(self.nodes.len()) - 1 == self.nodes.len()) && !self.nodes.contains_key(id) && old(self.nodes.contains_key(id)) && self.nodes.contains_key(&ret.unwrap())) || (ret.is_none() && (old(self.nodes.len()) == self.nodes.len())))]
     #[invariant(self.validate())]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
