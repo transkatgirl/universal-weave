@@ -1,6 +1,8 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
+// TODO: Property tests for LoggedWeave
+// TODO: Property tests for DependentLoroWeave CRDT merging
 // TODO: Rewrite IndependentWeave node activation logic
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
