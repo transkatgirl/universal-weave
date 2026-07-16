@@ -708,7 +708,7 @@ where
     fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[ensures((ret && value == self.bookmarked.contains(id)) || (!ret && old(self.bookmarked.clone() == self.bookmarked)))]
+    #[ensures((ret && value == self.bookmarked.contains(id)) || (!ret && old(self.bookmarked.clone()) == self.bookmarked))]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
