@@ -400,8 +400,8 @@ impl StateMachineTest for WeaveWrapper {
                 state.weave.remove_node_tracked(&map_id(id_seed), |_r| {});
             }
             WeaveTransition::RemoveAllNodes { apply_seed } => {
-                println!("weave.remove_all_nodes();");
                 if apply_seed == 0 {
+                    println!("weave.remove_all_nodes();");
                     state.weave.remove_all_nodes();
                 }
             }
@@ -489,7 +489,7 @@ impl StateMachineTest for WeaveWrapper {
                     }
                 }
 
-                println!("weave.move_node(&{}, {:?});", map_id(id_seed), new_parents);
+                println!("weave.move_node(&{}, &{:?});", map_id(id_seed), new_parents);
                 state.weave.move_node(&map_id(id_seed), &new_parents);
             }
             WeaveTransition::GetContentsMut {
@@ -497,9 +497,9 @@ impl StateMachineTest for WeaveWrapper {
                 content_seed,
             } => {
                 println!(
-                    "weave.get_contents_mut(&{}, |c| *c.content_seed = {});",
+                    "weave.get_contents_mut(&{}, |c| c.content_seed = {});",
                     map_id(id_seed),
-                    content_seed
+                    content_seed % 4
                 );
                 state
                     .weave
