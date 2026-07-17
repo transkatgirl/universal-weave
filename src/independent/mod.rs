@@ -36,7 +36,8 @@ use crate::{
     SortableWeave, Weave, ancestor_subgraph,
     contract::{lacks_duplicates, valid_ordered_nodes, valid_thread},
     dependent::DependentWeave,
-    descendant_subgraph, shortest_path_to_ancestor, topological_sort, topological_sort_rev,
+    descendant_subgraph, shortest_path_to_ancestor, shortest_path_to_descendant, topological_sort,
+    topological_sort_rev,
 };
 
 mod contracts;
@@ -425,6 +426,22 @@ where
                 if let Some(node) = self.nodes.get_mut(&orphan) {
                     node.active = false;
                 }
+            }
+
+            shortest_path_to_descendant(
+                &self.nodes,
+                id,
+                &|node| node.active && &node.id != id,
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set_2,
+                &mut self.scratchpad_list_2,
+            );
+
+            for path_item in self.scratchpad_list_2.drain(..) {
+                if let Some(node) = self.nodes.get_mut(&path_item) {
+                    node.active = true;
+                }
+                self.active.insert(path_item);
             }
         } else {
             if let Some(node) = self.nodes.get_mut(id) {

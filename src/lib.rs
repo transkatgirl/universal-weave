@@ -566,7 +566,7 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
             }
         } else {
             for child in node.to() {
-                shortest_path_to_ancestor(
+                shortest_path_to_descendant(
                     nodes,
                     child,
                     target,

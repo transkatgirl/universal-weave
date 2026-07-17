@@ -17,7 +17,6 @@ const MAX_TRANSITIONS: usize = 512;
 prop_state_machine! {
     #![proptest_config(Config {
         cases: CASES,
-        failure_persistence: None,
         //verbose: 1,
         max_shrink_time: MAX_TRANSITIONS as u32 * 2000,
         max_shrink_iters: u32::MAX-1,
