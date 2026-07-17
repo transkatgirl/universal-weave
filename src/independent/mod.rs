@@ -33,9 +33,11 @@ use crate::{
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
-    SortableWeave, Weave, add_node_identifiers, add_node_identifiers_rev,
+    SortableWeave, Weave,
     contract::{lacks_duplicates, valid_ordered_nodes, valid_thread},
     dependent::DependentWeave,
+    downwards_subgraph, shortest_path_to_ancestor, shortest_path_to_root, topological_sort,
+    topological_sort_rev, upwards_subgraph,
 };
 
 mod contracts;
@@ -210,7 +212,17 @@ where
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_list_2: Vec<K>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set: HashSet<K, S>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_set_2: HashSet<K, S>,
 
     pub metadata: M,
 }
@@ -228,7 +240,9 @@ where
             active: HashSet::with_capacity_and_hasher(capacity, S::default()),
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_list: Vec::with_capacity(capacity),
+            scratchpad_list_2: Vec::with_capacity(capacity),
             scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_set_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
             metadata,
         }
     }
@@ -248,10 +262,20 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_list.len()),
         );
+        self.scratchpad_list_2.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_list_2.len()),
+        );
         self.scratchpad_set.reserve(
             self.nodes
                 .capacity()
                 .saturating_sub(self.scratchpad_set.len()),
+        );
+        self.scratchpad_set_2.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_set_2.len()),
         );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
@@ -260,7 +284,9 @@ where
         self.active.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad_list.shrink_to(min_capacity);
+        self.scratchpad_list_2.shrink_to(min_capacity);
         self.scratchpad_set.shrink_to(min_capacity);
+        self.scratchpad_set_2.shrink_to(min_capacity);
     }
     fn all_parents(
         &self,
@@ -287,58 +313,185 @@ where
             )
         }
     }
-    fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
-        self.update_node_activity_in_place_inner(id, value, true)
-    }
-    #[stacksafe]
-    fn update_node_activity_in_place_inner(&mut self, id: &K, value: bool, start: bool) -> bool {
-        if let Some(node) = self.nodes.get(id) {
-            if node.active == value {
-                return true;
-            }
+    /*
 
-            if start {
-                self.scratchpad_list.clear();
-            }
+    activation:
+    1. recursively find all nodes which are ancestors of the target node
+    2. recursively find all nodes which are children of the target node, excluding the children of the target node's parents
+    3. deactivate all nodes which are not ancestors or children of the target [done]
+    4. within the ancestors, find the deepest (farthest from root) active node, along with the longest active path to it
+    5. find the shortest path between the deepest active node and the target node and activate all nodes along it [done?]
+    6. combine the two paths and then deactivate all ancestors not in that path
+    7. find the longest contiguous active node path starting at the roots
+    8. deactivate all nodes not in the path
 
-            if value {
-                let has_active_parents = node
-                    .from
-                    .iter()
-                    .copied()
-                    .any(|parent| self.active.contains(&parent));
-                let active_siblings: Vec<_> = self
-                    .sibling_ids_from_all_parents_including_roots(node)
-                    .filter(|sibling| self.active.contains(sibling))
-                    .collect();
+    deactivation:
+    1. deactivate the target node
+    2. find the longest contiguous active node path starting at the roots
+    3. deactivate all nodes not in the path [done]
 
-                if !has_active_parents && let Some(parent) = node.from.first().copied() {
-                    self.update_node_activity_in_place_inner(&parent, true, false);
+    */
+    pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
+        if value {
+            if let Some(node) = self.nodes.get_mut(id) {
+                if node.active {
+                    return true;
                 }
-                for sibling in active_siblings {
-                    self.update_node_activity_in_place_inner(&sibling, false, false);
-                }
+
+                node.active = true;
+                self.active.insert(node.id);
             } else {
-                self.scratchpad_list.extend(node.to.iter().copied());
+                return false;
             }
-        }
-        match self.nodes.get_mut(id) {
-            Some(node) => {
-                node.active = value;
-                if value {
-                    self.active.insert(node.id);
-                } else {
-                    self.active.remove(&node.id);
+
+            self.scratchpad_list.clear();
+            self.scratchpad_list_2.clear();
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
+
+            downwards_subgraph(&self.nodes, id, &mut self.scratchpad_set); // ancestors
+
+            for active_root in self
+                .roots
+                .iter()
+                .copied()
+                .filter(|root| self.active.contains(root) && self.scratchpad_set.contains(root))
+            {
+                build_thread_with_critera(
+                    &self.nodes,
+                    &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
+                    active_root,
+                    &mut self.scratchpad_list,
+                    &mut self.scratchpad_set_2,
+                    &mut self.scratchpad_list_2, // active thread including only active ancestors
+                );
+            }
+
+            let target = self.scratchpad_list_2.last().cloned();
+
+            self.scratchpad_list.clear();
+            self.scratchpad_set_2.clear();
+
+            self.scratchpad_set_2
+                .extend(self.scratchpad_list_2.drain(..));
+
+            self.scratchpad_list
+                .extend(self.active.intersection(&self.scratchpad_set));
+
+            for active_ancestor in self.scratchpad_list.drain(..) {
+                if !self.scratchpad_set_2.contains(&active_ancestor) && &active_ancestor != id {
+                    self.active.remove(&active_ancestor);
+                    if let Some(node) = self.nodes.get_mut(&active_ancestor) {
+                        node.active = false;
+                    }
                 }
             }
-            None => return false,
-        }
-        if start {
-            for item in self.scratchpad_list.drain(..) {
-                update_removed_child_activity(&mut self.nodes, &mut self.active, &item);
+
+            self.scratchpad_list.clear();
+            self.scratchpad_list_2.clear();
+            self.scratchpad_set_2.clear();
+
+            if let Some(target) = target {
+                shortest_path_to_ancestor(
+                    &self.nodes,
+                    id,
+                    &target,
+                    &mut self.scratchpad_list,
+                    &mut self.scratchpad_set_2,
+                    &mut self.scratchpad_list_2, // shortest path
+                );
+            } else {
+                shortest_path_to_root(
+                    &self.nodes,
+                    id,
+                    &mut self.scratchpad_list,
+                    &mut self.scratchpad_set_2,
+                    &mut self.scratchpad_list_2, // shortest path
+                );
+            }
+
+            for path_item in self.scratchpad_list_2.drain(..) {
+                if let Some(node) = self.nodes.get_mut(&path_item) {
+                    node.active = true;
+                }
+                self.active.insert(path_item);
+            }
+
+            self.scratchpad_list.clear();
+            self.scratchpad_set_2.clear();
+
+            for parent in &self.nodes.get(id).unwrap().from {
+                for sibling in self.nodes.get(parent).unwrap().to.iter().copied() {
+                    if self.scratchpad_set.insert(sibling) {
+                        self.scratchpad_list_2.push(sibling);
+                    };
+                }
+            }
+
+            self.scratchpad_set.remove(id);
+            upwards_subgraph(&self.nodes, id, &mut self.scratchpad_set);
+
+            for item in self.scratchpad_list_2.drain(..) {
+                self.scratchpad_set.remove(&item);
+            }
+
+            self.scratchpad_list
+                .extend(self.active.difference(&self.scratchpad_set).copied());
+
+            for orphan in self.scratchpad_list.drain(..) {
+                self.active.remove(&orphan);
+                if let Some(node) = self.nodes.get_mut(&orphan) {
+                    node.active = false;
+                }
+            }
+        } else {
+            if let Some(node) = self.nodes.get_mut(id) {
+                if !node.active {
+                    return true;
+                }
+
+                node.active = false;
+                self.active.remove(id);
+            } else {
+                return false;
             }
         }
+
+        self.fix_orphaned_activations();
+
         true
+    }
+    pub(super) fn fix_orphaned_activations(&mut self) {
+        self.scratchpad_list.clear();
+        self.scratchpad_list_2.clear();
+        self.scratchpad_set.clear();
+
+        for active_root in self
+            .roots
+            .iter()
+            .copied()
+            .filter(|root| self.active.contains(root))
+        {
+            build_thread_with_critera(
+                &self.nodes,
+                &|id| self.active.contains(id),
+                active_root,
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set,
+                &mut self.scratchpad_list_2,
+            );
+        }
+
+        self.scratchpad_set.extend(self.scratchpad_list_2.drain(..));
+        self.scratchpad_list
+            .extend(self.active.difference(&self.scratchpad_set).copied());
+
+        for orphan in self.scratchpad_list.drain(..) {
+            self.active.remove(&orphan);
+            if let Some(node) = self.nodes.get_mut(&orphan) {
+                node.active = false;
+            }
+        }
     }
     #[ensures(!self.nodes.contains_key(id))]
     #[stacksafe]
@@ -359,12 +512,6 @@ where
                     let identifier = child.id;
                     if child.from.is_empty() {
                         self.remove_node_unverified(&identifier);
-                    } else if node.active && child.active {
-                        update_removed_child_activity(
-                            &mut self.nodes,
-                            &mut self.active,
-                            &identifier,
-                        );
                     }
                 }
             }
@@ -396,12 +543,6 @@ where
                     let identifier = child.id;
                     if child.from.is_empty() {
                         self.remove_node_unverified_tracked(&identifier, callback);
-                    } else if node.active && child.active {
-                        update_removed_child_activity(
-                            &mut self.nodes,
-                            &mut self.active,
-                            &identifier,
-                        );
                     }
                 }
             }
@@ -410,43 +551,6 @@ where
         } else {
             false
         }
-    }
-}
-
-#[stacksafe]
-fn update_removed_child_activity<K, T, S>(
-    nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
-    active: &mut HashSet<K, S>,
-    id: &K,
-) -> bool
-where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(id) {
-        if !node.active {
-            return true;
-        }
-
-        let has_active_parents = node.from.iter().any(|parent| active.contains(parent));
-
-        if has_active_parents {
-            return true;
-        }
-    }
-    if let Some(node) = nodes.get_mut(id) {
-        node.active = false;
-        active.remove(&node.id);
-
-        let children: Vec<_> = node.to.iter().copied().collect();
-        for child in &children {
-            update_removed_child_activity(nodes, active, child);
-        }
-
-        true
-    } else {
-        false
     }
 }
 
@@ -524,7 +628,7 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
                 output,
@@ -543,7 +647,7 @@ where
                     self.scratchpad_set.insert(*parent);
                 }
             }
-            add_node_identifiers::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
                 output,
@@ -565,9 +669,9 @@ where
             .copied()
             .filter(|root| self.active.contains(root))
         {
-            build_thread(
+            build_thread_with_critera(
                 &self.nodes,
-                &self.active,
+                &|id| self.active.contains(id),
                 active_root,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
@@ -749,7 +853,11 @@ where
     #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
-        self.remove_node_unverified(id)
+        let result = self.remove_node_unverified(id);
+        if result.is_some() {
+            self.fix_orphaned_activations();
+        }
+        result
     }
     #[ensures(!self.nodes.contains_key(id))]
     #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
@@ -764,7 +872,12 @@ where
         id: &K,
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
     ) -> bool {
-        self.remove_node_unverified_tracked(id, &mut on_removal)
+        if self.remove_node_unverified_tracked(id, &mut on_removal) {
+            self.fix_orphaned_activations();
+            true
+        } else {
+            false
+        }
     }
     #[ensures(self.nodes.is_empty())]
     #[invariant(self.validate())]
@@ -803,7 +916,7 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
                 output,
@@ -822,7 +935,7 @@ where
                     self.scratchpad_set.insert(*parent);
                 }
             }
-            add_node_identifiers_rev::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
                 output,
@@ -1107,14 +1220,14 @@ where
             return false;
         }
 
-        let old_parents_ex_new = if let Some(node) = self.nodes.get_mut(id) {
+        if let Some(node) = self.nodes.get_mut(id) {
             for child in &node.to {
                 if new_parents.contains(child) {
                     return false;
                 }
             }
 
-            let mut old_parents = mem::take(&mut node.from);
+            let old_parents = mem::take(&mut node.from);
 
             for old_parent in &old_parents {
                 if !new_parents.contains(old_parent)
@@ -1129,12 +1242,8 @@ where
                     && let Some(new_parent) = self.nodes.get_mut(new_parent)
                 {
                     new_parent.to.insert(*id);
-                } else {
-                    old_parents.swap_remove(new_parent);
                 }
             }
-
-            old_parents
         } else {
             return false;
         };
@@ -1149,12 +1258,7 @@ where
         }
 
         if node.active {
-            node.active = false;
-            assert!(self.update_node_activity_in_place(id, true));
-
-            for old_parent in old_parents_ex_new {
-                update_removed_child_activity(&mut self.nodes, &mut self.active, &old_parent);
-            }
+            self.fix_orphaned_activations();
         }
 
         true
@@ -1396,12 +1500,12 @@ where
 }
 
 #[stacksafe]
-fn build_thread<K, T, S>(
+fn build_thread_with_critera<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    active: &HashSet<K, S>,
+    criteria: &impl Fn(&K) -> bool,
     id: K,
     scratchpad_list: &mut Vec<K>,
-    thread_set: &mut HashSet<K, S>,
+    scratchpad_set: &mut HashSet<K, S>,
     thread_list: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
@@ -1412,9 +1516,9 @@ fn build_thread<K, T, S>(
         && node
             .from
             .iter()
-            .filter(|parent| active.contains(*parent))
-            .all(|parent| thread_set.contains(parent))
-        && thread_set.insert(id)
+            .filter(|parent| criteria(parent))
+            .all(|parent| scratchpad_set.contains(parent))
+        && scratchpad_set.insert(id)
     {
         scratchpad_list.push(id);
 
@@ -1423,20 +1527,20 @@ fn build_thread<K, T, S>(
         }
 
         for child in node.to.iter().copied() {
-            if active.contains(&child) {
-                build_thread(
+            if criteria(&child) {
+                build_thread_with_critera(
                     nodes,
-                    active,
+                    criteria,
                     child,
                     scratchpad_list,
-                    thread_set,
+                    scratchpad_set,
                     thread_list,
                 );
             }
         }
 
         scratchpad_list.pop();
-        thread_set.remove(&id);
+        scratchpad_set.remove(&id);
     }
 }
 
@@ -1475,6 +1579,7 @@ where
 
             thread_list.pop();
             thread_set.remove(&id);
+
             false
         } else {
             true
@@ -1507,6 +1612,65 @@ fn build_thread_from<K, T, S>(
         if let Some(parent) = node.from.first().copied() {
             build_thread_from(nodes, active, parent, thread_list, thread_set);
         }
+    }
+}
+
+#[stacksafe]
+fn build_longest_thread_from<K, T, S>(
+    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
+    active: &HashSet<K, S>,
+    id: K,
+    scratchpad_list: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K, S>,
+    thread_list: &mut Vec<K>,
+    has_active: &mut bool,
+) where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(&id)
+        && scratchpad_set.insert(id)
+    {
+        scratchpad_list.push(id);
+
+        if node.from.iter().any(|parent| active.contains(parent)) {
+            *has_active = true;
+            if scratchpad_list.len() > thread_list.len() {
+                thread_list.clone_from(scratchpad_list);
+            }
+        } else {
+            if scratchpad_list.len() > thread_list.len() && (!*has_active) {
+                thread_list.clone_from(scratchpad_list);
+            }
+        }
+
+        for parent in node.from.iter().filter(|p| active.contains(p)).copied() {
+            build_longest_thread_from(
+                nodes,
+                active,
+                parent,
+                scratchpad_list,
+                scratchpad_set,
+                thread_list,
+                has_active,
+            );
+        }
+
+        for parent in node.from.iter().filter(|p| !active.contains(p)).copied() {
+            build_longest_thread_from(
+                nodes,
+                active,
+                parent,
+                scratchpad_list,
+                scratchpad_set,
+                thread_list,
+                has_active,
+            );
+        }
+
+        scratchpad_list.pop();
+        scratchpad_set.remove(&id);
     }
 }
 

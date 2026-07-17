@@ -433,7 +433,7 @@ where
 }
 
 #[stacksafe::stacksafe]
-fn add_node_identifiers<'a, K, N, T, S>(
+fn topological_sort<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
     identifiers: &mut Vec<K>,
@@ -458,13 +458,13 @@ fn add_node_identifiers<'a, K, N, T, S>(
         identifiers.push(*id);
         identifier_set.insert(*id);
         for child in node.to().into_iter() {
-            add_node_identifiers(nodes, child, identifiers, identifier_set);
+            topological_sort(nodes, child, identifiers, identifier_set);
         }
     }
 }
 
 #[stacksafe::stacksafe]
-fn add_node_identifiers_rev<'a, K, N, T, S>(
+fn topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
     identifiers: &mut Vec<K>,
@@ -489,7 +489,133 @@ fn add_node_identifiers_rev<'a, K, N, T, S>(
         identifiers.push(*id);
         identifier_set.insert(*id);
         for child in node.to().into_iter().rev() {
-            add_node_identifiers_rev(nodes, child, identifiers, identifier_set);
+            topological_sort_rev(nodes, child, identifiers, identifier_set);
+        }
+    }
+}
+
+#[stacksafe::stacksafe]
+fn shortest_path_to_root<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    scratchpad_list: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K, S>,
+    path: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if scratchpad_set.insert(*id) {
+        scratchpad_list.push(*id);
+
+        if node.from().into_iter().next().is_none() {
+            if path.is_empty() || path.len() > scratchpad_list.len() {
+                path.clone_from(scratchpad_list);
+            }
+        } else {
+            for parent in node.from() {
+                shortest_path_to_root(nodes, parent, scratchpad_list, scratchpad_set, path);
+            }
+        }
+
+        scratchpad_list.pop();
+        scratchpad_set.remove(id);
+    }
+}
+
+#[stacksafe::stacksafe]
+fn shortest_path_to_ancestor<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    target: &'a K,
+    scratchpad_list: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K, S>,
+    path: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if scratchpad_set.insert(*id) {
+        scratchpad_list.push(*id);
+
+        if target == id {
+            if path.is_empty() || path.len() > scratchpad_list.len() {
+                path.clone_from(scratchpad_list);
+            }
+        } else {
+            for parent in node.from() {
+                shortest_path_to_ancestor(
+                    nodes,
+                    parent,
+                    target,
+                    scratchpad_list,
+                    scratchpad_set,
+                    path,
+                );
+            }
+        }
+
+        scratchpad_list.pop();
+        scratchpad_set.remove(id);
+    }
+}
+
+#[stacksafe::stacksafe]
+fn downwards_subgraph<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if identifiers.insert(*id) {
+        for parent in node.from().into_iter() {
+            downwards_subgraph(nodes, parent, identifiers);
+        }
+    }
+}
+
+#[stacksafe::stacksafe]
+fn upwards_subgraph<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if identifiers.insert(*id) {
+        for child in node.to().into_iter() {
+            upwards_subgraph(nodes, child, identifiers);
         }
     }
 }

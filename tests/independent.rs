@@ -11,7 +11,7 @@ use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use stacksafe::stacksafe;
 use universal_weave::{
-    ActivePathWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
     IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node, SemiIndependentWeave,
     SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
@@ -215,6 +215,7 @@ impl StateMachineTest for WeaveWrapper {
     fn init_test(
         ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) -> Self::SystemUnderTest {
+        println!("init");
         WeaveWrapper {
             weave: IndependentWeave::with_capacity(ref_state.len(), ref_state.len() as u32),
             counter: 0,

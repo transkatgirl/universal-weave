@@ -36,7 +36,7 @@ use crate::{
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave,
     contract::{
-        lacks_duplicates, matches_add_node_identifiers, matches_add_node_identifiers_rev,
+        lacks_duplicates, matches_topological_sort, matches_topological_sort_rev,
         valid_ordered_nodes, valid_thread,
     },
 };
@@ -342,7 +342,7 @@ where
     }
     #[ensures(output.len() == self.nodes.len())]
     #[ensures(valid_ordered_nodes(&self.nodes, output))]
-    #[ensures(matches_add_node_identifiers(&self.nodes, &self.roots, output))]
+    #[ensures(matches_topological_sort(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -351,7 +351,7 @@ where
         }
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(matches_add_node_identifiers(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
+    #[ensures(matches_topological_sort(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers(&self.nodes, *id, output);
@@ -520,7 +520,7 @@ where
 {
     #[ensures(output.len() == self.nodes.len())]
     #[ensures(valid_ordered_nodes(&self.nodes, output))]
-    #[ensures(matches_add_node_identifiers_rev(&self.nodes, &self.roots, output))]
+    #[ensures(matches_topological_sort_rev(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -529,7 +529,7 @@ where
         }
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(matches_add_node_identifiers_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
+    #[ensures(matches_topological_sort_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *id, output); // Compiler limitation

@@ -1,6 +1,6 @@
 use std::{collections::HashSet, hash::Hash, ops::Index};
 
-use crate::{Node, add_node_identifiers, add_node_identifiers_rev};
+use crate::{Node, topological_sort, topological_sort_rev};
 
 pub(crate) fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
 where
@@ -20,7 +20,7 @@ where
     true
 }
 
-pub(crate) fn matches_add_node_identifiers<'a, K, N, T>(
+pub(crate) fn matches_topological_sort<'a, K, N, T>(
     nodes: &'a impl Index<&'a K, Output = N>,
     ids: impl IntoIterator<Item = &'a K>,
     value: &'a [K],
@@ -41,13 +41,13 @@ where
         for parent in node.from() {
             identifier_set.insert(*parent);
         }
-        add_node_identifiers(nodes, id, &mut identifiers, &mut identifier_set);
+        topological_sort(nodes, id, &mut identifiers, &mut identifier_set);
     }
 
     identifiers == value
 }
 
-pub(crate) fn matches_add_node_identifiers_rev<'a, K, N, T>(
+pub(crate) fn matches_topological_sort_rev<'a, K, N, T>(
     nodes: &'a impl Index<&'a K, Output = N>,
     ids: impl IntoIterator<Item = &'a K>,
     value: &'a [K],
@@ -68,7 +68,7 @@ where
         for parent in node.from() {
             identifier_set.insert(*parent);
         }
-        add_node_identifiers_rev(nodes, id, &mut identifiers, &mut identifier_set);
+        topological_sort_rev(nodes, id, &mut identifiers, &mut identifier_set);
     }
 
     identifiers == value
