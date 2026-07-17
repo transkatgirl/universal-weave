@@ -33,11 +33,10 @@ use crate::{
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
-    SortableWeave, Weave,
+    SortableWeave, Weave, ancestor_subgraph,
     contract::{lacks_duplicates, valid_ordered_nodes, valid_thread},
     dependent::DependentWeave,
-    downwards_subgraph, shortest_path_to_ancestor, shortest_path_to_root, topological_sort,
-    topological_sort_rev, upwards_subgraph,
+    descendant_subgraph, shortest_path_to_ancestor, topological_sort, topological_sort_rev,
 };
 
 mod contracts;
@@ -313,24 +312,6 @@ where
             )
         }
     }
-    /*
-
-    activation:
-    1. recursively find all nodes which are ancestors of the target node
-    2. recursively find all nodes which are children of the target node, excluding the children of the target node's parents
-    3. deactivate all nodes which are not ancestors or children of the target [done]
-    4. within the ancestors, find the deepest (farthest from root) active node, along with the longest active path to it
-    5. find the shortest path between the deepest active node and the target node and activate all nodes along it [done?]
-    6. combine the two paths and then deactivate all ancestors not in that path
-    7. find the longest contiguous active node path starting at the roots
-    8. deactivate all nodes not in the path
-
-    deactivation:
-    1. deactivate the target node
-    2. find the longest contiguous active node path starting at the roots
-    3. deactivate all nodes not in the path [done]
-
-    */
     pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
         if value {
             if let Some(node) = self.nodes.get_mut(id) {
@@ -349,7 +330,7 @@ where
             self.scratchpad_set.clear();
             self.scratchpad_set_2.clear();
 
-            downwards_subgraph(&self.nodes, id, &mut self.scratchpad_set); // ancestors
+            ancestor_subgraph(&self.nodes, id, &mut self.scratchpad_set); // ancestors
 
             for active_root in self
                 .roots
@@ -395,15 +376,16 @@ where
                 shortest_path_to_ancestor(
                     &self.nodes,
                     id,
-                    &target,
+                    &|node| node.id == target,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
                 );
             } else {
-                shortest_path_to_root(
+                shortest_path_to_ancestor(
                     &self.nodes,
                     id,
+                    &|node| node.from.is_empty(),
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
@@ -429,7 +411,7 @@ where
             }
 
             self.scratchpad_set.remove(id);
-            upwards_subgraph(&self.nodes, id, &mut self.scratchpad_set);
+            descendant_subgraph(&self.nodes, id, &mut self.scratchpad_set); // decendants
 
             for item in self.scratchpad_list_2.drain(..) {
                 self.scratchpad_set.remove(&item);

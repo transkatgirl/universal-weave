@@ -326,7 +326,7 @@ impl StateMachineTest for WeaveWrapper {
                 let from = IndexSet::from_iter(from_seeds.into_iter().map(&map_id));
                 for id in &from {
                     if state.weave.contains(id) {
-                        downwards_subgraph(state.weave.nodes(), id, &mut state.scratchpad_set);
+                        ancestor_subgraph(state.weave.nodes(), id, &mut state.scratchpad_set);
                     }
                 }
 
@@ -334,7 +334,7 @@ impl StateMachineTest for WeaveWrapper {
                 for id in to_seeds.into_iter().map(&map_id) {
                     if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
                         if state.weave.contains(&id) {
-                            downwards_subgraph(state.weave.nodes(), &id, &mut state.scratchpad_set);
+                            ancestor_subgraph(state.weave.nodes(), &id, &mut state.scratchpad_set);
                         }
 
                         to.insert(id);
@@ -495,7 +495,7 @@ impl StateMachineTest for WeaveWrapper {
                 let node_id = map_id(id_seed);
                 if let Some(node) = state.weave.get_node(&node_id) {
                     for child in node.to() {
-                        upwards_subgraph(state.weave.nodes(), child, &mut state.scratchpad_set);
+                        descendant_subgraph(state.weave.nodes(), child, &mut state.scratchpad_set);
                     }
                 }
 
@@ -562,7 +562,7 @@ impl StateMachineTest for WeaveWrapper {
 
 // Copied from src/lib.rs
 #[stacksafe]
-fn add_node_identifiers<'a, K, N, T, S>(
+fn topological_sort<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
     identifiers: &mut Vec<K>,
@@ -587,14 +587,14 @@ fn add_node_identifiers<'a, K, N, T, S>(
         identifiers.push(*id);
         identifier_set.insert(*id);
         for child in node.to().into_iter() {
-            add_node_identifiers(nodes, child, identifiers, identifier_set);
+            topological_sort(nodes, child, identifiers, identifier_set);
         }
     }
 }
 
 // Copied from src/lib.rs
 #[stacksafe]
-fn downwards_subgraph<'a, K, N, T, S>(
+fn ancestor_subgraph<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
     identifiers: &mut HashSet<K, S>,
@@ -611,14 +611,14 @@ fn downwards_subgraph<'a, K, N, T, S>(
 
     if identifiers.insert(*id) {
         for parent in node.from().into_iter() {
-            downwards_subgraph(nodes, parent, identifiers);
+            ancestor_subgraph(nodes, parent, identifiers);
         }
     }
 }
 
 // Copied from src/lib.rs
 #[stacksafe]
-fn upwards_subgraph<'a, K, N, T, S>(
+fn descendant_subgraph<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
     identifiers: &mut HashSet<K, S>,
@@ -635,7 +635,7 @@ fn upwards_subgraph<'a, K, N, T, S>(
 
     if identifiers.insert(*id) {
         for child in node.to().into_iter() {
-            upwards_subgraph(nodes, child, identifiers);
+            descendant_subgraph(nodes, child, identifiers);
         }
     }
 }
@@ -662,7 +662,7 @@ where
                     identifier_set.insert(*parent);
                 }
             }
-            add_node_identifiers(nodes, id, &mut identifiers, &mut identifier_set);
+            topological_sort(nodes, id, &mut identifiers, &mut identifier_set);
             if let Some(node) = nodes.get(id) {
                 for parent in node.from() {
                     identifier_set.remove(parent);
@@ -682,6 +682,7 @@ fn transition_set() {
         weave: IndependentWeave::with_capacity(items.len(), items.len() as u32),
         counter: 0,
         scratchpad: Vec::with_capacity(items.len()),
+        scratchpad_set: HashSet::with_capacity(items.len()),
     };
     for item in items {
         state = WeaveWrapper::apply(state, &vec![], item);
