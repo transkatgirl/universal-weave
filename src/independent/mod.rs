@@ -1203,7 +1203,7 @@ where
     #[invariant(self.validate())]
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<Vec<_>>() == new_parents)]
+    #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<HashSet<_>>() == HashSet::from_iter(new_parents.iter().copied()))]
     #[ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())) == self.nodes().get(id).map(|node| node.from.clone()))]
     #[ensures(ret || old(self.active.len()) == self.active.len())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {

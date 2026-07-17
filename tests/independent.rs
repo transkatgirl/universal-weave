@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash, RandomState},
-    iter,
     ops::Index,
 };
 
@@ -164,7 +163,8 @@ enum WeaveTransition {
 struct WeaveWrapper {
     weave: IndependentWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
-    id_scratchpad: Vec<u32>,
+    scratchpad: Vec<u32>,
+    scratchpad_set: HashSet<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -219,7 +219,8 @@ impl StateMachineTest for WeaveWrapper {
         WeaveWrapper {
             weave: IndependentWeave::with_capacity(ref_state.len(), ref_state.len() as u32),
             counter: 0,
-            id_scratchpad: Vec::with_capacity(ref_state.len()),
+            scratchpad: Vec::with_capacity(ref_state.len()),
+            scratchpad_set: HashSet::with_capacity(ref_state.len()),
         }
     }
     fn apply(
@@ -236,53 +237,52 @@ impl StateMachineTest for WeaveWrapper {
             WeaveTransition::GetOrderedNodeIdentifiers { reversed } => {
                 if reversed {
                     println!(
-                        "weave.get_ordered_node_identifiers_reversed_children(&mut id_scratchpad);"
+                        "weave.get_ordered_node_identifiers_reversed_children(&mut scratchpad);"
                     );
                     state
                         .weave
-                        .get_ordered_node_identifiers_reversed_children(&mut state.id_scratchpad);
+                        .get_ordered_node_identifiers_reversed_children(&mut state.scratchpad);
                 } else {
-                    println!("weave.get_ordered_node_identifiers(&mut id_scratchpad);");
+                    println!("weave.get_ordered_node_identifiers(&mut scratchpad);");
                     state
                         .weave
-                        .get_ordered_node_identifiers(&mut state.id_scratchpad);
+                        .get_ordered_node_identifiers(&mut state.scratchpad);
                 }
             }
             WeaveTransition::GetOrderedNodeIdentifiersFrom { id_seed, reversed } => {
                 if reversed {
                     println!(
-                        "weave.get_ordered_node_identifiers_from_reversed_children(&{}, &mut id_scratchpad);",
+                        "weave.get_ordered_node_identifiers_from_reversed_children(&{}, &mut scratchpad);",
                         map_id(id_seed)
                     );
                     state
                         .weave
                         .get_ordered_node_identifiers_from_reversed_children(
                             &map_id(id_seed),
-                            &mut state.id_scratchpad,
+                            &mut state.scratchpad,
                         );
                 } else {
                     println!(
-                        "weave.get_ordered_node_identifiers_from(&{}, &mut id_scratchpad);",
+                        "weave.get_ordered_node_identifiers_from(&{}, &mut scratchpad);",
                         map_id(id_seed)
                     );
-                    state.weave.get_ordered_node_identifiers_from(
-                        &map_id(id_seed),
-                        &mut state.id_scratchpad,
-                    );
+                    state
+                        .weave
+                        .get_ordered_node_identifiers_from(&map_id(id_seed), &mut state.scratchpad);
                 }
             }
             WeaveTransition::GetActiveThread => {
-                println!("weave.get_active_thread(&mut id_scratchpad);");
-                state.weave.get_active_thread(&mut state.id_scratchpad);
+                println!("weave.get_active_thread(&mut scratchpad);");
+                state.weave.get_active_thread(&mut state.scratchpad);
             }
             WeaveTransition::GetThreadFrom { id_seed } => {
                 println!(
-                    "weave.get_thread_from(&{}, &mut id_scratchpad);",
+                    "weave.get_thread_from(&{}, &mut scratchpad);",
                     map_id(id_seed)
                 );
                 state
                     .weave
-                    .get_thread_from(&map_id(id_seed), &mut state.id_scratchpad);
+                    .get_thread_from(&map_id(id_seed), &mut state.scratchpad);
             }
             WeaveTransition::AddNode {
                 from_seeds,
@@ -293,7 +293,7 @@ impl StateMachineTest for WeaveWrapper {
             } => {
                 let node = IndependentNode {
                     id: state.counter,
-                    from: IndexSet::from_iter(from_seeds.iter().copied().map(&map_id)),
+                    from: IndexSet::from_iter(from_seeds.into_iter().map(&map_id)),
                     to: IndexSet::default(),
                     active,
                     bookmarked,
@@ -321,15 +321,23 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                let from = IndexSet::from_iter(from_seeds.iter().copied().map(&map_id));
-                let (_, subset) = node_identifiers(state.weave.nodes(), from.iter());
-                let to = IndexSet::from_iter(
-                    to_seeds
-                        .iter()
-                        .copied()
-                        .map(&map_id)
-                        .filter(|id| subset.contains(id)),
-                );
+                let from = IndexSet::from_iter(from_seeds.into_iter().map(&map_id));
+                state.scratchpad_set.clear();
+                for id in &from {
+                    if state.weave.contains(id) {
+                        downwards_subgraph(state.weave.nodes(), id, &mut state.scratchpad_set);
+                    }
+                }
+                let mut to = IndexSet::with_capacity(to_seeds.len());
+                for id in to_seeds.into_iter().map(&map_id) {
+                    if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
+                        if state.weave.contains(&id) {
+                            downwards_subgraph(state.weave.nodes(), &id, &mut state.scratchpad_set);
+                        }
+
+                        to.insert(id);
+                    }
+                }
 
                 let node = IndependentNode {
                     id: state.counter,
@@ -480,12 +488,19 @@ impl StateMachineTest for WeaveWrapper {
                 id_seed,
                 new_parents_seeds,
             } => {
+                state.scratchpad_set.clear();
+
+                let node_id = map_id(id_seed);
+                if let Some(node) = state.weave.get_node(&node_id) {
+                    for child in node.to() {
+                        upwards_subgraph(state.weave.nodes(), child, &mut state.scratchpad_set);
+                    }
+                }
+
                 let mut new_parents = Vec::with_capacity(new_parents_seeds.len());
 
-                for seed in new_parents_seeds {
-                    let (_, subset) = node_identifiers(state.weave.nodes(), iter::once(&seed));
-                    let id = map_id(seed);
-                    if subset.contains(&id) {
+                for id in new_parents_seeds.into_iter().map(&map_id) {
+                    if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
                         new_parents.push(id);
                     }
                 }
@@ -575,6 +590,54 @@ fn add_node_identifiers<'a, K, N, T, S>(
     }
 }
 
+// Copied from src/lib.rs
+#[stacksafe]
+fn downwards_subgraph<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if identifiers.insert(*id) {
+        for parent in node.from().into_iter() {
+            downwards_subgraph(nodes, parent, identifiers);
+        }
+    }
+}
+
+// Copied from src/lib.rs
+#[stacksafe]
+fn upwards_subgraph<'a, K, N, T, S>(
+    nodes: &'a impl Index<&'a K, Output = N>,
+    id: &'a K,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if identifiers.insert(*id) {
+        for child in node.to().into_iter() {
+            upwards_subgraph(nodes, child, identifiers);
+        }
+    }
+}
+
 pub fn node_identifiers<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl Iterator<Item = &'a K>,
@@ -616,7 +679,7 @@ fn transition_set() {
     let mut state = WeaveWrapper {
         weave: IndependentWeave::with_capacity(items.len(), items.len() as u32),
         counter: 0,
-        id_scratchpad: Vec::with_capacity(items.len()),
+        scratchpad: Vec::with_capacity(items.len()),
     };
     for item in items {
         state = WeaveWrapper::apply(state, &vec![], item);

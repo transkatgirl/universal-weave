@@ -133,7 +133,7 @@ enum WeaveTransition {
 struct WeaveWrapper {
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
-    id_scratchpad: Vec<u32>,
+    scratchpad: Vec<u32>,
     last_commit: Option<Frontiers>,
 }
 
@@ -159,7 +159,7 @@ impl StateMachineTest for WeaveWrapper {
             ))
             .unwrap(),
             counter: 0,
-            id_scratchpad: Vec::with_capacity(ref_state.len()),
+            scratchpad: Vec::with_capacity(ref_state.len()),
             last_commit: None,
         }
     }
@@ -178,11 +178,11 @@ impl StateMachineTest for WeaveWrapper {
                 if reversed {
                     state
                         .weave
-                        .get_ordered_node_identifiers_reversed_children(&mut state.id_scratchpad);
+                        .get_ordered_node_identifiers_reversed_children(&mut state.scratchpad);
                 } else {
                     state
                         .weave
-                        .get_ordered_node_identifiers(&mut state.id_scratchpad);
+                        .get_ordered_node_identifiers(&mut state.scratchpad);
                 }
             }
             WeaveTransition::GetOrderedNodeIdentifiersFrom { id_seed, reversed } => {
@@ -191,21 +191,20 @@ impl StateMachineTest for WeaveWrapper {
                         .weave
                         .get_ordered_node_identifiers_from_reversed_children(
                             &map_id(id_seed),
-                            &mut state.id_scratchpad,
+                            &mut state.scratchpad,
                         );
                 } else {
-                    state.weave.get_ordered_node_identifiers_from(
-                        &map_id(id_seed),
-                        &mut state.id_scratchpad,
-                    );
+                    state
+                        .weave
+                        .get_ordered_node_identifiers_from(&map_id(id_seed), &mut state.scratchpad);
                 }
             }
             WeaveTransition::GetActiveThread => {
-                state.weave.get_active_thread(&mut state.id_scratchpad)
+                state.weave.get_active_thread(&mut state.scratchpad)
             }
             WeaveTransition::GetThreadFrom { id_seed } => state
                 .weave
-                .get_thread_from(&map_id(id_seed), &mut state.id_scratchpad),
+                .get_thread_from(&map_id(id_seed), &mut state.scratchpad),
             WeaveTransition::AddNode {
                 from_seed,
                 active,
