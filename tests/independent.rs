@@ -321,13 +321,15 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                let from = IndexSet::from_iter(from_seeds.into_iter().map(&map_id));
                 state.scratchpad_set.clear();
+
+                let from = IndexSet::from_iter(from_seeds.into_iter().map(&map_id));
                 for id in &from {
                     if state.weave.contains(id) {
                         downwards_subgraph(state.weave.nodes(), id, &mut state.scratchpad_set);
                     }
                 }
+
                 let mut to = IndexSet::with_capacity(to_seeds.len());
                 for id in to_seeds.into_iter().map(&map_id) {
                     if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
