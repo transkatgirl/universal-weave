@@ -1,9 +1,10 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
+// TODO: Rewrite IndependentWeave node activation & traversal logic
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
 // TODO: Property tests for DependentLoroWeave CRDT merging
-// TODO: Rewrite IndependentWeave node activation logic
+// TODO: Property tests for Archived structs
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
 
@@ -17,7 +18,7 @@ pub mod versioning;
 
 use std::{
     cmp::Ordering,
-    collections::HashSet,
+    collections::{HashMap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     ops::Index,
 };
@@ -158,14 +159,8 @@ where
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
-    /// This function is meant to be used in user interfaces and its exact behavior is decided by the Weave implementation. The `alternate` argument should be used in cases where an alternative behavior is desired (such as when shift-clicking a button).
-    ///
-    /// This function uses [`Weave::set_node_active_status_in_place`] internally.
-    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool;
-    /// Sets the active status of a node with the specified identifier.
-    ///
-    /// Unlike [`Weave::set_node_active_status`], this function only changes the active status of other nodes if it is necessary to preserve internal consistency.
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool;
+    /// This function may change the active status of other nodes in an implementation-specific manner if it is necessary to preserve internal consistency.
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
@@ -464,6 +459,38 @@ fn topological_sort<'a, K, N, T, S>(
 }
 
 #[stacksafe::stacksafe]
+fn topological_sort_subgraph<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    filter: &impl Fn(&'a K) -> bool,
+    id: &'a K,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let node = nodes.index(id);
+
+    if !identifier_set.contains(id)
+        && node
+            .from()
+            .into_iter()
+            .all(|parent| identifier_set.contains(parent) || !filter(parent))
+    {
+        identifiers.push(*id);
+        identifier_set.insert(*id);
+        for child in node.to().into_iter().filter(|child| filter(*child)) {
+            topological_sort_subgraph(nodes, filter, child, identifiers, identifier_set);
+        }
+    }
+}
+
+#[stacksafe::stacksafe]
 fn topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a impl Index<&'a K, Output = N>,
     id: &'a K,
@@ -582,48 +609,105 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     }
 }
 
-#[stacksafe::stacksafe]
-fn ancestor_subgraph<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    id: &'a K,
-    identifiers: &mut HashSet<K, S>,
+fn longest_path_to_root<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    topological_order: &'a [K],
+    scratchpad_map: &mut HashMap<K, usize, S>,
+    reversed_path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
     &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    let mut longest_global_distance = None;
 
-    if identifiers.insert(*id) {
-        for parent in node.from().into_iter() {
-            ancestor_subgraph(nodes, parent, identifiers);
+    for id in topological_order {
+        let node = nodes.index(id);
+
+        let longest_distance = node
+            .from()
+            .into_iter()
+            .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
+            .max()
+            .map(|l| l + 1)
+            .unwrap_or_default();
+
+        scratchpad_map.insert(*id, longest_distance);
+
+        match longest_global_distance {
+            Some((value, _)) => {
+                if longest_distance > value {
+                    longest_global_distance = Some((longest_distance, id));
+                }
+            }
+            None => {
+                longest_global_distance = Some((longest_distance, id));
+            }
+        }
+    }
+
+    if let Some((_, id)) = longest_global_distance {
+        let mut current_id = Some(id);
+
+        while let Some(id) = current_id {
+            let node = nodes.index(id);
+
+            reversed_path.push(*id);
+
+            current_id = node
+                .from()
+                .into_iter()
+                .max_by_key(|id| scratchpad_map.get(*id).copied().unwrap_or_default());
         }
     }
 }
 
-#[stacksafe::stacksafe]
-fn descendant_subgraph<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    id: &'a K,
+fn ancestor_subgraph<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    id: K,
+    scratchpad: &mut VecDeque<K>,
     identifiers: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + 'a,
-    N: Node<K, T> + 'a,
+    N: Node<K, T>,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
     &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push_back(id);
 
-    if identifiers.insert(*id) {
-        for child in node.to().into_iter() {
-            descendant_subgraph(nodes, child, identifiers);
+    while let Some(id) = scratchpad.pop_front() {
+        if identifiers.insert(id) {
+            scratchpad.extend(nodes[&id].from().into_iter().copied());
+        }
+    }
+}
+
+fn descendant_subgraph<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    id: K,
+    scratchpad: &mut VecDeque<K>,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T>,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push_back(id);
+
+    while let Some(id) = scratchpad.pop_front() {
+        if identifiers.insert(id) {
+            scratchpad.extend(nodes[&id].to().into_iter().copied());
         }
     }
 }

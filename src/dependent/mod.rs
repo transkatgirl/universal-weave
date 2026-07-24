@@ -37,7 +37,7 @@ use crate::{
     SemiIndependentWeave, SortableWeave, Weave,
     contract::{
         lacks_duplicates, matches_topological_sort, matches_topological_sort_rev,
-        valid_ordered_nodes, valid_thread,
+        valid_ordered_nodes, valid_path,
     },
 };
 
@@ -358,7 +358,7 @@ where
     }
     #[ensures(output.is_empty() == self.active.is_none())]
     #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_thread(&self.nodes, output))]
+    #[ensures(valid_path(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
@@ -367,7 +367,7 @@ where
         }
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_thread(&self.nodes, output))]
+    #[ensures(valid_path(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
@@ -418,14 +418,11 @@ where
 
         true
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
-        self.set_node_active_status_in_place(id, value)
-    }
     #[ensures(!ret || value == (self.active == Some(*id)))]
     #[ensures(ret || old(self.active) == self.active)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;

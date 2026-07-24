@@ -321,7 +321,7 @@ where
             let active = from_bytes_aligned(&binary, &mut self.buffer)?;
 
             if let Some(active) = active {
-                if !self.weave.set_node_active_status_in_place(&active, true) {
+                if !self.weave.set_node_active_status(&active, true) {
                     metadata
                         .insert("active_node", to_bytes(&None::<K>)?.into_vec())
                         .map_err(rancor::Error::new)?;
@@ -514,22 +514,8 @@ where
             false
         }
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
-        if self.weave.set_node_active_status(id, value, alternate) {
-            self.doc
-                .get_map("metadata")
-                .insert(
-                    "active_node",
-                    to_bytes(&self.weave.active).unwrap().into_vec(),
-                )
-                .unwrap();
-            true
-        } else {
-            false
-        }
-    }
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status_in_place(id, value) {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_node_active_status(id, value) {
             self.doc
                 .get_map("metadata")
                 .insert(

@@ -360,10 +360,7 @@ where
 
         true
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool, _alternate: bool) -> bool {
-        self.set_node_active_status_in_place(id, value)
-    }
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;

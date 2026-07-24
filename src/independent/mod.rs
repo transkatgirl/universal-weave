@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
     mem,
 };
@@ -34,10 +34,10 @@ use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SortableWeave, Weave, ancestor_subgraph,
-    contract::{lacks_duplicates, valid_ordered_nodes, valid_thread},
+    contract::{lacks_duplicates, valid_ordered_nodes, valid_path},
     dependent::DependentWeave,
-    descendant_subgraph, shortest_path_to_ancestor, shortest_path_to_descendant, topological_sort,
-    topological_sort_rev,
+    descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
+    shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
 };
 
 mod contracts;
@@ -224,6 +224,16 @@ where
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set_2: HashSet<K, S>,
 
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_map: HashMap<K, usize, S>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_queue: VecDeque<K>,
+
     pub metadata: M,
 }
 
@@ -243,6 +253,8 @@ where
             scratchpad_list_2: Vec::with_capacity(capacity),
             scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_set_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_map: HashMap::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_queue: VecDeque::with_capacity(capacity),
             metadata,
         }
     }
@@ -277,6 +289,16 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_set_2.len()),
         );
+        self.scratchpad_map.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_map.len()),
+        );
+        self.scratchpad_queue.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_queue.len()),
+        );
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
@@ -287,12 +309,8 @@ where
         self.scratchpad_list_2.shrink_to(min_capacity);
         self.scratchpad_set.shrink_to(min_capacity);
         self.scratchpad_set_2.shrink_to(min_capacity);
-    }
-    fn all_parents(
-        &self,
-        node: &IndependentNode<K, T, S>,
-    ) -> impl Iterator<Item = &IndependentNode<K, T, S>> {
-        node.from.iter().filter_map(|id| self.nodes.get(id))
+        self.scratchpad_map.shrink_to(min_capacity);
+        self.scratchpad_queue.shrink_to(min_capacity);
     }
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
@@ -302,13 +320,20 @@ where
             Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
             Box::new(
-                IndexSet::<K, S>::from_iter(self.all_parents(node).flat_map(|parent| {
-                    {
-                        parent.to.iter().copied().filter(|id| {
-                            *id != node.id && !node.from.contains(id) && !node.to.contains(id)
-                        })
-                    }
-                }))
+                IndexSet::<K, S>::from_iter(
+                    node.from
+                        .iter()
+                        .filter_map(|id| self.nodes.get(id))
+                        .flat_map(|parent| {
+                            {
+                                parent.to.iter().copied().filter(|id| {
+                                    *id != node.id
+                                        && !node.from.contains(id)
+                                        && !node.to.contains(id)
+                                })
+                            }
+                        }),
+                )
                 .into_iter(),
             )
         }
@@ -330,8 +355,15 @@ where
             self.scratchpad_list_2.clear();
             self.scratchpad_set.clear();
             self.scratchpad_set_2.clear();
+            self.scratchpad_map.clear();
+            self.scratchpad_queue.clear();
 
-            ancestor_subgraph(&self.nodes, id, &mut self.scratchpad_set); // ancestors
+            ancestor_subgraph(
+                &self.nodes,
+                *id,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_set,
+            ); // ancestors
 
             for active_root in self
                 .roots
@@ -339,17 +371,23 @@ where
                 .copied()
                 .filter(|root| self.active.contains(root) && self.scratchpad_set.contains(root))
             {
-                build_thread_with_critera(
+                topological_sort_subgraph(
                     &self.nodes,
-                    &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
-                    active_root,
+                    &|id| self.active.contains(id),
+                    &active_root,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
-                    &mut self.scratchpad_list_2, // active thread including only active ancestors
+                );
+
+                longest_path_to_root(
+                    &self.nodes,
+                    &self.scratchpad_list,
+                    &mut self.scratchpad_map,
+                    &mut self.scratchpad_list_2,
                 );
             }
 
-            let target = self.scratchpad_list_2.last().cloned();
+            let target = self.scratchpad_list_2.first().cloned();
 
             self.scratchpad_list.clear();
             self.scratchpad_set_2.clear();
@@ -412,7 +450,12 @@ where
             }
 
             self.scratchpad_set.remove(id);
-            descendant_subgraph(&self.nodes, id, &mut self.scratchpad_set); // decendants
+            descendant_subgraph(
+                &self.nodes,
+                *id,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_set,
+            ); // decendants
 
             for item in self.scratchpad_list_2.drain(..) {
                 self.scratchpad_set.remove(&item);
@@ -454,6 +497,8 @@ where
             } else {
                 return false;
             }
+
+            // TODO
         }
 
         self.fix_orphaned_activations();
@@ -464,6 +509,7 @@ where
         self.scratchpad_list.clear();
         self.scratchpad_list_2.clear();
         self.scratchpad_set.clear();
+        self.scratchpad_map.clear();
 
         for active_root in self
             .roots
@@ -471,15 +517,24 @@ where
             .copied()
             .filter(|root| self.active.contains(root))
         {
-            build_thread_with_critera(
+            topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
-                active_root,
+                &active_root,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
+            );
+
+            longest_path_to_root(
+                &self.nodes,
+                &self.scratchpad_list,
+                &mut self.scratchpad_map,
                 &mut self.scratchpad_list_2,
             );
         }
+
+        self.scratchpad_list.clear();
+        self.scratchpad_set.clear();
 
         self.scratchpad_set.extend(self.scratchpad_list_2.drain(..));
         self.scratchpad_list
@@ -623,6 +678,8 @@ where
     #[ensures(output.len() == self.nodes.len())]
     #[ensures(valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+        // TODO
+
         output.clear();
         self.scratchpad_set.clear();
 
@@ -637,6 +694,8 @@ where
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        // TODO
+
         output.clear();
         self.scratchpad_set.clear();
 
@@ -656,11 +715,14 @@ where
     }
     #[ensures(output.len() == self.active.len())]
     #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_thread(&self.nodes, output))]
+    #[ensures(valid_path(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
+        // TODO
+
         output.clear();
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
+        self.scratchpad_map.clear();
 
         for active_root in self
             .roots
@@ -668,21 +730,27 @@ where
             .copied()
             .filter(|root| self.active.contains(root))
         {
-            build_thread_with_critera(
+            topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
-                active_root,
+                &active_root,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
+            );
+
+            longest_path_to_root(
+                &self.nodes,
+                &self.scratchpad_list,
+                &mut self.scratchpad_map,
                 output,
             );
         }
-
-        output.reverse();
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_thread(&self.nodes, output))]
+    #[ensures(valid_path(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+        // TODO
+
         output.clear();
         self.scratchpad_set.clear();
 
@@ -792,36 +860,7 @@ where
     #[ensures(ret || old(self.active.clone()) == self.active)]
     #[ensures(ret == self.nodes.contains_key(id))]
     #[invariant(self.validate())]
-    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
-        if value
-            && let Some(node) = self.nodes.get(id)
-            && let Some(active_child) = node
-                .to
-                .iter()
-                .filter_map(|child| self.nodes.get(child))
-                .find(|child| child.active)
-        {
-            let child_id = active_child.id;
-
-            if (!alternate && active_child.from.len() == 1)
-                || (alternate && active_child.from.len() > 1)
-            {
-                let result = self.update_node_activity_in_place(id, true);
-                self.update_node_activity_in_place(&child_id, false);
-
-                result
-            } else {
-                self.update_node_activity_in_place(id, value)
-            }
-        } else {
-            self.update_node_activity_in_place(id, value)
-        }
-    }
-    #[ensures(!ret || value == self.active.contains(id))]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[invariant(self.validate())]
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
     #[ensures(!ret || value == self.bookmarked.contains(id))]
@@ -1495,51 +1534,6 @@ where
 
     fn active(&self) -> &Self::Active {
         &self.active
-    }
-}
-
-#[stacksafe]
-fn build_thread_with_critera<K, T, S>(
-    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    criteria: &impl Fn(&K) -> bool,
-    id: K,
-    scratchpad_list: &mut Vec<K>,
-    scratchpad_set: &mut HashSet<K, S>,
-    thread_list: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id)
-        && node
-            .from
-            .iter()
-            .filter(|parent| criteria(parent))
-            .all(|parent| scratchpad_set.contains(parent))
-        && scratchpad_set.insert(id)
-    {
-        scratchpad_list.push(id);
-
-        if scratchpad_list.len() > thread_list.len() {
-            thread_list.clone_from(scratchpad_list);
-        }
-
-        for child in node.to.iter().copied() {
-            if criteria(&child) {
-                build_thread_with_critera(
-                    nodes,
-                    criteria,
-                    child,
-                    scratchpad_list,
-                    scratchpad_set,
-                    thread_list,
-                );
-            }
-        }
-
-        scratchpad_list.pop();
-        scratchpad_set.remove(&id);
     }
 }
 

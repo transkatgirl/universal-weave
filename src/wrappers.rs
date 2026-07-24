@@ -112,9 +112,7 @@ where
     /// [`Weave::add_node()`]
     AddNode(N),
     /// [`Weave::set_node_active_status()`]
-    SetNodeActiveStatus { id: K, value: bool, alternate: bool },
-    /// [`Weave::set_node_active_status_in_place()`]
-    SetNodeActiveStatusInPlace { id: K, value: bool },
+    SetNodeActiveStatus { id: K, value: bool },
     /// [`Weave::set_node_bookmarked_status()`]
     SetNodeBookmarkedStatus { id: K, value: bool },
     /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
@@ -227,8 +225,6 @@ pub struct WeaveActionCount {
     pub add_node: usize,
     /// [`Weave::set_node_active_status()`]
     pub set_node_active_status: usize,
-    /// [`Weave::set_node_active_status_in_place()`]
-    pub set_node_active_status_in_place: usize,
     /// [`Weave::set_node_bookmarked_status()`]
     pub set_node_bookmarked_status: usize,
     /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
@@ -267,7 +263,6 @@ impl WeaveActionCount {
     pub fn total_count(&self) -> usize {
         self.add_node
             .saturating_add(self.set_node_active_status)
-            .saturating_add(self.set_node_active_status_in_place)
             .saturating_add(self.set_node_bookmarked_status)
             .saturating_add(self.remove_node)
             .saturating_add(self.remove_all_nodes)
@@ -289,14 +284,8 @@ impl WeaveActionCount {
     {
         match action {
             WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_add(1),
-            WeaveAction::SetNodeActiveStatus {
-                id: _,
-                value: _,
-                alternate: _,
-            } => self.set_node_active_status = self.set_node_active_status.saturating_add(1),
-            WeaveAction::SetNodeActiveStatusInPlace { id: _, value: _ } => {
-                self.set_node_active_status_in_place =
-                    self.set_node_active_status_in_place.saturating_add(1)
+            WeaveAction::SetNodeActiveStatus { id: _, value: _ } => {
+                self.set_node_active_status = self.set_node_active_status.saturating_add(1)
             }
             WeaveAction::SetNodeBookmarkedStatus { id: _, value: _ } => {
                 self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_add(1)
@@ -343,14 +332,8 @@ impl WeaveActionCount {
     {
         match action {
             WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_sub(1),
-            WeaveAction::SetNodeActiveStatus {
-                id: _,
-                value: _,
-                alternate: _,
-            } => self.set_node_active_status = self.set_node_active_status.saturating_sub(1),
-            WeaveAction::SetNodeActiveStatusInPlace { id: _, value: _ } => {
-                self.set_node_active_status_in_place =
-                    self.set_node_active_status_in_place.saturating_sub(1)
+            WeaveAction::SetNodeActiveStatus { id: _, value: _ } => {
+                self.set_node_active_status = self.set_node_active_status.saturating_sub(1)
             }
             WeaveAction::SetNodeBookmarkedStatus { id: _, value: _ } => {
                 self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_sub(1)
@@ -418,15 +401,8 @@ where
     fn apply(&mut self, action: WeaveAction<K, N, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
-            WeaveAction::SetNodeActiveStatus {
-                id,
-                value,
-                alternate,
-            } => {
-                assert!(self.set_node_active_status(&id, value, alternate))
-            }
-            WeaveAction::SetNodeActiveStatusInPlace { id, value } => {
-                assert!(self.set_node_active_status_in_place(&id, value))
+            WeaveAction::SetNodeActiveStatus { id, value } => {
+                assert!(self.set_node_active_status(&id, value))
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
                 assert!(self.set_node_bookmarked_status(&id, value))
@@ -488,15 +464,8 @@ where
     fn apply(&mut self, action: WeaveAction<K, dependent::DependentNode<K, T, S>, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
-            WeaveAction::SetNodeActiveStatus {
-                id,
-                value,
-                alternate,
-            } => {
-                assert!(self.set_node_active_status(&id, value, alternate))
-            }
-            WeaveAction::SetNodeActiveStatusInPlace { id, value } => {
-                assert!(self.set_node_active_status_in_place(&id, value))
+            WeaveAction::SetNodeActiveStatus { id, value } => {
+                assert!(self.set_node_active_status(&id, value))
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
                 assert!(self.set_node_bookmarked_status(&id, value))
@@ -561,15 +530,8 @@ where
     fn apply(&mut self, action: WeaveAction<K, independent::IndependentNode<K, T, S>, T, M>) {
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
-            WeaveAction::SetNodeActiveStatus {
-                id,
-                value,
-                alternate,
-            } => {
-                assert!(self.set_node_active_status(&id, value, alternate))
-            }
-            WeaveAction::SetNodeActiveStatusInPlace { id, value } => {
-                assert!(self.set_node_active_status_in_place(&id, value))
+            WeaveAction::SetNodeActiveStatus { id, value } => {
+                assert!(self.set_node_active_status(&id, value))
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
                 assert!(self.set_node_bookmarked_status(&id, value))
@@ -677,22 +639,10 @@ where
             false
         }
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
-        if self.weave.set_node_active_status(id, value, alternate) {
-            self.actions.push_back(WeaveAction::SetNodeActiveStatus {
-                id: *id,
-                value,
-                alternate,
-            });
-            true
-        } else {
-            false
-        }
-    }
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status_in_place(id, value) {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_node_active_status(id, value) {
             self.actions
-                .push_back(WeaveAction::SetNodeActiveStatusInPlace { id: *id, value });
+                .push_back(WeaveAction::SetNodeActiveStatus { id: *id, value });
             true
         } else {
             false
@@ -997,18 +947,9 @@ where
             false
         }
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool, alternate: bool) -> bool {
-        if self.weave.set_node_active_status(id, value, alternate) {
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_node_active_status(id, value) {
             self.count.set_node_active_status = self.count.set_node_active_status.saturating_add(1);
-            true
-        } else {
-            false
-        }
-    }
-    fn set_node_active_status_in_place(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status_in_place(id, value) {
-            self.count.set_node_active_status_in_place =
-                self.count.set_node_active_status_in_place.saturating_add(1);
             true
         } else {
             false

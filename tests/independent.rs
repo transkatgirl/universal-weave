@@ -89,14 +89,8 @@ enum WeaveTransition {
         content_seed: u32,
         length: u32,
     },
-    #[proptest(weight = 3)]
+    #[proptest(weight = 4)]
     SetNodeActiveStatus {
-        alternate: bool,
-        value: bool,
-        id_seed: u32,
-    },
-    #[proptest(weight = 3)]
-    SetNodeActiveStatusInPlace {
         value: bool,
         id_seed: u32,
     },
@@ -363,30 +357,13 @@ impl StateMachineTest for WeaveWrapper {
                 );
                 state.weave.add_node(node);
             }
-            WeaveTransition::SetNodeActiveStatus {
-                id_seed,
-                value,
-                alternate,
-            } => {
+            WeaveTransition::SetNodeActiveStatus { id_seed, value } => {
                 println!(
-                    "weave.set_node_active_status(&{}, {}, {});",
-                    map_id(id_seed),
-                    value,
-                    alternate
-                );
-                state
-                    .weave
-                    .set_node_active_status(&map_id(id_seed), value, alternate);
-            }
-            WeaveTransition::SetNodeActiveStatusInPlace { id_seed, value } => {
-                println!(
-                    "weave.set_node_active_status_in_place(&{}, {});",
+                    "weave.set_node_active_status(&{}, {});",
                     map_id(id_seed),
                     value,
                 );
-                state
-                    .weave
-                    .set_node_active_status_in_place(&map_id(id_seed), value);
+                state.weave.set_node_active_status(&map_id(id_seed), value);
             }
             WeaveTransition::SetNodeBookmarkedStatus { id_seed, value } => {
                 println!(

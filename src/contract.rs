@@ -103,7 +103,7 @@ where
     true
 }
 
-pub(crate) fn valid_thread<'a, K, N, T>(
+pub(crate) fn valid_path<'a, K, N, T>(
     nodes: &'a impl Index<&'a K, Output = N>,
     value: &'a [K],
 ) -> bool
