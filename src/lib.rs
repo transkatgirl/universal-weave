@@ -4,6 +4,7 @@
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
 // TODO: Property tests for DependentLoroWeave CRDT merging
+// TODO: Property tests for IndependentWeave behavior parity with DependentWeave?
 // TODO: Property tests for Archived structs
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
@@ -661,7 +662,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
             current_id = node
                 .from()
                 .into_iter()
-                .max_by_key(|id| scratchpad_map.get(*id).copied().unwrap_or_default());
+                .max_by_key(|id| scratchpad_map.get(*id).copied());
         }
     }
 }

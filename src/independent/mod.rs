@@ -373,7 +373,7 @@ where
             {
                 topological_sort_subgraph(
                     &self.nodes,
-                    &|id| self.active.contains(id),
+                    &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                     &active_root,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
