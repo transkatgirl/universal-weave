@@ -31,6 +31,7 @@ Features:
 		- Makes heavy use of debug assertions
 		- Offers interfaces for applying correctness assertions at runtime
 	- Heavily property tested
+	- Heavily linted
 	- Entirely human written codebase
 -->
 

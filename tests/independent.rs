@@ -10,9 +10,9 @@ use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use stacksafe::stacksafe;
 use universal_weave::{
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
+    BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
     IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node, SemiIndependentWeave,
-    SortableWeave, Weave,
+    SortableBookmarkableWeave, SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
 };
 

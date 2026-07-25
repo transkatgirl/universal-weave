@@ -1,8 +1,9 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
-// TODO: Add validation API for working with untrusted data
+// TODO: Separate bookmarking into a Weave wrapper
+// TODO: Clippy pedantic linting & restriction lints
 // TODO: Rewrite all traversal logic to be non-recursive
-// TODO: Separate bookmarking into a Weave subtrait & wrapper
+// TODO: Add validation API for working with untrusted data
 // TODO: Full code review
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
@@ -12,6 +13,14 @@
 // TODO: Property tests for Archived structs
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
+
+#![warn(let_underscore)]
+//#![warn(clippy::pedantic)]
+//#![warn(clippy::nursery)]
+#![warn(clippy::print_stdout)]
+#![warn(clippy::print_stderr)]
+#![warn(clippy::cargo)]
+#![allow(clippy::multiple_crate_versions)]
 
 mod contract;
 pub mod dependent;
@@ -60,21 +69,12 @@ where
     fn from(&self) -> &Self::From;
     /// Returns a reference to the identifiers corresponding to the node's children.
     fn to(&self) -> &Self::To;
-    /// Returns a reference to the node's contents.
-    fn contents(&self) -> &T;
-}
-
-/// A [`Node`] which contains a copy of its state within the [`Weave`].
-pub trait IntegratedNode<K, T>: Node<K, T>
-where
-    K: Hash + Copy + Eq,
-{
     /// Returns `true` if the node is considered "active".
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     fn is_active(&self) -> bool;
-    /// Returns `true` if the node is bookmarked.
-    fn is_bookmarked(&self) -> bool;
+    /// Returns a reference to the node's contents.
+    fn contents(&self) -> &T;
 }
 
 /// [`Node`] contents which can be split apart or merged together.
@@ -117,8 +117,6 @@ where
     type Nodes;
     /// Identifiers of "root" nodes (nodes which do not have any parents).
     type Roots;
-    /// Identifiers of bookmarked nodes.
-    type Bookmarks;
 
     /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
@@ -128,16 +126,12 @@ where
     fn nodes(&self) -> &Self::Nodes;
     /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
     fn roots(&self) -> &Self::Roots;
-    /// Returns a reference to the identifiers of bookmarked nodes.
-    fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     fn contains_active(&self, id: &K) -> bool;
-    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
-    fn contains_bookmark(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
@@ -166,8 +160,6 @@ where
     ///
     /// This function may change the active status of other nodes in an implementation-specific manner if it is necessary to preserve internal consistency.
     fn set_node_active_status(&mut self, id: &K, value: bool) -> bool;
-    /// Sets the bookmarked status of a node with the specified identifier.
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may update other nodes if it is necessary to preserve internal consistency.
@@ -194,6 +186,23 @@ where
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O;
 }
 
+/// A [`Weave`] where nodes can be bookmarked.
+pub trait BookmarkableWeave<K, N, T>: Weave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    /// Identifiers of bookmarked nodes.
+    type Bookmarks;
+
+    /// Returns a reference to the identifiers of bookmarked nodes.
+    fn bookmarks(&self) -> &Self::Bookmarks;
+    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    fn contains_bookmark(&self, id: &K) -> bool;
+    /// Sets the bookmarked status of a node with the specified identifier.
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
+}
+
 /// A [`Weave`] where the ordering of nodes is stable and can be user-defined.
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
@@ -216,6 +225,15 @@ where
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
+}
+
+/// A [`Weave`] where the ordering of bookmarked nodes is stable and can be user-defined.
+pub trait SortableBookmarkableWeave<K, N, T>:
+    BookmarkableWeave<K, N, T> + SortableWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
     /// Sorts bookmarked nodes using the comparison function `cmp`.
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of bookmarked nodes using the comparison function `cmp`.
@@ -310,8 +328,6 @@ where
     type Nodes;
     /// Identifiers of "root" nodes (nodes which do not have any parents).
     type Roots;
-    /// Identifiers of bookmarked nodes.
-    type Bookmarks;
 
     /// Returns the number of nodes stored within the Weave.
     fn len(&self) -> usize;
@@ -321,16 +337,12 @@ where
     fn nodes(&self) -> &Self::Nodes;
     /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
     fn roots(&self) -> &Self::Roots;
-    /// Returns a reference to the identifiers of bookmarked nodes.
-    fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     fn contains_active(&self, id: &K) -> bool;
-    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
-    fn contains_bookmark(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
@@ -351,14 +363,36 @@ where
     fn get_thread_from(&self, id: &K, output: &mut Vec<K>);
 }
 
+#[cfg(feature = "rkyv")]
 /// An [`ArchivedWeave`] containing document-wide metadata.
-pub trait ArchivedMetadataWeave<K, N, T, M> {
+pub trait ArchivedMetadataWeave<K, N, T, M>: ArchivedWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
     /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
 }
 
+#[cfg(feature = "rkyv")]
+/// An [`ArchivedWeave`] where nodes can be bookmarked.
+pub trait ArchivedBookmarkableWeave<K, N, T>: ArchivedWeave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    /// Identifiers of bookmarked nodes.
+    type Bookmarks;
+
+    /// Returns a reference to the identifiers of bookmarked nodes.
+    fn bookmarks(&self) -> &Self::Bookmarks;
+    /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    fn contains_bookmark(&self, id: &K) -> bool;
+}
+
+#[cfg(feature = "rkyv")]
 /// An [`ArchivedWeave`] where the ordering of nodes is stable and can be user-defined.
-pub trait ArchivedSortableWeave<K, N, T>
+pub trait ArchivedSortableWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
     N: Node<K, T>,

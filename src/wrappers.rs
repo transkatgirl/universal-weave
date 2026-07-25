@@ -8,9 +8,10 @@ use std::{
 };
 
 use crate::{
-    ActivePathWeave, ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave, MetadataWeave, Node,
-    SemiIndependentWeave, SortableWeave, Weave, dependent, independent,
+    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
+    DeduplicatableWeave, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
+    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    dependent, independent,
 };
 
 #[cfg(feature = "rkyv")]
@@ -113,7 +114,7 @@ where
     AddNode(N),
     /// [`Weave::set_node_active_status()`]
     SetNodeActiveStatus { id: K, value: bool },
-    /// [`Weave::set_node_bookmarked_status()`]
+    /// [`BookmarkableWeave::set_node_bookmarked_status()`]
     SetNodeBookmarkedStatus { id: K, value: bool },
     /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
     RemoveNode(K),
@@ -123,7 +124,7 @@ where
     SetMetadata(M),
     /// Caused by [`SortableWeave::sort_node_children_by()`], [`SortableWeave::sort_node_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
     SetNodeChildOrdering { parent: Option<K>, children: Vec<K> },
-    /// Caused by [`SortableWeave::sort_bookmarks_by()`] and [`SortableWeave::sort_bookmarks_by_id()`]
+    /// Caused by [`SortableBookmarkableWeave::sort_bookmarks_by()`] and [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     SetBookmarkOrdering(Vec<K>),
     /// [`IndependentWeave::move_node()`]
     MoveNode { id: K, new_parents: Vec<K> },
@@ -225,7 +226,7 @@ pub struct WeaveActionCount {
     pub add_node: usize,
     /// [`Weave::set_node_active_status()`]
     pub set_node_active_status: usize,
-    /// [`Weave::set_node_bookmarked_status()`]
+    /// [`BookmarkableWeave::set_node_bookmarked_status()`]
     pub set_node_bookmarked_status: usize,
     /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
     pub remove_node: usize,
@@ -237,7 +238,7 @@ pub struct WeaveActionCount {
     pub sort_node_children: usize,
     /// [`SortableWeave::sort_roots_by()`] or [`SortableWeave::sort_roots_by_id()`]
     pub sort_roots: usize,
-    /// [`SortableWeave::sort_bookmarks_by()`] or [`SortableWeave::sort_bookmarks_by_id()`]
+    /// [`SortableBookmarkableWeave::sort_bookmarks_by()`] or [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     pub sort_bookmarks: usize,
     /// [`IndependentWeave::move_node()`]
     pub move_node: usize,
@@ -253,7 +254,7 @@ pub struct WeaveActionCount {
 
 impl WeaveActionCount {
     pub fn new() -> Self {
-        WeaveActionCount::default()
+        Self::default()
     }
     /// Resets all action counts to zero.
     pub fn reset(&mut self) {
@@ -389,7 +390,9 @@ where
 where
     W: Weave<K, N, T>
         + MetadataWeave<K, N, T, M>
+        + BookmarkableWeave<K, N, T>
         + SortableWeave<K, N, T>
+        + SortableBookmarkableWeave<K, N, T>
         + IndependentWeave<K, N, T>
         + SemiIndependentWeave<K, N, T>
         + DiscreteWeave<K, N, T>,
@@ -590,7 +593,6 @@ where
 {
     type Nodes = W::Nodes;
     type Roots = W::Roots;
-    type Bookmarks = W::Bookmarks;
 
     fn len(&self) -> usize {
         self.weave.len()
@@ -604,17 +606,11 @@ where
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        self.weave.bookmarks()
-    }
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
-    }
-    fn contains_bookmark(&self, id: &K) -> bool {
-        self.weave.contains_bookmark(id)
     }
     fn get_node(&self, id: &K) -> Option<&N> {
         self.weave.get_node(id)
@@ -643,15 +639,6 @@ where
         if self.weave.set_node_active_status(id, value) {
             self.actions
                 .push_back(WeaveAction::SetNodeActiveStatus { id: *id, value });
-            true
-        } else {
-            false
-        }
-    }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_bookmarked_status(id, value) {
-            self.actions
-                .push_back(WeaveAction::SetNodeBookmarkedStatus { id: *id, value });
             true
         } else {
             false
@@ -701,6 +688,31 @@ where
     }
 }
 
+impl<W, K, N, T, M> BookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
+where
+    W: BookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T> + Clone,
+{
+    type Bookmarks = W::Bookmarks;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        self.weave.bookmarks()
+    }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.weave.contains_bookmark(id)
+    }
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_node_bookmarked_status(id, value) {
+            self.actions
+                .push_back(WeaveAction::SetNodeBookmarkedStatus { id: *id, value });
+            true
+        } else {
+            false
+        }
+    }
+}
+
 impl<W, K, N, T, M> SortableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SortableWeave<K, N, T>,
@@ -708,7 +720,6 @@ where
     N: Node<K, T> + Clone,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
-    for<'a> &'a W::Bookmarks: IntoIterator<Item = &'a K>,
 {
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         self.weave
@@ -768,6 +779,17 @@ where
             children: self.weave.roots().into_iter().copied().collect(),
         });
     }
+}
+
+impl<W, K, N, T, M> SortableBookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
+where
+    W: SortableBookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T> + Clone,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a W::Bookmarks: IntoIterator<Item = &'a K>,
+{
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
         self.weave.sort_bookmarks_by(cmp);
         self.actions.push_back(WeaveAction::SetBookmarkOrdering(
@@ -898,7 +920,6 @@ where
 {
     type Nodes = W::Nodes;
     type Roots = W::Roots;
-    type Bookmarks = W::Bookmarks;
 
     fn len(&self) -> usize {
         self.weave.len()
@@ -912,17 +933,11 @@ where
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        self.weave.bookmarks()
-    }
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
-    }
-    fn contains_bookmark(&self, id: &K) -> bool {
-        self.weave.contains_bookmark(id)
     }
     fn get_node(&self, id: &K) -> Option<&N> {
         self.weave.get_node(id)
@@ -955,15 +970,6 @@ where
             false
         }
     }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_bookmarked_status(id, value) {
-            self.count.set_node_bookmarked_status =
-                self.count.set_node_bookmarked_status.saturating_add(1);
-            true
-        } else {
-            false
-        }
-    }
     fn remove_node(&mut self, id: &K) -> Option<N> {
         if let Some(removed) = self.weave.remove_node(id) {
             self.count.remove_node = self.count.remove_node.saturating_add(1);
@@ -983,6 +989,31 @@ where
     fn remove_all_nodes(&mut self) {
         self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
         self.weave.remove_all_nodes();
+    }
+}
+
+impl<W, K, N, T> BookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
+where
+    W: BookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    type Bookmarks = W::Bookmarks;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        self.weave.bookmarks()
+    }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.weave.contains_bookmark(id)
+    }
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_node_bookmarked_status(id, value) {
+            self.count.set_node_bookmarked_status =
+                self.count.set_node_bookmarked_status.saturating_add(1);
+            true
+        } else {
+            false
+        }
     }
 }
 
@@ -1041,6 +1072,14 @@ where
         self.count.sort_roots = self.count.sort_roots.saturating_add(1);
         self.weave.sort_roots_by_id(cmp);
     }
+}
+
+impl<W, K, N, T> SortableBookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
+where
+    W: SortableBookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
         self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
         self.weave.sort_bookmarks_by(cmp);

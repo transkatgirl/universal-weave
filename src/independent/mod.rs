@@ -25,12 +25,15 @@ use wincode::{SchemaRead, SchemaWrite};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{ArchivedActivePathWeave, ArchivedMetadataWeave, ArchivedSortableWeave, ArchivedWeave};
+use crate::{
+    ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
+    ArchivedSortableWeave, ArchivedWeave,
+};
 
 use crate::{
-    ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
-    SortableWeave, Weave, ancestor_subgraph,
+    ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
+    Node, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
     contract::{lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
@@ -134,22 +137,11 @@ where
     fn to(&self) -> &Self::To {
         &self.to
     }
-    fn contents(&self) -> &T {
-        &self.contents
-    }
-}
-
-impl<K, T, S> IntegratedNode<K, T> for IndependentNode<K, T, S>
-where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
     fn is_active(&self) -> bool {
         self.active
     }
-    fn is_bookmarked(&self) -> bool {
-        self.bookmarked
+    fn contents(&self) -> &T {
+        &self.contents
     }
 }
 
@@ -642,7 +634,6 @@ where
 {
     type Nodes = HashMap<K, IndependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
-    type Bookmarks = IndexSet<K, S>;
 
     fn len(&self) -> usize {
         self.nodes.len()
@@ -656,17 +647,11 @@ where
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        &self.bookmarked
-    }
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
     fn contains_active(&self, id: &K) -> bool {
         self.active.contains(id)
-    }
-    fn contains_bookmark(&self, id: &K) -> bool {
-        self.bookmarked.contains(id)
     }
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
@@ -879,25 +864,6 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[ensures(!ret || value == self.bookmarked.contains(id))]
-    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[invariant(self.validate())]
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        match self.nodes.get_mut(id) {
-            Some(node) => {
-                node.bookmarked = value;
-                if value {
-                    self.bookmarked.insert(node.id);
-                } else {
-                    self.bookmarked.shift_remove(id);
-                }
-
-                true
-            }
-            None => false,
-        }
-    }
     #[ensures(!self.nodes.contains_key(id))]
     #[ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len())]
     #[ensures(ret.is_none() || old(self.active.len()) >= self.active.len())]
@@ -940,6 +906,41 @@ where
         self.roots.clear();
         self.active.clear();
         self.bookmarked.clear();
+    }
+}
+
+impl<K, T, M, S> BookmarkableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    type Bookmarks = IndexSet<K, S>;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        &self.bookmarked
+    }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.bookmarked.contains(id)
+    }
+    #[ensures(!ret || value == self.bookmarked.contains(id))]
+    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
+    #[ensures(ret == self.nodes.contains_key(id))]
+    #[invariant(self.validate())]
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        match self.nodes.get_mut(id) {
+            Some(node) => {
+                node.bookmarked = value;
+                if value {
+                    self.bookmarked.insert(node.id);
+                } else {
+                    self.bookmarked.shift_remove(id);
+                }
+
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -1051,6 +1052,15 @@ where
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
     }
+}
+
+impl<K, T, M, S> SortableBookmarkableWeave<K, IndependentNode<K, T, S>, T>
+    for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
     #[ensures(old(self.bookmarked.len()) == self.bookmarked.len())]
     #[invariant(self.validate())]
     fn sort_bookmarks_by(
@@ -1343,24 +1353,11 @@ where
     fn to(&self) -> &Self::To {
         &self.to
     }
-    fn contents(&self) -> &T::Archived {
-        &self.contents
-    }
-}
-
-#[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> IntegratedNode<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
-where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
     fn is_active(&self) -> bool {
         self.active
     }
-    fn is_bookmarked(&self) -> bool {
-        self.bookmarked
+    fn contents(&self) -> &T::Archived {
+        &self.contents
     }
 }
 
@@ -1377,7 +1374,6 @@ where
 {
     type Nodes = ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>;
     type Roots = ArchivedIndexSet<K::Archived>;
-    type Bookmarks = ArchivedIndexSet<K::Archived>;
 
     fn len(&self) -> usize {
         self.nodes.len()
@@ -1391,17 +1387,11 @@ where
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        &self.bookmarked
-    }
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
     fn contains_active(&self, id: &K::Archived) -> bool {
         self.active.contains(id)
-    }
-    fn contains_bookmark(&self, id: &K::Archived) -> bool {
-        self.bookmarked.contains(id)
     }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
@@ -1564,6 +1554,27 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, M, M2, S>
+    ArchivedBookmarkableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+    for ArchivedIndependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2> + IndependentContents,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    type Bookmarks = ArchivedIndexSet<K::Archived>;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        &self.bookmarked
+    }
+    fn contains_bookmark(&self, id: &K::Archived) -> bool {
+        self.bookmarked.contains(id)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
     ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
@@ -1628,6 +1639,7 @@ where
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn archived_topological_sort<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
@@ -1659,6 +1671,7 @@ fn archived_topological_sort<'a, K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn archived_topological_sort_subgraph<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     filter: &impl Fn(&K) -> bool,
@@ -1692,6 +1705,7 @@ fn archived_topological_sort_subgraph<'a, K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn archived_topological_sort_rev<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
@@ -1720,6 +1734,7 @@ fn archived_topological_sort_rev<'a, K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 #[stacksafe::stacksafe]
 fn archived_shortest_path_to_ancestor<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
@@ -1759,6 +1774,7 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn archived_longest_path_to_root<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
@@ -1807,6 +1823,7 @@ fn archived_longest_path_to_root<'a, K, N, T>(
     }
 }
 
+#[cfg(feature = "rkyv")]
 fn archived_ancestor_subgraph<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: K,

@@ -5,8 +5,8 @@ use proptest::{prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use universal_weave::{
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    SemiIndependentWeave, SortableWeave, Weave,
+    BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
+    MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 

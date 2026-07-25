@@ -6,6 +6,16 @@ authors = [
 ]
 license = "Unlicense"
 description = "General-purpose building blocks for \"Loom\" implementations."
+categories = [
+	"data-structures",
+]
+keywords = [
+	"loom",
+	"weave",
+	"graph",
+	"storage",
+]
+repository = "https://github.com/transkatgirl/universal-weave"
 edition = "2024"
 
 [features]
@@ -30,7 +40,7 @@ legacy = [  ]
 
 
 [dependencies]
-contracts = { version = "0.6.7", features = [
+contracts = { version = "0.6.8", features = [
 	"override_debug",
 ] }
 indexmap = "2.14.0"
@@ -42,11 +52,11 @@ rkyv = { version = "0.8.17", features = [
 	"indexmap-2",
 ], optional = true }
 loro = { version = "1.13.7", optional = true }
-wincode = { version = "0.5.5", features = [
+wincode = { version = "0.6.0", features = [
 	"indexmap",
 	"derive",
 ], optional = true }
-serde = { version = "1.0.228", features = [
+serde = { version = "1.0.229", features = [
 	"derive",
 ], optional = true }
 

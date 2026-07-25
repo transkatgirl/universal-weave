@@ -7,7 +7,8 @@ use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use rkyv::{Archive, Deserialize, Serialize};
 use universal_weave::{
-    IndependentContents, MetadataWeave, SemiIndependentWeave, SortableWeave, Weave,
+    BookmarkableWeave, IndependentContents, MetadataWeave, SemiIndependentWeave,
+    SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave, loro::DependentLoroWeave},
 };
 

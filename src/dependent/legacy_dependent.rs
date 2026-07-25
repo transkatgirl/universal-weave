@@ -24,15 +24,22 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
 use crate::{
-    ArchivedActiveSingularWeave, ArchivedMetadataWeave, ArchivedSortableWeave, ArchivedWeave,
-    dependent::ArchivedDependentNode,
+    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
+    ArchivedSortableWeave, ArchivedWeave,
+    dependent::{
+        ArchivedDependentNode, archived_path_to_root, archived_topological_sort,
+        archived_topological_sort_rev,
+    },
 };
 
 use crate::{
-    ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
-    DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave, SemiIndependentWeave,
-    SortableWeave, Weave,
-    dependent::{DependentNode, DependentWeave as NewDependentWeave},
+    ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    dependent::{
+        DependentNode, DependentWeave as NewDependentWeave, path_to_root, topological_sort,
+        topological_sort_rev,
+    },
 };
 
 #[allow(unused_imports)]
@@ -44,7 +51,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
-        NewDependentWeave {
+        Self {
             scratchpad: Vec::with_capacity(value.nodes.len()),
             nodes: value.nodes,
             roots: value.roots,
@@ -159,7 +166,7 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread: Vec::new(),
+            thread: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -172,15 +179,14 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
         self.bookmarked
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
-        self.thread.clear();
-        self.thread.shrink_to_fit();
+        self.thread
+            .reserve(self.nodes.capacity().saturating_sub(self.thread.len()));
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread.clear();
-        self.thread.shrink_to_fit();
+        self.thread.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -266,7 +272,6 @@ where
 {
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
-    type Bookmarks = IndexSet<K, S>;
 
     fn len(&self) -> usize {
         self.nodes.len()
@@ -280,17 +285,11 @@ where
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        &self.bookmarked
-    }
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
     fn contains_active(&self, id: &K) -> bool {
         self.active == Some(*id)
-    }
-    fn contains_bookmark(&self, id: &K) -> bool {
-        self.bookmarked.contains(id)
     }
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
@@ -299,25 +298,31 @@ where
         output.clear();
 
         for root in &self.roots {
-            add_node_identifiers(&self.nodes, *root, output);
+            self.thread.clear();
+            topological_sort(&self.nodes, *root, &mut self.thread, output);
         }
     }
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
-        add_node_identifiers(&self.nodes, *id, output);
+
+        if self.nodes.contains_key(id) {
+            self.thread.clear();
+            topological_sort(&self.nodes, *id, &mut self.thread, output);
+        }
     }
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         if let Some(active) = self.active {
-            build_thread(&self.nodes, active, output);
+            path_to_root(&self.nodes, active, output);
         }
     }
-
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
-        build_thread(&self.nodes, *id, output);
+        if self.nodes.contains_key(id) {
+            path_to_root(&self.nodes, *id, output);
+        }
     }
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
@@ -377,21 +382,6 @@ where
             None => false,
         }
     }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        match self.nodes.get_mut(id) {
-            Some(node) => {
-                node.bookmarked = value;
-                if value {
-                    self.bookmarked.insert(node.id);
-                } else {
-                    self.bookmarked.shift_remove(id);
-                }
-
-                true
-            }
-            None => false,
-        }
-    }
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         self.remove_node_unverified(id)
     }
@@ -423,6 +413,36 @@ where
     }
 }
 
+impl<K, T, M, S> BookmarkableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    type Bookmarks = IndexSet<K, S>;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        &self.bookmarked
+    }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.bookmarked.contains(id)
+    }
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        match self.nodes.get_mut(id) {
+            Some(node) => {
+                node.bookmarked = value;
+                if value {
+                    self.bookmarked.insert(node.id);
+                } else {
+                    self.bookmarked.shift_remove(id);
+                }
+
+                true
+            }
+            None => false,
+        }
+    }
+}
+
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
@@ -432,12 +452,17 @@ where
         output.clear();
 
         for root in &self.roots {
-            add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *root, output); // Compiler limitation
+            self.thread.clear();
+            topological_sort_rev(&self.nodes, *root, &mut self.thread, output);
         }
     }
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
-        add_node_identifiers_rev::<K, DependentNode<K, T, S>, T, S>(&self.nodes, *id, output); // Compiler limitation
+
+        if self.nodes.contains_key(id) {
+            self.thread.clear();
+            topological_sort_rev(&self.nodes, *id, &mut self.thread, output);
+        }
     }
     fn sort_node_children_by(
         &mut self,
@@ -477,6 +502,14 @@ where
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
     }
+}
+
+impl<K, T, M, S> SortableBookmarkableWeave<K, DependentNode<K, T, S>, T>
+    for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
     fn sort_bookmarks_by(
         &mut self,
         mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
@@ -642,7 +675,6 @@ where
 {
     type Nodes = ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>;
     type Roots = ArchivedIndexSet<K::Archived>;
-    type Bookmarks = ArchivedIndexSet<K::Archived>;
 
     fn len(&self) -> usize {
         self.nodes.len()
@@ -656,17 +688,11 @@ where
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        &self.bookmarked
-    }
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
     fn contains_active(&self, id: &K::Archived) -> bool {
         self.active == Some(*id)
-    }
-    fn contains_bookmark(&self, id: &K::Archived) -> bool {
-        self.bookmarked.contains(id)
     }
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
@@ -674,25 +700,63 @@ where
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
+        let mut scratchpad = Vec::with_capacity(self.len());
+        let mut scratchpad_2 = Vec::with_capacity(self.len());
+
         for root in self.roots().iter() {
-            add_archived_node_identifiers(&self.nodes, *root, output);
+            archived_topological_sort(
+                &self.nodes,
+                *root,
+                &mut scratchpad,
+                &mut scratchpad_2,
+                output,
+            );
         }
     }
     fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        add_archived_node_identifiers(&self.nodes, *id, output);
+
+        if self.nodes.contains_key(id) {
+            let mut scratchpad = Vec::with_capacity(self.len());
+            let mut scratchpad_2 = Vec::with_capacity(self.len());
+
+            archived_topological_sort(&self.nodes, *id, &mut scratchpad, &mut scratchpad_2, output);
+        }
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if let ArchivedOption::Some(active) = self.active {
-            build_thread_archived(&self.nodes, active, output);
+            archived_path_to_root(&self.nodes, active, output);
         }
     }
     fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
 
-        build_thread_archived(&self.nodes, *id, output);
+        if self.nodes.contains_key(id) {
+            archived_path_to_root(&self.nodes, *id, output);
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
+    ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    type Bookmarks = ArchivedIndexSet<K::Archived>;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        &self.bookmarked
+    }
+    fn contains_bookmark(&self, id: &K::Archived) -> bool {
+        self.bookmarked.contains(id)
     }
 }
 
@@ -725,9 +789,10 @@ where
 {
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        let mut scratchpad = Vec::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(&self.nodes, *root, output);
+            archived_topological_sort_rev(&self.nodes, *root, &mut scratchpad, output);
         }
     }
     fn get_ordered_node_identifiers_from_reversed_children(
@@ -736,7 +801,12 @@ where
         output: &mut Vec<K::Archived>,
     ) {
         output.clear();
-        add_archived_node_identifiers_rev(&self.nodes, *id, output);
+
+        if self.nodes.contains_key(id) {
+            let mut scratchpad = Vec::with_capacity(self.len());
+
+            archived_topological_sort_rev(&self.nodes, *id, &mut scratchpad, output);
+        }
     }
 }
 
@@ -753,109 +823,5 @@ where
 {
     fn active(&self) -> ArchivedOption<K::Archived> {
         self.active
-    }
-}
-
-#[stacksafe]
-fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: K, thread: &mut Vec<K>)
-where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread.push(id);
-        if let Some(parent) = node.from {
-            build_thread(nodes, parent, thread);
-        }
-    }
-}
-
-#[stacksafe]
-fn add_node_identifiers<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
-where
-    K: Hash + Copy + Eq,
-    N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to().into_iter() {
-            add_node_identifiers(nodes, *child, identifiers);
-        }
-    }
-}
-
-#[stacksafe]
-fn add_node_identifiers_rev<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
-where
-    K: Hash + Copy + Eq,
-    N: Node<K, T>,
-    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to().into_iter().rev() {
-            add_node_identifiers_rev(nodes, *child, identifiers);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn build_thread_archived<K, K2, T, T2, S>(
-    nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
-    id: K::Archived,
-    thread: &mut Vec<K::Archived>,
-) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq,
-    T: Archive<Archived = T2>,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread.push(id);
-        if let ArchivedOption::Some(parent) = node.from {
-            build_thread_archived(nodes, parent, thread);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn add_archived_node_identifiers<K, N, T>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T, To = ArchivedIndexSet<K>>,
-{
-    if let Some(node) = nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to().iter() {
-            add_archived_node_identifiers(nodes, *child, identifiers);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn add_archived_node_identifiers_rev<K, N, T>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T, To = ArchivedIndexSet<K>>,
-{
-    if let Some(node) = nodes.get(&id) {
-        identifiers.push(id);
-        for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(nodes, *child, identifiers);
-        }
     }
 }

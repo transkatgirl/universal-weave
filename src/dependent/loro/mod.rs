@@ -20,8 +20,8 @@ use rkyv::{
 };
 
 use crate::{
-    ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, IndependentContents,
-    SemiIndependentWeave, SortableWeave, Weave,
+    ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
+    IndependentContents, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
@@ -434,7 +434,6 @@ where
 {
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
-    type Bookmarks = IndexSet<K, S>;
 
     fn len(&self) -> usize {
         self.weave.len()
@@ -448,17 +447,11 @@ where
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
-    fn bookmarks(&self) -> &Self::Bookmarks {
-        self.weave.bookmarks()
-    }
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
-    }
-    fn contains_bookmark(&self, id: &K) -> bool {
-        self.weave.contains_bookmark(id)
     }
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.weave.get_node(id)
@@ -527,27 +520,6 @@ where
                     to_bytes(&self.weave.active).unwrap().into_vec(),
                 )
                 .unwrap();
-            true
-        } else {
-            false
-        }
-    }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        let bookmark_index = self.weave.bookmarked.get_index_of(id);
-
-        if self.weave.set_node_bookmarked_status(id, value) {
-            if value && bookmark_index.is_none() {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .push(to_bytes(id).unwrap().into_vec())
-                    .unwrap();
-            } else if !value && let Some(bookmark_index) = bookmark_index {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .delete(bookmark_index, 1)
-                    .unwrap();
-            }
-
             true
         } else {
             false
@@ -680,6 +652,55 @@ where
     }
 }
 
+impl<K, T, M, S> BookmarkableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    type Bookmarks = IndexSet<K, S>;
+
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        self.weave.bookmarks()
+    }
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.weave.contains_bookmark(id)
+    }
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        let bookmark_index = self.weave.bookmarked.get_index_of(id);
+
+        if self.weave.set_node_bookmarked_status(id, value) {
+            if value && bookmark_index.is_none() {
+                self.doc
+                    .get_movable_list("bookmarks")
+                    .push(to_bytes(id).unwrap().into_vec())
+                    .unwrap();
+            } else if !value && let Some(bookmark_index) = bookmark_index {
+                self.doc
+                    .get_movable_list("bookmarks")
+                    .delete(bookmark_index, 1)
+                    .unwrap();
+            }
+
+            true
+        } else {
+            false
+        }
+    }
+}
+
 // TODO: Find a way to swap Loro items so that reordering will no longer be O(N^2)
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
 where
@@ -776,6 +797,27 @@ where
                 .unwrap();
         }
     }
+}
+
+impl<K, T, M, S> SortableBookmarkableWeave<K, DependentNode<K, T, S>, T>
+    for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    M: Archive,
+    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
     fn sort_bookmarks_by(
         &mut self,
         cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
