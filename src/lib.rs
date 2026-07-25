@@ -655,9 +655,9 @@ fn ancestor_subgraph<'a, K, N, T, S>(
 {
     scratchpad.push_back(id);
 
-    while let Some(id) = scratchpad.pop_front() {
+    while let Some(id) = scratchpad.pop_back() {
         if identifiers.insert(id) {
-            scratchpad.extend(nodes[&id].from().into_iter().copied());
+            scratchpad.extend(nodes[&id].from().into_iter().rev().copied());
         }
     }
 }
@@ -678,9 +678,9 @@ fn descendant_subgraph<'a, K, N, T, S>(
 {
     scratchpad.push_back(id);
 
-    while let Some(id) = scratchpad.pop_front() {
+    while let Some(id) = scratchpad.pop_back() {
         if identifiers.insert(id) {
-            scratchpad.extend(nodes[&id].to().into_iter().copied());
+            scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
         }
     }
 }

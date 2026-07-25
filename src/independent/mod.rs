@@ -1408,24 +1408,46 @@ where
     }
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        let mut scratchpad = Vec::with_capacity(self.len());
+        let mut scratchpad_2 = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
 
-        for root in self.roots().iter() {
-            add_archived_node_identifiers(&self.nodes, *root, output, &mut identifier_set);
+        for root in self.roots.iter() {
+            archived_topological_sort(
+                &self.nodes,
+                root,
+                &mut scratchpad,
+                &mut scratchpad_2,
+                output,
+                &mut identifier_set,
+            );
         }
     }
     fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut identifier_set = HashSet::with_capacity(self.len());
 
         if self.nodes.contains_key(id) {
-            add_archived_node_identifiers(&self.nodes, *id, output, &mut identifier_set);
+            let mut scratchpad = Vec::with_capacity(self.len());
+            let mut scratchpad_2 = Vec::with_capacity(self.len());
+            let mut identifier_set = HashSet::with_capacity(self.len());
+
+            archived_topological_sort(
+                &self.nodes,
+                id,
+                &mut scratchpad,
+                &mut scratchpad_2,
+                output,
+                &mut identifier_set,
+            );
         }
     }
     fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut thread_list = Vec::with_capacity(self.len());
-        let mut thread_set = HashSet::with_capacity(self.len());
+        let mut scratchpad_list = Vec::with_capacity(self.len());
+        let mut scratchpad_list_2 = Vec::with_capacity(self.len());
+        let mut scratchpad_list_3 = Vec::with_capacity(self.len());
+        let mut scratchpad_set = HashSet::with_capacity(self.len());
+        let mut scratchpad_map = HashMap::with_capacity(self.len());
 
         for active_root in self
             .roots
@@ -1433,58 +1455,93 @@ where
             .copied()
             .filter(|root| self.active.contains(root))
         {
-            build_thread_archived(
+            archived_topological_sort_subgraph(
                 &self.nodes,
-                &self.active,
-                active_root,
-                &mut thread_list,
-                &mut thread_set,
+                &|id| self.active.contains(id),
+                &active_root,
+                &mut scratchpad_list,
+                &mut scratchpad_list_2,
+                &mut scratchpad_list_3,
+                &mut scratchpad_set,
+            );
+
+            archived_longest_path_to_root(
+                &self.nodes,
+                &scratchpad_list_3,
+                &mut scratchpad_map,
                 output,
             );
         }
-
-        output.reverse();
     }
     fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        let mut thread_set = HashSet::with_capacity(self.len());
+        if !self.nodes.contains_key(id) {
+            return;
+        }
 
-        build_thread_from_archived(&self.nodes, &self.active, *id, output, &mut thread_set);
+        let mut scratchpad_list = Vec::with_capacity(self.len());
+        let mut scratchpad_list_2 = Vec::with_capacity(self.len());
+        let mut scratchpad_list_3 = Vec::with_capacity(self.len());
+        let mut scratchpad_list_4 = Vec::with_capacity(self.len());
+        let mut scratchpad_set = HashSet::with_capacity(self.len());
+        let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
+        let mut scratchpad_map = HashMap::with_capacity(self.len());
 
-        if let Some(last_thread_node) = output.last()
-            && !self.roots.contains(last_thread_node)
+        archived_ancestor_subgraph(
+            &self.nodes,
+            *id,
+            &mut scratchpad_list_3,
+            &mut scratchpad_set,
+        );
+
+        for active_root in self
+            .roots
+            .iter()
+            .copied()
+            .filter(|root| self.active.contains(root) && scratchpad_set.contains(root))
         {
-            thread_set.clear();
+            archived_topological_sort_subgraph(
+                &self.nodes,
+                &|id| self.active.contains(id) && scratchpad_set.contains(id),
+                &active_root,
+                &mut scratchpad_list_3,
+                &mut scratchpad_list_4,
+                &mut scratchpad_list,
+                &mut scratchpad_set_2,
+            );
 
-            let mut alternate_thread_list = Vec::with_capacity(self.len() - output.len());
+            archived_longest_path_to_root(
+                &self.nodes,
+                &scratchpad_list,
+                &mut scratchpad_map,
+                &mut scratchpad_list_2,
+            );
+        }
 
-            for active_root in self
-                .roots
-                .iter()
-                .copied()
-                .filter(|root| self.active.contains(root))
-            {
-                if build_thread_archived_until(
-                    &self.nodes,
-                    &self.active,
-                    active_root,
-                    &self
-                        .nodes
-                        .get(last_thread_node)
-                        .unwrap()
-                        .from
-                        .iter()
-                        .copied()
-                        .filter(|parent| self.active.contains(parent))
-                        .collect::<HashSet<K2>>(),
-                    &mut alternate_thread_list,
-                    &mut thread_set,
-                ) {
-                    break;
-                }
-            }
+        scratchpad_list.clear();
+        scratchpad_set_2.clear();
 
-            output.extend(alternate_thread_list.into_iter().rev());
+        if let Some(target) = scratchpad_list_2.first().copied() {
+            archived_shortest_path_to_ancestor(
+                &self.nodes,
+                id,
+                &|node| node.id == target,
+                &mut scratchpad_list,
+                &mut scratchpad_set_2,
+                output,
+            );
+
+            output.pop();
+            output.append(&mut scratchpad_list_2);
+        } else {
+            archived_shortest_path_to_ancestor(
+                &self.nodes,
+                id,
+                &|node| node.from.is_empty(),
+                &mut scratchpad_list,
+                &mut scratchpad_set_2,
+                output,
+            );
         }
     }
 }
@@ -1518,10 +1575,17 @@ where
 {
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        let mut scratchpad = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
 
-        for root in self.roots().iter() {
-            add_archived_node_identifiers_rev(&self.nodes, *root, output, &mut identifier_set);
+        for root in self.roots.iter() {
+            archived_topological_sort_rev(
+                &self.nodes,
+                root,
+                &mut scratchpad,
+                output,
+                &mut identifier_set,
+            );
         }
     }
     fn get_ordered_node_identifiers_from_reversed_children(
@@ -1530,10 +1594,18 @@ where
         output: &mut Vec<K::Archived>,
     ) {
         output.clear();
-        let mut identifier_set = HashSet::with_capacity(self.len());
 
         if self.nodes.contains_key(id) {
-            add_archived_node_identifiers_rev(&self.nodes, *id, output, &mut identifier_set);
+            let mut scratchpad = Vec::with_capacity(self.len());
+            let mut identifier_set = HashSet::with_capacity(self.len());
+
+            archived_topological_sort_rev(
+                &self.nodes,
+                id,
+                &mut scratchpad,
+                output,
+                &mut identifier_set,
+            );
         }
     }
 }
@@ -1556,241 +1628,199 @@ where
     }
 }
 
-#[stacksafe]
-fn build_longest_thread_from<K, T, S>(
-    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    active: &HashSet<K, S>,
-    id: K,
-    scratchpad_list: &mut Vec<K>,
-    scratchpad_set: &mut HashSet<K, S>,
-    thread_list: &mut Vec<K>,
-    has_active: &mut bool,
+fn archived_topological_sort<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    id: &'a K,
+    scratchpad: &mut Vec<K>,
+    scratchpad_2: &mut Vec<K>,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
-    if let Some(node) = nodes.get(&id)
-        && scratchpad_set.insert(id)
-    {
-        scratchpad_list.push(id);
+    scratchpad.push(*id);
 
-        if node.from.iter().any(|parent| active.contains(parent)) {
-            *has_active = true;
-            if scratchpad_list.len() > thread_list.len() {
-                thread_list.clone_from(scratchpad_list);
-            }
-        } else {
-            if scratchpad_list.len() > thread_list.len() && (!*has_active) {
-                thread_list.clone_from(scratchpad_list);
-            }
+    while let Some(id) = scratchpad.pop() {
+        let node = &nodes[&id];
+
+        if !identifier_set.contains(&id)
+            && node
+                .from()
+                .iter()
+                .all(|parent| identifier_set.contains(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad_2.extend(nodes[&id].to().iter().copied());
+            scratchpad_2.reverse();
+            scratchpad.append(scratchpad_2);
         }
-
-        for parent in node.from.iter().filter(|p| active.contains(p)).copied() {
-            build_longest_thread_from(
-                nodes,
-                active,
-                parent,
-                scratchpad_list,
-                scratchpad_set,
-                thread_list,
-                has_active,
-            );
-        }
-
-        for parent in node.from.iter().filter(|p| !active.contains(p)).copied() {
-            build_longest_thread_from(
-                nodes,
-                active,
-                parent,
-                scratchpad_list,
-                scratchpad_set,
-                thread_list,
-                has_active,
-            );
-        }
-
-        scratchpad_list.pop();
-        scratchpad_set.remove(&id);
     }
 }
 
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn build_thread_archived<K, K2, T, T2, S>(
-    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
-    active: &ArchivedHashSet<K::Archived>,
-    id: K::Archived,
-    scratchpad_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived>,
-    thread_list: &mut Vec<K::Archived>,
+fn archived_topological_sort_subgraph<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    filter: &impl Fn(&K) -> bool,
+    id: &'a K,
+    scratchpad: &mut Vec<K>,
+    scratchpad_2: &mut Vec<K>,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
 ) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq,
-    T: Archive<Archived = T2> + IndependentContents,
-    S: BuildHasher + Default + Clone,
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
-    if let Some(node) = nodes.get(&id)
-        && node
-            .from
-            .iter()
-            .filter(|parent| active.contains(*parent))
-            .all(|parent| thread_set.contains(parent))
-        && thread_set.insert(id)
-    {
-        scratchpad_list.push(id);
+    scratchpad.push(*id);
 
-        if scratchpad_list.len() > thread_list.len() {
-            thread_list.clone_from(scratchpad_list);
+    while let Some(id) = scratchpad.pop() {
+        let node = &nodes[&id];
+
+        if filter(&id)
+            && !identifier_set.contains(&id)
+            && node
+                .from()
+                .iter()
+                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad_2.extend(nodes[&id].to().iter().copied());
+            scratchpad_2.reverse();
+            scratchpad.append(scratchpad_2);
         }
+    }
+}
 
-        for child in node.to.iter().copied() {
-            if active.contains(&child) {
-                build_thread_archived(
+fn archived_topological_sort_rev<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    id: &'a K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+{
+    scratchpad.push(*id);
+
+    while let Some(id) = scratchpad.pop() {
+        let node = &nodes[&id];
+
+        if !identifier_set.contains(&id)
+            && node
+                .from()
+                .iter()
+                .all(|parent| identifier_set.contains(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(node.to().iter().copied());
+        }
+    }
+}
+
+#[stacksafe::stacksafe]
+fn archived_shortest_path_to_ancestor<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    id: &'a K,
+    target: &impl Fn(&'a N) -> bool,
+    scratchpad_list: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K>,
+    path: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+{
+    let node = nodes.get(id).unwrap();
+
+    if scratchpad_set.insert(*id) {
+        scratchpad_list.push(*id);
+
+        if target(node) {
+            if path.is_empty() || path.len() > scratchpad_list.len() {
+                path.clone_from(scratchpad_list);
+            }
+        } else {
+            for parent in node.from().iter() {
+                archived_shortest_path_to_ancestor(
                     nodes,
-                    active,
-                    child,
+                    parent,
+                    target,
                     scratchpad_list,
-                    thread_set,
-                    thread_list,
+                    scratchpad_set,
+                    path,
                 );
             }
         }
 
         scratchpad_list.pop();
-        thread_set.remove(&id);
+        scratchpad_set.remove(id);
     }
 }
 
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn build_thread_archived_until<K, K2, T, T2, S>(
-    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
-    active: &ArchivedHashSet<K::Archived>,
-    id: K::Archived,
-    stop_at: &HashSet<K::Archived>,
-    thread_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived>,
-) -> bool
-where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq,
-    T: Archive<Archived = T2> + IndependentContents,
-    S: BuildHasher + Default + Clone,
+fn archived_longest_path_to_root<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    topological_order: &'a [K],
+    scratchpad_map: &mut HashMap<K, usize>,
+    reversed_path: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
-    if let Some(node) = nodes.get(&id)
-        && node
-            .from
-            .iter()
-            .filter(|parent| active.contains(*parent))
-            .all(|parent| thread_set.contains(parent))
-        && thread_set.insert(id)
-    {
-        thread_list.push(id);
+    let mut longest_global_distance = None;
 
-        if !stop_at.contains(&id) {
-            for child in node.to.iter().copied() {
-                if active.contains(&child)
-                    && build_thread_archived_until(
-                        nodes,
-                        active,
-                        child,
-                        stop_at,
-                        thread_list,
-                        thread_set,
-                    )
-                {
-                    return true;
+    for id in topological_order {
+        let longest_distance = nodes[id]
+            .from()
+            .iter()
+            .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
+            .max()
+            .map(|l| l + 1)
+            .unwrap_or_default();
+
+        scratchpad_map.insert(*id, longest_distance);
+
+        match longest_global_distance {
+            Some((value, _)) => {
+                if longest_distance > value {
+                    longest_global_distance = Some((longest_distance, id));
                 }
             }
-
-            thread_list.pop();
-            thread_set.remove(&id);
-            false
-        } else {
-            true
+            None => {
+                longest_global_distance = Some((longest_distance, id));
+            }
         }
-    } else {
-        false
     }
-}
 
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn build_thread_from_archived<K, K2, T, T2, S>(
-    nodes: &ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>,
-    active: &ArchivedHashSet<K::Archived>,
-    id: K::Archived,
-    thread_list: &mut Vec<K::Archived>,
-    thread_set: &mut HashSet<K::Archived>,
-) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq,
-    T: Archive<Archived = T2> + IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread_list.push(id);
-        thread_set.insert(id);
+    if let Some((_, id)) = longest_global_distance {
+        let mut current_id = Some(id);
 
-        if node.from.iter().any(|parent| active.contains(parent)) {
-            return;
-        }
+        while let Some(id) = current_id {
+            reversed_path.push(*id);
 
-        if let Some(parent) = node.from.get_index(0).copied() {
-            build_thread_from_archived(nodes, active, parent, thread_list, thread_set);
+            current_id = nodes[id]
+                .from()
+                .iter()
+                .max_by_key(|id| scratchpad_map.get(*id).copied());
         }
     }
 }
 
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn add_archived_node_identifiers<K, N, T>(
-    nodes: &ArchivedHashMap<K, N>,
+fn archived_ancestor_subgraph<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
     id: K,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
+    K: Hash + Copy + Eq + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
-    if let Some(node) = nodes.get(&id)
-        && !identifier_set.contains(&id)
-        && node
-            .from()
-            .iter()
-            .all(|parent| identifier_set.contains(parent))
-    {
-        identifiers.push(id);
-        identifier_set.insert(id);
-        for child in node.to().iter() {
-            add_archived_node_identifiers(nodes, *child, identifiers, identifier_set);
-        }
-    }
-}
+    scratchpad.push(id);
 
-#[cfg(feature = "rkyv")]
-#[stacksafe]
-fn add_archived_node_identifiers_rev<K, N, T>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
-) where
-    K: Hash + Copy + Eq,
-    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
-{
-    if let Some(node) = nodes.get(&id)
-        && !identifier_set.contains(&id)
-        && node
-            .from()
-            .iter()
-            .all(|parent| identifier_set.contains(parent))
-    {
-        identifiers.push(id);
-        identifier_set.insert(id);
-        for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
-            add_archived_node_identifiers_rev(nodes, *child, identifiers, identifier_set);
+    while let Some(id) = scratchpad.pop() {
+        if identifiers.insert(id) {
+            scratchpad.extend(nodes[&id].from().iter().copied());
         }
     }
 }
