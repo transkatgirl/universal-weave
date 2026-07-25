@@ -366,7 +366,11 @@ where
     N: Node<K, T>,
     S: BuildHasher + Default + Clone,
 {
-    /// Applies a [`WeaveAction`] to a [`Weave`], panicking on failure.
+    /// Applies a [`WeaveAction`] to a [`Weave`].
+    ///
+    /// # Panics
+    ///
+    /// May panics if applying the action fails.
     fn apply(&mut self, action: WeaveAction<K, N, T, M>);
 }
 
