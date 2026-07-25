@@ -710,6 +710,7 @@ where
         }
     }
     #[ensures(output.len() == self.active.len())]
+    #[ensures(output.iter().all(|i| self.active.contains(i)))]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
@@ -742,55 +743,75 @@ where
             );
         }
     }
+    #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
+    #[ensures(self.nodes.contains_key(id) || output.is_empty())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
-        // TODO
-
         output.clear();
-        self.scratchpad_set.clear();
+        if !self.nodes.contains_key(id) {
+            return;
+        }
 
-        build_thread_from(
+        self.scratchpad_list.clear();
+        self.scratchpad_set.clear();
+        self.scratchpad_set_2.clear();
+        self.scratchpad_map.clear();
+        self.scratchpad_queue.clear();
+
+        ancestor_subgraph(
             &self.nodes,
-            &self.active,
             *id,
-            output,
+            &mut self.scratchpad_queue,
             &mut self.scratchpad_set,
         );
 
-        if let Some(last_thread_node) = output.last()
-            && !self.roots.contains(last_thread_node)
+        for active_root in self
+            .roots
+            .iter()
+            .copied()
+            .filter(|root| self.active.contains(root) && self.scratchpad_set.contains(root))
         {
-            self.scratchpad_set.clear();
-            self.scratchpad_list.clear();
+            topological_sort_subgraph(
+                &self.nodes,
+                &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
+                &active_root,
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set_2,
+            );
 
-            for active_root in self
-                .roots
-                .iter()
-                .copied()
-                .filter(|root| self.active.contains(root))
-            {
-                if build_thread_until(
-                    &self.nodes,
-                    &self.active,
-                    active_root,
-                    &HashSet::from_iter(
-                        self.nodes
-                            .get(last_thread_node)
-                            .unwrap()
-                            .from
-                            .iter()
-                            .copied()
-                            .filter(|parent| self.active.contains(parent)),
-                    ),
-                    &mut self.scratchpad_list,
-                    &mut self.scratchpad_set,
-                ) {
-                    break;
-                }
-            }
+            longest_path_to_root(
+                &self.nodes,
+                &self.scratchpad_list,
+                &mut self.scratchpad_map,
+                &mut self.scratchpad_list_2,
+            );
+        }
 
-            output.extend(self.scratchpad_list.drain(..).rev());
+        self.scratchpad_list.clear();
+        self.scratchpad_set_2.clear();
+
+        if let Some(target) = self.scratchpad_list_2.first().copied() {
+            shortest_path_to_ancestor(
+                &self.nodes,
+                id,
+                &|node| node.id == target,
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set_2,
+                output,
+            );
+
+            output.pop();
+            output.append(&mut self.scratchpad_list_2);
+        } else {
+            shortest_path_to_ancestor(
+                &self.nodes,
+                id,
+                &|node| node.from.is_empty(),
+                &mut self.scratchpad_list,
+                &mut self.scratchpad_set_2,
+                output,
+            );
         }
     }
     #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
@@ -1530,77 +1551,6 @@ where
 
     fn active(&self) -> &Self::Active {
         &self.active
-    }
-}
-
-#[stacksafe]
-fn build_thread_until<K, T, S>(
-    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    active: &HashSet<K, S>,
-    id: K,
-    stop_at: &HashSet<K, S>,
-    thread_list: &mut Vec<K>,
-    thread_set: &mut HashSet<K, S>,
-) -> bool
-where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id)
-        && node
-            .from
-            .iter()
-            .filter(|parent| active.contains(*parent))
-            .all(|parent| thread_set.contains(parent))
-        && thread_set.insert(id)
-    {
-        thread_list.push(id);
-
-        if !stop_at.contains(&id) {
-            for child in node.to.iter().copied() {
-                if active.contains(&child)
-                    && build_thread_until(nodes, active, child, stop_at, thread_list, thread_set)
-                {
-                    return true;
-                }
-            }
-
-            thread_list.pop();
-            thread_set.remove(&id);
-
-            false
-        } else {
-            true
-        }
-    } else {
-        false
-    }
-}
-
-#[stacksafe]
-fn build_thread_from<K, T, S>(
-    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    active: &HashSet<K, S>,
-    id: K,
-    thread_list: &mut Vec<K>,
-    thread_set: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    if let Some(node) = nodes.get(&id) {
-        thread_list.push(id);
-        thread_set.insert(id);
-
-        if node.from.iter().any(|parent| active.contains(parent)) {
-            return;
-        }
-
-        if let Some(parent) = node.from.first().copied() {
-            build_thread_from(nodes, active, parent, thread_list, thread_set);
-        }
     }
 }
 

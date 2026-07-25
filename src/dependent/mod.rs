@@ -356,7 +356,7 @@ where
         output.clear();
         add_node_identifiers(&self.nodes, *id, output);
     }
-    #[ensures(output.is_empty() == self.active.is_none())]
+    #[ensures(self.active == output.first().copied())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
@@ -366,6 +366,8 @@ where
             build_thread(&self.nodes, active, output);
         }
     }
+    #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
+    #[ensures(self.nodes.contains_key(id) || output.is_empty())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {

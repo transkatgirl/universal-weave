@@ -4,6 +4,7 @@
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
 // TODO: Property tests for DependentLoroWeave CRDT merging
+// TODO: Property tests for IndependentWeave::from(DependentWeave)
 // TODO: Property tests for IndependentWeave behavior parity with DependentWeave?
 // TODO: Property tests for Archived structs
 // TODO: Unit tests
