@@ -18,7 +18,6 @@ use rkyv::{
     to_bytes,
     util::AlignedVec,
 };
-use stacksafe::stacksafe;
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, IndependentContents,
@@ -56,6 +55,7 @@ where
 {
     weave: DependentWeave<K, T, M, S>,
     mapping: HashMap<K, TreeID, S>,
+    scratchpad: Vec<(TreeID, Option<K>)>,
     buffer: AlignedVec,
     doc: LoroDoc,
 }
@@ -192,6 +192,7 @@ where
 
         Ok(Self {
             doc,
+            scratchpad: Vec::with_capacity(mapping.len()),
             mapping,
             buffer: AlignedVec::with_capacity(4096),
             weave: value,
@@ -241,6 +242,7 @@ where
 
         let mut wrapped = Self {
             mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
+            scratchpad: Vec::with_capacity(weave.capacity()),
             buffer,
             weave,
             doc: value,
@@ -359,41 +361,43 @@ where
 
         Ok(())
     }
-    #[stacksafe]
     fn import_subtree(
         &mut self,
         tree: &LoroTree,
         target: TreeID,
         parent: Option<K>,
     ) -> Result<(), rancor::Error> {
-        let meta = tree.get_meta(target).map_err(rancor::Error::new)?;
+        self.scratchpad.push((target, parent));
 
-        if let Some(ValueOrContainer::Value(LoroValue::Binary(binary_id))) = meta.get("id")
-            && let Some(ValueOrContainer::Value(LoroValue::Binary(binary_contents))) =
-                meta.get("contents")
-        {
-            let id = from_bytes_aligned(&binary_id, &mut self.buffer)?;
-            if self.weave.add_node(DependentNode {
-                id,
-                from: parent,
-                to: IndexSet::default(),
-                active: false,
-                bookmarked: false,
-                contents: from_bytes_aligned(&binary_contents, &mut self.buffer)?,
-            }) {
-                self.mapping.insert(id, target);
+        while let Some((target, parent)) = self.scratchpad.pop() {
+            let meta = tree.get_meta(target).map_err(rancor::Error::new)?;
 
-                if let Some(children) = tree.children(target) {
-                    for child in children {
-                        self.import_subtree(tree, child, Some(id))?;
+            if let Some(ValueOrContainer::Value(LoroValue::Binary(binary_id))) = meta.get("id")
+                && let Some(ValueOrContainer::Value(LoroValue::Binary(binary_contents))) =
+                    meta.get("contents")
+            {
+                let id = from_bytes_aligned(&binary_id, &mut self.buffer)?;
+                if self.weave.add_node(DependentNode {
+                    id,
+                    from: parent,
+                    to: IndexSet::default(),
+                    active: false,
+                    bookmarked: false,
+                    contents: from_bytes_aligned(&binary_contents, &mut self.buffer)?,
+                }) {
+                    self.mapping.insert(id, target);
+
+                    if let Some(children) = tree.children(target) {
+                        self.scratchpad
+                            .extend(children.into_iter().rev().map(|child| (child, Some(id))));
                     }
+                } else {
+                    tree.delete(target).map_err(rancor::Error::new)?;
                 }
             } else {
                 tree.delete(target).map_err(rancor::Error::new)?;
-            }
-        } else {
-            tree.delete(target).map_err(rancor::Error::new)?;
-        };
+            };
+        }
 
         Ok(())
     }
