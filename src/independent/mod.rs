@@ -497,8 +497,6 @@ where
             } else {
                 return false;
             }
-
-            // TODO
         }
 
         self.fix_orphaned_activations();
@@ -524,14 +522,14 @@ where
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
-
-            longest_path_to_root(
-                &self.nodes,
-                &self.scratchpad_list,
-                &mut self.scratchpad_map,
-                &mut self.scratchpad_list_2,
-            );
         }
+
+        longest_path_to_root(
+            &self.nodes,
+            &self.scratchpad_list,
+            &mut self.scratchpad_map,
+            &mut self.scratchpad_list_2,
+        );
 
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
@@ -678,8 +676,6 @@ where
     #[ensures(output.len() == self.nodes.len())]
     #[ensures(valid_ordered_nodes(&self.nodes, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
-        // TODO
-
         output.clear();
         self.scratchpad_set.clear();
 
