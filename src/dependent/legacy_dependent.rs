@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     hash::{BuildHasher, Hash},
 };
 
@@ -25,20 +25,14 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActiveSingularWeave, ArchivedMetadataWeave, ArchivedSortableWeave, ArchivedWeave,
-    dependent::{
-        ArchivedDependentNode, add_archived_node_identifiers, add_archived_node_identifiers_rev,
-        build_thread_archived,
-    },
+    dependent::ArchivedDependentNode,
 };
 
 use crate::{
     ActiveSingularWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave, SemiIndependentWeave,
     SortableWeave, Weave,
-    dependent::{
-        DependentNode, DependentWeave as NewDependentWeave, add_node_identifiers,
-        add_node_identifiers_rev, build_thread,
-    },
+    dependent::{DependentNode, DependentWeave as NewDependentWeave},
 };
 
 #[allow(unused_imports)]
@@ -51,7 +45,7 @@ where
 {
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
         NewDependentWeave {
-            scratchpad: VecDeque::with_capacity(value.nodes.len()),
+            scratchpad: Vec::with_capacity(value.nodes.len()),
             nodes: value.nodes,
             roots: value.roots,
             active: value.active,
@@ -759,5 +753,109 @@ where
 {
     fn active(&self) -> ArchivedOption<K::Archived> {
         self.active
+    }
+}
+
+#[stacksafe]
+fn build_thread<K, T, S>(nodes: &HashMap<K, DependentNode<K, T, S>, S>, id: K, thread: &mut Vec<K>)
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(&id) {
+        thread.push(id);
+        if let Some(parent) = node.from {
+            build_thread(nodes, parent, thread);
+        }
+    }
+}
+
+#[stacksafe]
+fn add_node_identifiers<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(&id) {
+        identifiers.push(id);
+        for child in node.to().into_iter() {
+            add_node_identifiers(nodes, *child, identifiers);
+        }
+    }
+}
+
+#[stacksafe]
+fn add_node_identifiers_rev<K, N, T, S>(nodes: &HashMap<K, N, S>, id: K, identifiers: &mut Vec<K>)
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(&id) {
+        identifiers.push(id);
+        for child in node.to().into_iter().rev() {
+            add_node_identifiers_rev(nodes, *child, identifiers);
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+#[stacksafe]
+fn build_thread_archived<K, K2, T, T2, S>(
+    nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
+    id: K::Archived,
+    thread: &mut Vec<K::Archived>,
+) where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq,
+    T: Archive<Archived = T2>,
+    S: BuildHasher + Default + Clone,
+{
+    if let Some(node) = nodes.get(&id) {
+        thread.push(id);
+        if let ArchivedOption::Some(parent) = node.from {
+            build_thread_archived(nodes, parent, thread);
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+#[stacksafe]
+fn add_archived_node_identifiers<K, N, T>(
+    nodes: &ArchivedHashMap<K, N>,
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, To = ArchivedIndexSet<K>>,
+{
+    if let Some(node) = nodes.get(&id) {
+        identifiers.push(id);
+        for child in node.to().iter() {
+            add_archived_node_identifiers(nodes, *child, identifiers);
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+#[stacksafe]
+fn add_archived_node_identifiers_rev<K, N, T>(
+    nodes: &ArchivedHashMap<K, N>,
+    id: K,
+    identifiers: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq,
+    N: Node<K, T, To = ArchivedIndexSet<K>>,
+{
+    if let Some(node) = nodes.get(&id) {
+        identifiers.push(id);
+        for child in node.to().iter().collect::<Vec<_>>().into_iter().rev() {
+            add_archived_node_identifiers_rev(nodes, *child, identifiers);
+        }
     }
 }
