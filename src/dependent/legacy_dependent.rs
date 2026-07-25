@@ -288,9 +288,9 @@ where
     }
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
+        self.thread.clear();
 
         for root in &self.roots {
-            self.thread.clear();
             topological_sort(&self.nodes, *root, &mut self.thread, output);
         }
     }
@@ -442,9 +442,9 @@ where
 {
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
+        self.thread.clear();
 
         for root in &self.roots {
-            self.thread.clear();
             topological_sort_rev(&self.nodes, *root, &mut self.thread, output);
         }
     }
@@ -459,11 +459,10 @@ where
     fn sort_node_children_by(
         &mut self,
         id: &K,
-        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
+        mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
-            node.to
-                .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
+            node.to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
             self.nodes.insert(node.id, node);
 
             true
@@ -471,13 +470,9 @@ where
             false
         }
     }
-    fn sort_node_children_by_id(
-        &mut self,
-        id: &K,
-        compare: impl FnMut(&K, &K) -> Ordering,
-    ) -> bool {
+    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
-            node.to.sort_by(compare);
+            node.to.sort_by(cmp);
 
             true
         } else {
@@ -486,13 +481,13 @@ where
     }
     fn sort_roots_by(
         &mut self,
-        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
+        mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.roots
-            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
+            .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
-    fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
-        self.roots.sort_by(compare);
+    fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.roots.sort_by(cmp);
     }
 }
 
@@ -504,13 +499,13 @@ where
 {
     fn sort_bookmarks_by(
         &mut self,
-        mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
+        mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.bookmarked
-            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
+            .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
-    fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
-        self.bookmarked.sort_by(compare);
+    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.bookmarked.sort_by(cmp);
     }
 }
 
