@@ -22,7 +22,7 @@ Features:
 		- Node sorting
 	- Tree-based Weave implementation
 		- CRDT-based collaborative editing (uses loro & rkyv, *experimental*)
-	- DAG-based Weave implementation (**experimental WIP; not recommended for use**)
+	- DAG-based Weave implementation (*experimental*)
 		- Node moving
 	- General-purpose weave wrappers: Action queuing (can be used to implement undo/redo)
 <!--
