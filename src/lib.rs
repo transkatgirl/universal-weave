@@ -1,8 +1,9 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 // TODO: Add validation API for working with untrusted data
-// TODO: Rewrite IndependentWeave node activation & traversal logic
 // TODO: Rewrite all traversal logic to be non-recursive
+// TODO: Separate bookmarking into a Weave subtrait & wrapper
+// TODO: Full code review
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
 // TODO: Property tests for DependentLoroWeave CRDT merging
