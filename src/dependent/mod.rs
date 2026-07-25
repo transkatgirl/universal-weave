@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     hash::{BuildHasher, Hash},
     iter,
 };
@@ -17,6 +17,7 @@ use rkyv::{
     Archive, Deserialize, Serialize,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
     option::ArchivedOption,
+    with::Skip,
 };
 
 #[cfg(feature = "wincode")]
@@ -27,8 +28,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
 use crate::{
-    ArchivedActiveSingularWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
-    ArchivedSortableWeave, ArchivedWeave,
+    ArchivedActiveSingularWeave, ArchivedMetadataWeave, ArchivedSortableWeave, ArchivedWeave,
 };
 
 use crate::{
@@ -36,8 +36,8 @@ use crate::{
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SemiIndependentWeave, SortableWeave, Weave,
     contract::{
-        lacks_duplicates, matches_topological_sort, matches_topological_sort_rev,
-        valid_ordered_nodes, valid_path,
+        lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
+        valid_topological_sort,
     },
 };
 
@@ -193,6 +193,11 @@ where
     )]
     bookmarked: IndexSet<K, S>,
 
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "wincode", wincode(skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad: VecDeque<K>,
+
     pub metadata: M,
 }
 
@@ -207,6 +212,7 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad: VecDeque::with_capacity(capacity),
             metadata,
         }
     }
@@ -219,11 +225,14 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
         self.bookmarked
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
+        self.scratchpad
+            .reserve(self.nodes.capacity().saturating_sub(self.scratchpad.len()));
     }
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
+        self.scratchpad.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -341,7 +350,7 @@ where
         self.nodes.get(id)
     }
     #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(valid_topological_sort(&self.nodes, output))]
     #[ensures(matches_topological_sort(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
@@ -518,7 +527,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(valid_topological_sort(&self.nodes, output))]
     #[ensures(matches_topological_sort_rev(&self.nodes, &self.roots, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
@@ -758,7 +767,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> ArchivedNode<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
+impl<K, K2, T, T2, S> Node<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq + 'static,
@@ -783,8 +792,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> ArchivedIntegratedNode<K::Archived, T::Archived>
-    for ArchivedDependentNode<K, T, S>
+impl<K, K2, T, T2, S> IntegratedNode<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq + 'static,
@@ -1001,7 +1009,7 @@ fn add_archived_node_identifiers<K, N, T>(
     identifiers: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T, To = ArchivedIndexSet<K>>,
+    N: Node<K, T, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);
@@ -1019,7 +1027,7 @@ fn add_archived_node_identifiers_rev<K, N, T>(
     identifiers: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T, To = ArchivedIndexSet<K>>,
+    N: Node<K, T, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id) {
         identifiers.push(id);

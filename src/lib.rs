@@ -47,16 +47,16 @@ pub trait Node<K, T>
 where
     K: Hash + Copy + Eq,
 {
-    /// Identifiers corresponding to the node's children.
-    type From;
     /// Identifiers corresponding to the node's parents.
+    type From;
+    /// Identifiers corresponding to the node's children.
     type To;
 
     /// Returns the node's unique identifier.
     fn id(&self) -> K;
-    /// Returns a reference to the identifiers corresponding to the node's children.
-    fn from(&self) -> &Self::From;
     /// Returns a reference to the identifiers corresponding to the node's parents.
+    fn from(&self) -> &Self::From;
+    /// Returns a reference to the identifiers corresponding to the node's children.
     fn to(&self) -> &Self::To;
     /// Returns a reference to the node's contents.
     fn contents(&self) -> &T;
@@ -220,7 +220,7 @@ where
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
-/// A [`Weave`] where only one [`Node`] object can be considered "active" at a time.
+/// A [`Weave`] where only one [`Node`] can be considered "active" at a time.
 pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
@@ -230,7 +230,7 @@ where
     fn active(&self) -> Option<K>;
 }
 
-/// A [`Weave`] where every [`Node`] object in the active path is always considered "active".
+/// A [`Weave`] where every [`Node`] in the active path is always considered "active".
 pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
@@ -298,45 +298,11 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-/// A [`Node`] which has been decoded using zero-copy deserialization.
-pub trait ArchivedNode<K, T>
-where
-    K: Hash + Copy + Eq,
-{
-    /// Identifiers corresponding to the node's children.
-    type From;
-    /// Identifiers corresponding to the node's parents.
-    type To;
-
-    /// Returns the node's unique identifier.
-    fn id(&self) -> K;
-    /// Returns a reference to the identifiers corresponding to the node's children.
-    fn from(&self) -> &Self::From;
-    /// Returns a reference to the identifiers corresponding to the node's parents.
-    fn to(&self) -> &Self::To;
-    /// Returns a reference to the node's contents.
-    fn contents(&self) -> &T;
-}
-
-/// An [`ArchivedNode`] which contains a copy of its state within the [`Weave`].
-pub trait ArchivedIntegratedNode<K, T>
-where
-    K: Hash + Copy + Eq,
-{
-    /// Returns `true` if the node is considered "active".
-    ///
-    /// The meaning of this value can depend on the underlying [`Weave`] implementation.
-    fn is_active(&self) -> bool;
-    /// Returns `true` if the node is bookmarked.
-    fn is_bookmarked(&self) -> bool;
-}
-
-#[cfg(feature = "rkyv")]
 /// A read-only [`Weave`] which has been decoded using zero-copy deserialization.
 pub trait ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: Node<K, T>,
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
@@ -393,7 +359,7 @@ pub trait ArchivedMetadataWeave<K, N, T, M> {
 pub trait ArchivedSortableWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: Node<K, T>,
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
@@ -406,22 +372,22 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where only one [`ArchivedNode`] object can be considered "active" at a time.
+/// An [`ArchivedWeave`] where only one [`Node`] can be considered "active" at a time.
 pub trait ArchivedActiveSingularWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
     fn active(&self) -> ArchivedOption<K>;
 }
 
 #[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where every [`ArchivedNode`] object in the active path is always considered "active".
+/// An [`ArchivedWeave`] where every [`Node`] in the active path is always considered "active".
 pub trait ArchivedActivePathWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T>,
+    N: Node<K, T>,
 {
     /// Identifiers of active nodes.
     type Active;
@@ -430,10 +396,10 @@ where
     fn active(&self) -> &Self::Active;
 }
 
-#[stacksafe::stacksafe]
 fn topological_sort<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
+    nodes: &'a HashMap<K, N, S>,
     id: &'a K,
+    scratchpad: &mut VecDeque<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -445,27 +411,29 @@ fn topological_sort<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push_back(*id);
 
-    if !identifier_set.contains(id)
-        && node
-            .from()
-            .into_iter()
-            .all(|parent| identifier_set.contains(parent))
-    {
-        identifiers.push(*id);
-        identifier_set.insert(*id);
-        for child in node.to().into_iter() {
-            topological_sort(nodes, child, identifiers, identifier_set);
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
+
+        if !identifier_set.contains(&id)
+            && node
+                .from()
+                .into_iter()
+                .all(|parent| identifier_set.contains(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(node.to().into_iter().rev().copied());
         }
     }
 }
 
-#[stacksafe::stacksafe]
 fn topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
-    filter: &impl Fn(&'a K) -> bool,
+    filter: &impl Fn(&K) -> bool,
     id: &'a K,
+    scratchpad: &mut VecDeque<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -477,26 +445,29 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push_back(*id);
 
-    if !identifier_set.contains(id)
-        && node
-            .from()
-            .into_iter()
-            .all(|parent| identifier_set.contains(parent) || !filter(parent))
-    {
-        identifiers.push(*id);
-        identifier_set.insert(*id);
-        for child in node.to().into_iter().filter(|child| filter(*child)) {
-            topological_sort_subgraph(nodes, filter, child, identifiers, identifier_set);
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
+
+        if filter(&id)
+            && !identifier_set.contains(&id)
+            && node
+                .from()
+                .into_iter()
+                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(node.to().into_iter().rev().copied());
         }
     }
 }
 
-#[stacksafe::stacksafe]
 fn topological_sort_rev<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
+    nodes: &'a HashMap<K, N, S>,
     id: &'a K,
+    scratchpad: &mut VecDeque<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -508,18 +479,20 @@ fn topological_sort_rev<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push_back(*id);
 
-    if !identifier_set.contains(id)
-        && node
-            .from()
-            .into_iter()
-            .all(|parent| identifier_set.contains(parent))
-    {
-        identifiers.push(*id);
-        identifier_set.insert(*id);
-        for child in node.to().into_iter().rev() {
-            topological_sort_rev(nodes, child, identifiers, identifier_set);
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
+
+        if !identifier_set.contains(&id)
+            && node
+                .from()
+                .into_iter()
+                .all(|parent| identifier_set.contains(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(node.to().into_iter().copied());
         }
     }
 }
@@ -629,9 +602,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
     let mut longest_global_distance = None;
 
     for id in topological_order {
-        let node = nodes.index(id);
-
-        let longest_distance = node
+        let longest_distance = nodes[id]
             .from()
             .into_iter()
             .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
@@ -657,11 +628,9 @@ fn longest_path_to_root<'a, K, N, T, S>(
         let mut current_id = Some(id);
 
         while let Some(id) = current_id {
-            let node = nodes.index(id);
-
             reversed_path.push(*id);
 
-            current_id = node
+            current_id = nodes[id]
                 .from()
                 .into_iter()
                 .max_by_key(|id| scratchpad_map.get(*id).copied());

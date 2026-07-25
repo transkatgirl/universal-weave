@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     hash::{BuildHasher, Hash},
 };
 
@@ -51,6 +51,7 @@ where
 {
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
         NewDependentWeave {
+            scratchpad: VecDeque::with_capacity(value.nodes.len()),
             nodes: value.nodes,
             roots: value.roots,
             active: value.active,

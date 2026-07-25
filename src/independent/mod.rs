@@ -25,16 +25,13 @@ use wincode::{SchemaRead, SchemaWrite};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 #[cfg(feature = "rkyv")]
-use crate::{
-    ArchivedActivePathWeave, ArchivedIntegratedNode, ArchivedMetadataWeave, ArchivedNode,
-    ArchivedSortableWeave, ArchivedWeave,
-};
+use crate::{ArchivedActivePathWeave, ArchivedMetadataWeave, ArchivedSortableWeave, ArchivedWeave};
 
 use crate::{
     ActivePathWeave, DeduplicatableContents, DeduplicatableWeave, DiscreteContentResult,
     DiscreteContents, DiscreteWeave, IndependentContents, IntegratedNode, MetadataWeave, Node,
     SortableWeave, Weave, ancestor_subgraph,
-    contract::{lacks_duplicates, valid_ordered_nodes, valid_path},
+    contract::{lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
@@ -356,7 +353,6 @@ where
             self.scratchpad_set.clear();
             self.scratchpad_set_2.clear();
             self.scratchpad_map.clear();
-            self.scratchpad_queue.clear();
 
             ancestor_subgraph(
                 &self.nodes,
@@ -375,6 +371,7 @@ where
                     &self.nodes,
                     &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                     &active_root,
+                    &mut self.scratchpad_queue,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                 );
@@ -519,6 +516,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 &active_root,
+                &mut self.scratchpad_queue,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
@@ -674,7 +672,7 @@ where
         self.nodes.get(id)
     }
     #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(valid_topological_sort(&self.nodes, output))]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -683,6 +681,7 @@ where
             topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
+                &mut self.scratchpad_queue,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -704,6 +703,7 @@ where
             topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
+                &mut self.scratchpad_queue,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -729,6 +729,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 &active_root,
+                &mut self.scratchpad_queue,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
@@ -755,7 +756,6 @@ where
         self.scratchpad_set.clear();
         self.scratchpad_set_2.clear();
         self.scratchpad_map.clear();
-        self.scratchpad_queue.clear();
 
         ancestor_subgraph(
             &self.nodes,
@@ -774,6 +774,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                 &active_root,
+                &mut self.scratchpad_queue,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
             );
@@ -963,7 +964,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_ordered_nodes(&self.nodes, output))]
+    #[ensures(valid_topological_sort(&self.nodes, output))]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -972,6 +973,7 @@ where
             topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
+                &mut self.scratchpad_queue,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -979,6 +981,8 @@ where
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+        // TODO
+
         output.clear();
         self.scratchpad_set.clear();
 
@@ -991,6 +995,7 @@ where
             topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
+                &mut self.scratchpad_queue,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -1319,7 +1324,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> ArchivedNode<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
+impl<K, K2, T, T2, S> Node<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq + 'static,
@@ -1344,8 +1349,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> ArchivedIntegratedNode<K::Archived, T::Archived>
-    for ArchivedIndependentNode<K, T, S>
+impl<K, K2, T, T2, S> IntegratedNode<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
     K: Archive<Archived = K2> + Hash + Copy + Eq,
     <K as Archive>::Archived: Hash + Copy + Eq + 'static,
@@ -1748,7 +1752,7 @@ fn add_archived_node_identifiers<K, N, T>(
     identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id)
         && !identifier_set.contains(&id)
@@ -1774,7 +1778,7 @@ fn add_archived_node_identifiers_rev<K, N, T>(
     identifier_set: &mut HashSet<K>,
 ) where
     K: Hash + Copy + Eq,
-    N: ArchivedNode<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>>,
 {
     if let Some(node) = nodes.get(&id)
         && !identifier_set.contains(&id)
