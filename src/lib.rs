@@ -15,13 +15,14 @@
 // TODO: Unit tests
 // TODO: Formal verification using Verus once it supports enough of the language features
 
+#![forbid(unsafe_code)]
 #![warn(let_underscore)]
 #![warn(non_ascii_idents)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::missing_errors_doc)]
-#![warn(clippy::nursery)]
+#![allow(clippy::missing_errors_doc)] // TODO
 #![warn(clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, reason = "Unresolvable")]
+#![warn(clippy::nursery)]
 
 mod contract;
 pub mod dependent;
@@ -108,7 +109,19 @@ pub trait DeduplicatableContents {
     fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
+// TODO: Add checks for cyclical connections!
 /// A document linking together multiple [`Node`] objects without cyclical links.
+///
+/// # Internal inconsistency and Panics
+///
+/// If the Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in unsafe behavior.
+///
+/// Operations on a Weave should never result in internal inconsistency, except in the following cases:
+/// - A cyclical connection was created within the weave.
+/// - The weave was already internally inconsistent.
+/// - An operation resulted in a panic, and further operations were attempted on the same Weave through the use of [`std::panic::catch_unwind`].
+///
+/// However, Weave objects which have been deserialized from an untrusted source may be internally inconsistent.
 pub trait Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
@@ -153,9 +166,11 @@ where
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Inserts a node into the Weave.
     ///
-    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
-    ///
     /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
+    ///
+    /// # Internal inconsistency
+    ///
+    /// This function does not comprehensively check for cyclical connections. Creating a cyclical connection of nodes within a Weave will violate internal consistency.
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
@@ -170,6 +185,10 @@ where
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
     /// This function may update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `on_removal` panics.
     fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
@@ -184,6 +203,10 @@ where
     /// Returns a reference to the Weave's associated metadata.
     fn metadata(&self) -> &M;
     /// Mutable access to the Weave's associated metadata.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `callback` panics.
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O;
 }
 
@@ -219,12 +242,28 @@ where
     /// Unlike [`Weave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>);
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts the identifiers of a parent node's children with the specified identifier using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
     /// Sorts "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
@@ -236,8 +275,16 @@ where
     N: Node<K, T>,
 {
     /// Sorts bookmarked nodes using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of bookmarked nodes using the comparison function `cmp`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
@@ -273,9 +320,11 @@ where
 {
     /// Moves a node with the specified identifier to a new set of parent nodes.
     ///
-    /// Note: This function does not comprehensively check for cyclical connections; doing so must be done by the function caller. Creating a cyclical connection of nodes within a Weave will put the Weave in an invalid state, resulting in unexpected behavior including but not limited to infinite loops and panics.
-    ///
     /// This function may change the active status of other nodes if it is necessary to preserve internal consistency.
+    ///
+    /// # Internal inconsistency
+    ///
+    /// This function does not comprehensively check for cyclical connections. Creating a cyclical connection of nodes within a Weave will violate internal consistency.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
@@ -287,6 +336,10 @@ where
     T: IndependentContents,
 {
     /// Mutable access to the contents of a node with the specified identifier.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `callback` panics.
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O>;
 }
 
