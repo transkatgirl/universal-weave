@@ -1,4 +1,4 @@
-//! Wrappers which add additional functionality to [`Weave`] implementations
+//! Wrappers which add additional functionality to [`Weave`] implementations.
 
 use std::{
     cmp::Ordering,
@@ -76,7 +76,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
-    pub fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T, M>>) -> Self {
+    pub const fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T, M>>) -> Self {
         Self { weave, actions }
     }
     pub fn into_weave(self) -> W {
@@ -105,6 +105,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[non_exhaustive]
 pub enum WeaveAction<K, N, T, M>
 where
     K: Hash + Copy + Eq,
@@ -196,7 +197,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
-    pub fn new(weave: W, count: WeaveActionCount) -> Self {
+    pub const fn new(weave: W, count: WeaveActionCount) -> Self {
         Self {
             weave,
             count,
@@ -221,6 +222,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[non_exhaustive]
 pub struct WeaveActionCount {
     /// [`Weave::add_node()`]
     pub add_node: usize,
@@ -248,11 +250,12 @@ pub struct WeaveActionCount {
     pub split_node: usize,
     /// [`DiscreteWeave::merge_with_parent()`]
     pub merge_with_parent: usize,
-    /// User defined; Not incremented/decremented by the [`CountedWeave`] wrapper or [`WeaveActionCount`] functions
+    /// User defined; Not incremented/decremented by the [`CountedWeave`] wrapper or [`WeaveActionCount`] functions.
     pub other: usize,
 }
 
 impl WeaveActionCount {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -261,7 +264,8 @@ impl WeaveActionCount {
         *self = Self::default();
     }
     /// Returns the sum of all action counts.
-    pub fn total_count(&self) -> usize {
+    #[must_use]
+    pub const fn total_count(&self) -> usize {
         self.add_node
             .saturating_add(self.set_node_active_status)
             .saturating_add(self.set_node_bookmarked_status)
@@ -278,100 +282,80 @@ impl WeaveActionCount {
             .saturating_add(self.other)
     }
     /// Increments the action count corresponding to the [`WeaveAction`]'s type.
-    pub fn increment<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
+    pub const fn increment<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
         K: Hash + Copy + Eq,
         N: Node<K, T>,
     {
         match action {
             WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_add(1),
-            WeaveAction::SetNodeActiveStatus { id: _, value: _ } => {
-                self.set_node_active_status = self.set_node_active_status.saturating_add(1)
+            WeaveAction::SetNodeActiveStatus { .. } => {
+                self.set_node_active_status = self.set_node_active_status.saturating_add(1);
             }
-            WeaveAction::SetNodeBookmarkedStatus { id: _, value: _ } => {
-                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_add(1)
+            WeaveAction::SetNodeBookmarkedStatus { .. } => {
+                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_add(1);
             }
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_add(1),
             WeaveAction::RemoveAllNodes => {
-                self.remove_all_nodes = self.remove_all_nodes.saturating_add(1)
+                self.remove_all_nodes = self.remove_all_nodes.saturating_add(1);
             }
             WeaveAction::SetMetadata(_metadata) => {
-                self.metadata_mut = self.metadata_mut.saturating_add(1)
+                self.metadata_mut = self.metadata_mut.saturating_add(1);
             }
-            WeaveAction::SetNodeChildOrdering {
-                parent,
-                children: _,
-            } => match parent {
+            WeaveAction::SetNodeChildOrdering { parent, .. } => match parent {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_add(1),
                 None => self.sort_roots = self.sort_roots.saturating_add(1),
             },
             WeaveAction::SetBookmarkOrdering(_ids) => {
-                self.sort_bookmarks = self.sort_bookmarks.saturating_add(1)
+                self.sort_bookmarks = self.sort_bookmarks.saturating_add(1);
             }
-            WeaveAction::MoveNode {
-                id: _,
-                new_parents: _,
-            } => self.move_node = self.move_node.saturating_add(1),
-            WeaveAction::SetNodeContent { id: _, contents: _ } => {
-                self.get_contents_mut = self.get_contents_mut.saturating_add(1)
+            WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_add(1),
+            WeaveAction::SetNodeContent { .. } => {
+                self.get_contents_mut = self.get_contents_mut.saturating_add(1);
             }
-            WeaveAction::SplitNode {
-                id: _,
-                at: _,
-                new_id: _,
-            } => self.split_node = self.split_node.saturating_add(1),
+            WeaveAction::SplitNode { .. } => self.split_node = self.split_node.saturating_add(1),
             WeaveAction::MergeNodeWithParent(_id) => {
-                self.merge_with_parent = self.merge_with_parent.saturating_add(1)
+                self.merge_with_parent = self.merge_with_parent.saturating_add(1);
             }
-        };
+        }
     }
     /// Decrements the action count corresponding to the [`WeaveAction`]'s type.
-    pub fn decrement<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
+    pub const fn decrement<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
         K: Hash + Copy + Eq,
         N: Node<K, T>,
     {
         match action {
             WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_sub(1),
-            WeaveAction::SetNodeActiveStatus { id: _, value: _ } => {
-                self.set_node_active_status = self.set_node_active_status.saturating_sub(1)
+            WeaveAction::SetNodeActiveStatus { .. } => {
+                self.set_node_active_status = self.set_node_active_status.saturating_sub(1);
             }
-            WeaveAction::SetNodeBookmarkedStatus { id: _, value: _ } => {
-                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_sub(1)
+            WeaveAction::SetNodeBookmarkedStatus { .. } => {
+                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_sub(1);
             }
             WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_sub(1),
             WeaveAction::RemoveAllNodes => {
-                self.remove_all_nodes = self.remove_all_nodes.saturating_sub(1)
+                self.remove_all_nodes = self.remove_all_nodes.saturating_sub(1);
             }
             WeaveAction::SetMetadata(_metadata) => {
-                self.metadata_mut = self.metadata_mut.saturating_sub(1)
+                self.metadata_mut = self.metadata_mut.saturating_sub(1);
             }
-            WeaveAction::SetNodeChildOrdering {
-                parent,
-                children: _,
-            } => match parent {
+            WeaveAction::SetNodeChildOrdering { parent, .. } => match parent {
                 Some(_id) => self.sort_node_children = self.sort_node_children.saturating_sub(1),
                 None => self.sort_roots = self.sort_roots.saturating_sub(1),
             },
             WeaveAction::SetBookmarkOrdering(_ids) => {
-                self.sort_bookmarks = self.sort_bookmarks.saturating_sub(1)
+                self.sort_bookmarks = self.sort_bookmarks.saturating_sub(1);
             }
-            WeaveAction::MoveNode {
-                id: _,
-                new_parents: _,
-            } => self.move_node = self.move_node.saturating_sub(1),
-            WeaveAction::SetNodeContent { id: _, contents: _ } => {
-                self.get_contents_mut = self.get_contents_mut.saturating_sub(1)
+            WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_sub(1),
+            WeaveAction::SetNodeContent { .. } => {
+                self.get_contents_mut = self.get_contents_mut.saturating_sub(1);
             }
-            WeaveAction::SplitNode {
-                id: _,
-                at: _,
-                new_id: _,
-            } => self.split_node = self.split_node.saturating_sub(1),
+            WeaveAction::SplitNode { .. } => self.split_node = self.split_node.saturating_sub(1),
             WeaveAction::MergeNodeWithParent(_id) => {
-                self.merge_with_parent = self.merge_with_parent.saturating_sub(1)
+                self.merge_with_parent = self.merge_with_parent.saturating_sub(1);
             }
-        };
+        }
     }
 }
 
@@ -405,10 +389,10 @@ where
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value))
+                assert!(self.set_node_active_status(&id, value));
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value))
+                assert!(self.set_node_bookmarked_status(&id, value));
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
@@ -428,13 +412,11 @@ where
                 match parent {
                     Some(id) => {
                         assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        }))
+                            id_mapping[a].cmp(&id_mapping[b])
+                        }));
                     }
                     None => {
-                        self.sort_roots_by_id(|a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        });
+                        self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
                     }
                 }
             }
@@ -442,9 +424,7 @@ where
                 let mut id_mapping = HashMap::with_capacity_and_hasher(ids.len(), S::default());
                 id_mapping.extend(ids.into_iter().enumerate().map(|(index, id)| (id, index)));
 
-                self.sort_bookmarks_by_id(|a, b| {
-                    id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                });
+                self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
             WeaveAction::MoveNode { id, new_parents } => assert!(self.move_node(&id, &new_parents)),
             WeaveAction::SetNodeContent { id, contents } => {
@@ -468,10 +448,10 @@ where
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value))
+                assert!(self.set_node_active_status(&id, value));
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value))
+                assert!(self.set_node_bookmarked_status(&id, value));
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
@@ -491,13 +471,11 @@ where
                 match parent {
                     Some(id) => {
                         assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        }))
+                            id_mapping[a].cmp(&id_mapping[b])
+                        }));
                     }
                     None => {
-                        self.sort_roots_by_id(|a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        });
+                        self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
                     }
                 }
             }
@@ -505,14 +483,9 @@ where
                 let mut id_mapping = HashMap::with_capacity_and_hasher(ids.len(), S::default());
                 id_mapping.extend(ids.into_iter().enumerate().map(|(index, id)| (id, index)));
 
-                self.sort_bookmarks_by_id(|a, b| {
-                    id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                });
+                self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
-            WeaveAction::MoveNode {
-                id: _,
-                new_parents: _,
-            } => unimplemented!(),
+            WeaveAction::MoveNode { .. } => unimplemented!(),
             WeaveAction::SetNodeContent { id, contents } => {
                 self.get_contents_mut(&id, |c| *c = contents).unwrap();
             }
@@ -534,10 +507,10 @@ where
         match action {
             WeaveAction::AddNode(node) => assert!(self.add_node(node)),
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value))
+                assert!(self.set_node_active_status(&id, value));
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value))
+                assert!(self.set_node_bookmarked_status(&id, value));
             }
             WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
@@ -557,13 +530,11 @@ where
                 match parent {
                     Some(id) => {
                         assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        }))
+                            id_mapping[a].cmp(&id_mapping[b])
+                        }));
                     }
                     None => {
-                        self.sort_roots_by_id(|a, b| {
-                            id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                        });
+                        self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
                     }
                 }
             }
@@ -571,9 +542,7 @@ where
                 let mut id_mapping = HashMap::with_capacity_and_hasher(ids.len(), S::default());
                 id_mapping.extend(ids.into_iter().enumerate().map(|(index, id)| (id, index)));
 
-                self.sort_bookmarks_by_id(|a, b| {
-                    id_mapping.get(a).unwrap().cmp(id_mapping.get(b).unwrap())
-                });
+                self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
             WeaveAction::MoveNode { id, new_parents } => assert!(self.move_node(&id, &new_parents)),
             WeaveAction::SetNodeContent { id, contents } => {

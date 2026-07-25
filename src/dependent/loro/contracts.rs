@@ -12,7 +12,7 @@ use rkyv::{
 };
 use stacksafe::stacksafe;
 
-#[allow(unused_imports)]
+#[cfg(doc)]
 use loro::LoroDoc;
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
     dependent::loro::{DependentLoroWeave, from_bytes_aligned},
 };
 
-#[allow(unused_imports)]
+#[cfg(doc)]
 use crate::dependent::DependentWeave;
 
 impl<K, T, M, S> DependentLoroWeave<K, T, M, S>
@@ -35,7 +35,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>> + Eq,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>> + Eq,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,

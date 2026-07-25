@@ -4,7 +4,7 @@ use indexmap::IndexSet;
 
 use crate::dependent::DependentWeave;
 
-#[allow(unused_imports)]
+#[cfg(doc)]
 use crate::Weave;
 
 impl<K, T, M, S> DependentWeave<K, T, M, S>
@@ -22,20 +22,14 @@ where
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
         self.roots.is_subset::<S>(&nodes)
-            && if let Some(active) = self.active {
-                self.nodes.contains_key(&active)
-            } else {
-                true
-            }
+            && self
+                .active
+                .is_none_or(|active| self.nodes.contains_key(&active))
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
-                    && if let Some(from) = value.from {
-                        self.nodes.contains_key(&from)
-                    } else {
-                        true
-                    }
+                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
                     && value.to.is_subset(&nodes)
                     && value.from.is_none() == self.roots.contains(key)
                     && value.active == (self.active == Some(*key))
@@ -43,13 +37,11 @@ where
                     && value
                         .from
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.to.contains(key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
                     && value
                         .to
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.from == Some(*key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
     }
     #[must_use]

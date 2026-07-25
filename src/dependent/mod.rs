@@ -7,7 +7,7 @@ use std::{
     iter,
 };
 
-#[allow(unused_imports)] // false positive warning
+#[allow(unused_imports, reason = "False positive")]
 use ::contracts::{ensures, invariant};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
@@ -112,12 +112,9 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn validate(&self) -> bool {
-        (if let Some(from) = self.from {
-            !self.to.contains(&from)
-        } else {
-            true
-        } && self.from != Some(self.id)
-            && !self.to.contains(&self.id))
+        self.from.is_none_or(|from| !self.to.contains(&from))
+            && self.from != Some(self.id)
+            && !self.to.contains(&self.id)
     }
 }
 
@@ -253,7 +250,7 @@ where
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
-            for child in node.to.iter() {
+            for child in &node.to {
                 self.remove_node_unverified(child);
             }
             if node.active {
@@ -282,7 +279,7 @@ where
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
-            for child in node.to.iter() {
+            for child in &node.to {
                 self.remove_node_unverified_tracked(child, callback);
             }
             if node.active {
@@ -559,7 +556,7 @@ where
     ) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             node.to
-                .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+                .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
             self.nodes.insert(node.id, node);
 
             true
@@ -591,7 +588,7 @@ where
         mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.roots
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
     #[ensures(old(self.roots.len()) == self.roots.len())]
@@ -614,7 +611,7 @@ where
         mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.bookmarked
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.bookmarked.len()) == self.bookmarked.len())]
     #[invariant(self.validate())]
@@ -670,7 +667,7 @@ where
                     node.active = false;
                     node.bookmarked = false;
 
-                    for child in node.to.iter() {
+                    for child in &node.to {
                         let child = self.nodes.get_mut(child).unwrap();
                         child.from = Some(node.id);
                     }
@@ -720,7 +717,7 @@ where
                         parent.contents = content;
                         parent.to = node.to;
 
-                        for child in parent.to.iter() {
+                        for child in &parent.to {
                             let child = self.nodes.get_mut(child).unwrap();
                             child.from = Some(parent.id);
                         }

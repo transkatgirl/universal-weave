@@ -6,7 +6,7 @@ use std::{
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
-#[allow(unused_imports)]
+#[cfg(doc)]
 use crate::Weave;
 
 use crate::{IndependentContents, independent::IndependentWeave};
@@ -43,13 +43,11 @@ where
                     && value
                         .from
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.to.contains(key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
                     && value
                         .to
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.from.contains(key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from.contains(key)))
                     && if value.active && !value.from.is_empty() {
                         !value.from.is_disjoint::<S>(&active_index)
                     } else {

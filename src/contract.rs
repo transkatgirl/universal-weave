@@ -1,3 +1,5 @@
+#![allow(clippy::impl_trait_in_params, reason = "Readability")]
+
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::{BuildHasher, Hash},
@@ -6,7 +8,7 @@ use std::{
 
 use crate::{Node, topological_sort, topological_sort_rev};
 
-pub(crate) fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
+pub fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
 where
     &'a I: IntoIterator<Item = T, IntoIter: ExactSizeIterator>,
     T: Hash + Eq,
@@ -24,10 +26,7 @@ where
     true
 }
 
-pub(crate) fn valid_topological_sort<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    value: &'a [K],
-) -> bool
+pub fn valid_topological_sort<'a, K, N, T, S>(nodes: &'a HashMap<K, N, S>, value: &'a [K]) -> bool
 where
     K: Hash + Copy + Eq + 'a,
     N: Node<K, T> + 'a,
@@ -53,7 +52,7 @@ where
     true
 }
 
-pub(crate) fn matches_topological_sort<'a, K, N, T, S>(
+pub fn matches_topological_sort<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl IntoIterator<Item = &'a K>,
     value: &'a [K],
@@ -88,7 +87,7 @@ where
     identifiers == value
 }
 
-pub(crate) fn matches_topological_sort_rev<'a, K, N, T, S>(
+pub fn matches_topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl IntoIterator<Item = &'a K>,
     value: &'a [K],
@@ -123,10 +122,7 @@ where
     identifiers == value
 }
 
-pub(crate) fn valid_path<'a, K, N, T>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    value: &'a [K],
-) -> bool
+pub fn valid_path<'a, K, N, T>(nodes: &'a impl Index<&'a K, Output = N>, value: &'a [K]) -> bool
 where
     K: Hash + Copy + Eq + 'a,
     N: Node<K, T> + 'a,
@@ -141,7 +137,7 @@ where
         let node = &nodes[item];
 
         if let Some(last) = last_id {
-            if node.from().into_iter().find(|a| *a == &last).is_none() {
+            if !node.from().into_iter().any(|a| a == &last) {
                 return false;
             }
         } else if node.from().into_iter().next().is_some() {

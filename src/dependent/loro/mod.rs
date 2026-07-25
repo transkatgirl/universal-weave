@@ -1,6 +1,7 @@
-//! [`loro`] wrapper for [`DependentWeave`]
+//! [`loro`] wrapper for [`DependentWeave`].
 
 use std::{
+    cmp::Ordering,
     collections::HashMap,
     hash::{BuildHasher, Hash},
 };
@@ -21,14 +22,15 @@ use rkyv::{
 
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
-    IndependentContents, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    IndependentContents, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
+    SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
 mod contracts;
 
-#[allow(unused)]
-use crate::{DiscreteWeave, MetadataWeave, Node};
+#[cfg(doc)]
+use crate::{DiscreteWeave, Node};
 
 /// A [`DependentWeave`] wrapper which adds collaborative editing using [`loro`].
 ///
@@ -47,7 +49,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -72,7 +73,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -95,7 +95,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -118,7 +117,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -141,7 +139,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -212,7 +209,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -266,7 +262,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -286,7 +281,10 @@ where
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
     /// This function does not squash generated [`LoroDoc`] operations that cancel out.
-    pub fn update(&mut self, callback: impl FnOnce(&mut LoroDoc)) -> Result<(), rancor::Error> {
+    pub fn update<F>(&mut self, callback: F) -> Result<(), rancor::Error>
+    where
+        F: FnOnce(&mut LoroDoc),
+    {
         callback(&mut self.doc);
         match self.import() {
             Ok(()) => Ok(()),
@@ -310,7 +308,7 @@ where
         } else {
             Err(rancor::Error::new(loro::LoroError::Unknown(
                 "Malformed metadata".into(),
-            )))?
+            )))?;
         }
 
         for root in tree.roots() {
@@ -396,7 +394,7 @@ where
                 }
             } else {
                 tree.delete(target).map_err(rancor::Error::new)?;
-            };
+            }
         }
 
         Ok(())
@@ -426,7 +424,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -492,7 +489,7 @@ where
             if bookmarked {
                 self.doc
                     .get_movable_list("bookmarks")
-                    .push(id_bytes.clone())
+                    .push(id_bytes)
                     .unwrap();
             }
 
@@ -629,7 +626,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -664,7 +660,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -714,7 +709,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -731,7 +725,7 @@ where
     fn sort_node_children_by(
         &mut self,
         id: &K,
-        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
+        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
         if self.weave.sort_node_children_by(id, cmp) {
             let tree = self.doc.get_tree("tree");
@@ -751,11 +745,7 @@ where
             false
         }
     }
-    fn sort_node_children_by_id(
-        &mut self,
-        id: &K,
-        cmp: impl FnMut(&K, &K) -> std::cmp::Ordering,
-    ) -> bool {
+    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if self.weave.sort_node_children_by_id(id, cmp) {
             let tree = self.doc.get_tree("tree");
             let parent = self.mapping.get(id).copied().unwrap();
@@ -776,7 +766,7 @@ where
     }
     fn sort_roots_by(
         &mut self,
-        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
+        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.weave.sort_roots_by(cmp);
 
@@ -787,7 +777,7 @@ where
                 .unwrap();
         }
     }
-    fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> std::cmp::Ordering) {
+    fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.weave.sort_roots_by_id(cmp);
 
         let tree = self.doc.get_tree("tree");
@@ -812,7 +802,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -820,7 +809,7 @@ where
 {
     fn sort_bookmarks_by(
         &mut self,
-        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> std::cmp::Ordering,
+        cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
@@ -836,7 +825,7 @@ where
             }
         }
     }
-    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> std::cmp::Ordering) {
+    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
         let mut old_bookmarks = self.weave.bookmarked.clone();
@@ -866,7 +855,6 @@ where
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -892,7 +880,6 @@ where
         + IndependentContents,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
@@ -929,7 +916,6 @@ where
         + DeduplicatableContents,
     for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    M: Archive,
     for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
     for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<M, Strategy<Pool, rancor::Error>>,

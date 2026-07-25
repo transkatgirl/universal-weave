@@ -1,0 +1,22 @@
+[
+  {
+    "file": "src/dependent/loro/contracts.rs",
+    "decorator": "👀"
+  },
+  {
+    "file": "src/dependent/contracts.rs",
+    "decorator": "👀"
+  },
+  {
+    "file": "src/independent/contracts.rs",
+    "decorator": "👀"
+  },
+  {
+    "file": "src/independent/mod.rs",
+    "decorator": "👀"
+  },
+  {
+    "file": "src/dependent/mod.rs",
+    "decorator": "👀"
+  }
+]

@@ -4,6 +4,7 @@
 // TODO: Clippy pedantic linting & restriction lints
 // TODO: Rewrite all traversal logic to be non-recursive
 // TODO: Add validation API for working with untrusted data
+// TODO: Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
 // TODO: Full code review
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
@@ -15,12 +16,12 @@
 // TODO: Formal verification using Verus once it supports enough of the language features
 
 #![warn(let_underscore)]
-//#![warn(clippy::pedantic)]
-//#![warn(clippy::nursery)]
-#![warn(clippy::print_stdout)]
-#![warn(clippy::print_stderr)]
+#![warn(non_ascii_idents)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc)]
+#![warn(clippy::nursery)]
 #![warn(clippy::cargo)]
-#![allow(clippy::multiple_crate_versions)]
+#![allow(clippy::multiple_crate_versions, reason = "Unresolvable")]
 
 mod contract;
 pub mod dependent;

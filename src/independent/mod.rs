@@ -309,24 +309,22 @@ where
             Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
         } else {
             Box::new(
-                IndexSet::<K, S>::from_iter(
-                    node.from
-                        .iter()
-                        .filter_map(|id| self.nodes.get(id))
-                        .flat_map(|parent| {
-                            {
-                                parent.to.iter().copied().filter(|id| {
-                                    *id != node.id
-                                        && !node.from.contains(id)
-                                        && !node.to.contains(id)
-                                })
-                            }
-                        }),
-                )
-                .into_iter(),
+                node.from
+                    .iter()
+                    .filter_map(|id| self.nodes.get(id))
+                    .flat_map(|parent| {
+                        {
+                            parent.to.iter().copied().filter(|id| {
+                                *id != node.id && !node.from.contains(id) && !node.to.contains(id)
+                            })
+                        }
+                    })
+                    .collect::<IndexSet<K, S>>()
+                    .into_iter(),
             )
         }
     }
+    #[allow(clippy::too_many_lines)]
     pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
         if value {
             if let Some(node) = self.nodes.get_mut(id) {
@@ -430,11 +428,11 @@ where
             self.scratchpad_list.clear();
             self.scratchpad_set_2.clear();
 
-            for parent in &self.nodes.get(id).unwrap().from {
-                for sibling in self.nodes.get(parent).unwrap().to.iter().copied() {
+            for parent in &self.nodes[id].from {
+                for sibling in self.nodes[parent].to.iter().copied() {
                     if self.scratchpad_set.insert(sibling) {
                         self.scratchpad_list_2.push(sibling);
-                    };
+                    }
                 }
             }
 
@@ -475,17 +473,15 @@ where
                 }
                 self.active.insert(path_item);
             }
-        } else {
-            if let Some(node) = self.nodes.get_mut(id) {
-                if !node.active {
-                    return true;
-                }
-
-                node.active = false;
-                self.active.remove(id);
-            } else {
-                return false;
+        } else if let Some(node) = self.nodes.get_mut(id) {
+            if !node.active {
+                return true;
             }
+
+            node.active = false;
+            self.active.remove(id);
+        } else {
+            return false;
         }
 
         self.fix_orphaned_activations();
@@ -596,6 +592,7 @@ where
     }
 }
 
+#[allow(clippy::fallible_impl_from, reason = "Should never fail")]
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
@@ -614,7 +611,7 @@ where
 
             assert!(output.add_node(IndependentNode {
                 id: node.id,
-                from: IndexSet::from_iter(node.from.into_iter()),
+                from: node.from.into_iter().collect(),
                 to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
                 active: node.active,
                 bookmarked: node.bookmarked,
@@ -818,7 +815,7 @@ where
         }
 
         for child in &node.to {
-            let child = self.nodes.get(child).unwrap();
+            let child = &self.nodes[child];
             if child.from.is_empty() {
                 if child.active {
                     node.active = true;
@@ -1012,7 +1009,7 @@ where
     ) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             node.to
-                .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+                .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
             self.nodes.insert(node.id, node);
 
             true
@@ -1044,7 +1041,7 @@ where
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
     ) {
         self.roots
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
     #[ensures(old(self.roots.len()) == self.roots.len())]
@@ -1068,7 +1065,7 @@ where
         mut compare: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
     ) {
         self.bookmarked
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.bookmarked.len()) == self.bookmarked.len())]
     #[invariant(self.validate())]
@@ -1127,7 +1124,7 @@ where
                     node.active = false;
                     node.bookmarked = false;
 
-                    for child in node.to.iter() {
+                    for child in &node.to {
                         let child = self.nodes.get_mut(child).unwrap();
 
                         if let Some(index) = child.from.get_index_of(&left_node.id) {
@@ -1193,7 +1190,7 @@ where
                         parent.contents = content;
                         parent.to = node.to;
 
-                        for child in parent.to.iter() {
+                        for child in &parent.to {
                             let child = self.nodes.get_mut(child).unwrap();
 
                             if let Some(index) = child.from.get_index_of(&node.id) {
@@ -1271,7 +1268,7 @@ where
     #[invariant(self.validate())]
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<HashSet<_>>() == HashSet::from_iter(new_parents.iter().copied()))]
+    #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<HashSet<_>>() == new_parents.iter().copied().collect::<HashSet<_>>())]
     #[ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())) == self.nodes().get(id).map(|node| node.from.clone()))]
     #[ensures(ret || old(self.active.len()) == self.active.len())]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
@@ -1282,7 +1279,7 @@ where
             return false;
         }
 
-        let new_parents = IndexSet::from_iter(new_parents.iter().copied());
+        let new_parents: IndexSet<K, S> = new_parents.iter().copied().collect();
 
         if new_parents.contains(id) {
             return false;
@@ -1314,7 +1311,7 @@ where
             }
         } else {
             return false;
-        };
+        }
 
         let node = self.nodes.get_mut(id).unwrap();
         node.from = new_parents;

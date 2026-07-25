@@ -1,4 +1,4 @@
-//! A deprecated version of DependentWeave used by `tapestry-weave`'s v0 format; Please don't use this!
+//! A deprecated version of `DependentWeave` used by `tapestry-weave`'s v0 format; Please don't use this!
 
 use std::{
     cmp::Ordering,
@@ -42,7 +42,7 @@ use crate::{
     },
 };
 
-#[allow(unused_imports)]
+#[cfg(doc)]
 use crate::Node;
 
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
@@ -119,20 +119,14 @@ where
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
         self.roots.is_subset::<S>(&nodes)
-            && if let Some(active) = self.active {
-                self.nodes.contains_key(&active)
-            } else {
-                true
-            }
+            && self
+                .active
+                .is_none_or(|active| self.nodes.contains_key(&active))
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
-                    && if let Some(from) = value.from {
-                        self.nodes.contains_key(&from)
-                    } else {
-                        true
-                    }
+                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
                     && value.to.is_subset(&nodes)
                     && value.from.is_none() == self.roots.contains(key)
                     && value.active == (self.active == Some(*key))
@@ -140,13 +134,11 @@ where
                     && value
                         .from
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.to.contains(key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
                     && value
                         .to
                         .iter()
-                        .map(|v| self.nodes.get(v).unwrap())
-                        .all(|p| p.from == Some(*key))
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
     }
     #[must_use]
@@ -215,7 +207,7 @@ where
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
-            for child in node.to.iter() {
+            for child in &node.to {
                 self.remove_node_unverified(child);
             }
             if node.active {
@@ -243,7 +235,7 @@ where
         if let Some(node) = self.nodes.remove(id) {
             self.roots.shift_remove(id);
             self.bookmarked.shift_remove(id);
-            for child in node.to.iter() {
+            for child in &node.to {
                 self.remove_node_unverified_tracked(child, callback);
             }
             if node.active {
@@ -471,7 +463,7 @@ where
     ) -> bool {
         if let Some(mut node) = self.nodes.remove(id) {
             node.to
-                .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+                .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
             self.nodes.insert(node.id, node);
 
             true
@@ -497,7 +489,7 @@ where
         mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.roots
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     fn sort_roots_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(compare);
@@ -515,7 +507,7 @@ where
         mut compare: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
         self.bookmarked
-            .sort_by(|a, b| compare(self.nodes.get(a).unwrap(), self.nodes.get(b).unwrap()));
+            .sort_by(|a, b| compare(&self.nodes[a], &self.nodes[b]));
     }
     fn sort_bookmarks_by_id(&mut self, compare: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(compare);
@@ -561,7 +553,7 @@ where
                     node.active = false;
                     node.bookmarked = false;
 
-                    for child in node.to.iter() {
+                    for child in &node.to {
                         let child = self.nodes.get_mut(child).unwrap();
                         child.from = Some(node.id);
                     }
@@ -602,7 +594,7 @@ where
                         parent.contents = content;
                         parent.to = node.to;
 
-                        for child in parent.to.iter() {
+                        for child in &parent.to {
                             let child = self.nodes.get_mut(child).unwrap();
                             child.from = Some(parent.id);
                         }
