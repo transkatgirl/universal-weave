@@ -1,19 +1,37 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
-// TODO: Separate bookmarking into a Weave wrapper
-// TODO: Clippy pedantic linting & restriction lints
-// TODO: Rewrite all traversal logic to be non-recursive
-// TODO: Add validation API for working with untrusted data
-// TODO: Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
-// TODO: Full code review
-// TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
-// TODO: Property tests for LoggedWeave
-// TODO: Property tests for DependentLoroWeave CRDT merging
-// TODO: Property tests for IndependentWeave::from(DependentWeave)
-// TODO: Property tests for IndependentWeave behavior parity with DependentWeave?
-// TODO: Property tests for Archived structs
-// TODO: Unit tests
-// TODO: Formal verification using Verus once it supports enough of the language features
+/*
+
+# 0.1.0 Checklist:
+- [ ] Linting using all available clippy lints
+- [ ] Rewrite all traversal logic to be non-recursive
+- [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
+    - [ ] IMPORTANT - Review validate() behavior
+- [ ] Add validate() to Weave
+- [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
+- [ ] Full documentation review (including README)
+    - [ ] Add crate examples
+- [ ] Full code review
+- [ ] Improve test coverage
+    - [ ] Property tests for LoggedWeave
+    - [ ] Property tests for DependentLoroWeave CRDT merging
+    - [ ] Property tests for IndependentWeave::from(DependentWeave)
+    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
+    - [ ] Property tests for Archived structs
+    - [ ] Add unit tests until test coverage is 100%
+- [ ] Publish to crates.io
+
+# 0.2.0 Checklist:
+- [ ] Separate bookmarking into a Weave wrapper?
+- [ ] Remove all opportunities for internal inconsistency
+    - [ ] Add cycle checking to add_node()
+    - [ ] Add cycle checking to move_node()
+    - [ ] Add validation at deserialization time
+
+# Ideas for future releases:
+- Formal verification using Verus once it supports enough of the language features
+
+*/
 
 #![forbid(unsafe_code)]
 #![warn(let_underscore)]
