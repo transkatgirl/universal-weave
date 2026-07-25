@@ -14,14 +14,14 @@ Features:
 	- Deduplication
 - Weaves:
 	- Serialization and deserialization (supports rkyv, serde, wincode)
-		- Zero-copy deserialization (rkyv only)
-		- Format versioning (rkyv only)
+		- Zero-copy deserialization (requires rkyv)
+		- Format versioning (requires rkyv)
 	- Unbounded depth (unsupported for WASM and [some niche targets](https://github.com/rust-lang/stacker/#platform-support))
 	- Convenient traversal methods
 	- Stable node ordering
 		- Node sorting
 	- Tree-based Weave implementation
-		- CRDT-based collaborative editing (uses loro & rkyv, *experimental*)
+		- CRDT-based collaborative editing (requires loro & rkyv, *experimental*)
 	- DAG-based Weave implementation (*experimental*)
 		- Node moving
 	- General-purpose weave wrappers: Action queuing (can be used to implement undo/redo)
@@ -29,8 +29,7 @@ Features:
 - Reliability:
 	- Built using design-by-contract principles
 		- Makes heavy use of debug assertions
-		- Offers interfaces for applying internal correctness assertions at runtime
-			- It's recommended that you apply these assertions when persistently storing document state
+		- Offers interfaces for applying correctness assertions at runtime
 	- Heavily property tested
 	- Entirely human written codebase
 -->
