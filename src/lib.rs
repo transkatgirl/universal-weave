@@ -114,7 +114,7 @@ pub trait DeduplicatableContents {
 ///
 /// # Internal inconsistency and Panics
 ///
-/// If the Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in unsafe behavior.
+/// If a Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in unsafe behavior.
 ///
 /// Operations on a Weave should never result in internal inconsistency, except in the following cases:
 /// - A cyclical connection was created within the weave.

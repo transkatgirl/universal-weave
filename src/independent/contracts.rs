@@ -28,7 +28,8 @@ where
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
         let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
 
-        self.roots.is_subset::<S>(&nodes)
+        self.scratchpad_queue.is_empty()
+            && self.roots.is_subset::<S>(&nodes)
             && self.validate_active()
             && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset::<S>(&nodes)

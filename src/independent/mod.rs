@@ -324,20 +324,27 @@ where
             )
         }
     }
-    #[allow(clippy::too_many_lines)]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Cannot be split into smaller functions"
+    )]
     pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
-        if value {
-            if let Some(node) = self.nodes.get_mut(id) {
-                if node.active {
-                    return true;
-                }
-
-                node.active = true;
-                self.active.insert(node.id);
-            } else {
-                return false;
+        if let Some(node) = self.nodes.get_mut(id) {
+            if node.active == value {
+                return true;
             }
 
+            node.active = value;
+            if value {
+                self.active.insert(node.id);
+            } else {
+                self.active.remove(id);
+            }
+        } else {
+            return false;
+        }
+
+        if value {
             self.scratchpad_list.clear();
             self.scratchpad_list_2.clear();
             self.scratchpad_set.clear();
@@ -394,8 +401,6 @@ where
                 }
             }
 
-            self.scratchpad_list.clear();
-            self.scratchpad_list_2.clear();
             self.scratchpad_set_2.clear();
 
             if let Some(target) = target {
@@ -473,15 +478,6 @@ where
                 }
                 self.active.insert(path_item);
             }
-        } else if let Some(node) = self.nodes.get_mut(id) {
-            if !node.active {
-                return true;
-            }
-
-            node.active = false;
-            self.active.remove(id);
-        } else {
-            return false;
         }
 
         self.fix_orphaned_activations();

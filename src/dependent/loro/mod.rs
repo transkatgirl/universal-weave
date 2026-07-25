@@ -281,6 +281,16 @@ where
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
     /// This function does not squash generated [`LoroDoc`] operations that cancel out.
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if updating the weave's state from the corresponding [`LoroDoc`] fails.
+    ///
+    /// If an error occurs, all nodes will be removed from the weave.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `callback` panics.
     pub fn update<F>(&mut self, callback: F) -> Result<(), rancor::Error>
     where
         F: FnOnce(&mut LoroDoc),

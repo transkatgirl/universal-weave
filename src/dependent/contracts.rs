@@ -21,7 +21,8 @@ where
     pub fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
 
-        self.roots.is_subset::<S>(&nodes)
+        self.scratchpad.is_empty()
+            && self.roots.is_subset::<S>(&nodes)
             && self
                 .active
                 .is_none_or(|active| self.nodes.contains_key(&active))
