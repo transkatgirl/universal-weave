@@ -387,7 +387,7 @@ where
                 );
             }
 
-            let target = self.scratchpad_list_2.first().cloned();
+            let target = self.scratchpad_list_2.first().copied();
 
             self.scratchpad_list.clear();
             self.scratchpad_set_2.clear();
@@ -714,8 +714,6 @@ where
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
-        // TODO
-
         output.clear();
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
@@ -1149,7 +1147,7 @@ where
     #[ensures(ret.is_none() || !self.nodes.contains_key(id))]
     #[ensures(ret.is_none() || old(self.nodes.contains_key(id)))]
     #[ensures(ret.is_none() || self.nodes.contains_key(&ret.unwrap()))]
-    #[ensures(ret.is_none() || ret == old(self.nodes.get(id).and_then(|node| node.from.first().cloned())))]
+    #[ensures(ret.is_none() || ret == old(self.nodes.get(id).and_then(|node| node.from.first().copied())))]
     #[ensures(ret.is_some() || old(self.nodes.len()) == self.nodes.len())]
     #[ensures(ret.is_some() || old(self.active.clone()) == self.active)]
     #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]

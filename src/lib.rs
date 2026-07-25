@@ -1,6 +1,7 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
 // TODO: Rewrite IndependentWeave node activation & traversal logic
+// TODO: Rewrite all traversal logic to be non-recursive
 // TODO: Review function contracts to ensure consistency with documentation & reasonable behavior
 // TODO: Property tests for LoggedWeave
 // TODO: Property tests for DependentLoroWeave CRDT merging
