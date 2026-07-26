@@ -1,18 +1,13 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::{BuildHasher, Hash, RandomState},
-    ops::Index,
-};
+use std::hash::{BuildHasher, RandomState};
 
 use indexmap::IndexSet;
 use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
-use stacksafe::stacksafe;
 use universal_weave::{
-    BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
-    IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node, SemiIndependentWeave,
-    SortableBookmarkableWeave, SortableWeave, Weave,
+    ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
 };
 
@@ -78,7 +73,7 @@ enum WeaveTransition {
         content_seed: u32,
         length: u32,
     },
-    #[proptest(weight = 3)]
+    #[proptest(weight = 5)]
     AddNodeTo {
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
         to_seeds: Vec<u32>,
@@ -132,6 +127,10 @@ enum WeaveTransition {
     SortBookmarksById {
         sort_seed: u32,
     },
+    SetActivePath {
+        #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=16), ()))")]
+        id_seeds: Vec<u32>,
+    },
     #[proptest(weight = 3)]
     MoveNode {
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
@@ -157,7 +156,6 @@ struct WeaveWrapper {
     weave: IndependentWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
     scratchpad: Vec<u32>,
-    scratchpad_set: HashSet<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,7 +211,6 @@ impl StateMachineTest for WeaveWrapper {
             weave: IndependentWeave::with_capacity(ref_state.len(), ref_state.len() as u32),
             counter: 0,
             scratchpad: Vec::with_capacity(ref_state.len()),
-            scratchpad_set: HashSet::with_capacity(ref_state.len()),
         }
     }
     fn apply(
@@ -314,30 +311,10 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                state.scratchpad_set.clear();
-
-                let from = IndexSet::from_iter(from_seeds.into_iter().map(&map_id));
-                for id in &from {
-                    if state.weave.contains(id) {
-                        ancestor_subgraph(state.weave.nodes(), id, &mut state.scratchpad_set);
-                    }
-                }
-
-                let mut to = IndexSet::with_capacity(to_seeds.len());
-                for id in to_seeds.into_iter().map(&map_id) {
-                    if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
-                        if state.weave.contains(&id) {
-                            ancestor_subgraph(state.weave.nodes(), &id, &mut state.scratchpad_set);
-                        }
-
-                        to.insert(id);
-                    }
-                }
-
                 let node = IndependentNode {
                     id: state.counter,
-                    from,
-                    to,
+                    from: from_seeds.into_iter().map(&map_id).collect(),
+                    to: to_seeds.into_iter().map(&map_id).collect(),
                     active,
                     bookmarked,
                     contents: WeaveContent {
@@ -462,26 +439,17 @@ impl StateMachineTest for WeaveWrapper {
                     hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
                 });
             }
+            WeaveTransition::SetActivePath { id_seeds } => {
+                let active: Vec<u32> = id_seeds.into_iter().map(&map_id).collect();
+
+                //println!("weave.set_active_path({:?}.into_iter());", active);
+                state.weave.set_active_path(active.into_iter());
+            }
             WeaveTransition::MoveNode {
                 id_seed,
                 new_parents_seeds,
             } => {
-                state.scratchpad_set.clear();
-
-                let node_id = map_id(id_seed);
-                if let Some(node) = state.weave.get_node(&node_id) {
-                    for child in node.to() {
-                        descendant_subgraph(state.weave.nodes(), child, &mut state.scratchpad_set);
-                    }
-                }
-
-                let mut new_parents = Vec::with_capacity(new_parents_seeds.len());
-
-                for id in new_parents_seeds.into_iter().map(&map_id) {
-                    if !state.scratchpad_set.contains(&id) || !state.weave.contains(&id) {
-                        new_parents.push(id);
-                    }
-                }
+                let new_parents: Vec<u32> = new_parents_seeds.into_iter().map(&map_id).collect();
 
                 //println!("weave.move_node(&{}, &{:?});", map_id(id_seed), new_parents);
                 state.weave.move_node(&map_id(id_seed), &new_parents);
@@ -534,119 +502,6 @@ impl StateMachineTest for WeaveWrapper {
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
     }
-}
-
-// Copied from src/lib.rs
-#[stacksafe]
-fn topological_sort<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    id: &'a K,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let node = nodes.index(id);
-
-    if !identifier_set.contains(id)
-        && node
-            .from()
-            .into_iter()
-            .all(|parent| identifier_set.contains(parent))
-    {
-        identifiers.push(*id);
-        identifier_set.insert(*id);
-        for child in node.to().into_iter() {
-            topological_sort(nodes, child, identifiers, identifier_set);
-        }
-    }
-}
-
-// Copied from src/lib.rs
-#[stacksafe]
-fn ancestor_subgraph<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    id: &'a K,
-    identifiers: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let node = nodes.index(id);
-
-    if identifiers.insert(*id) {
-        for parent in node.from().into_iter() {
-            ancestor_subgraph(nodes, parent, identifiers);
-        }
-    }
-}
-
-// Copied from src/lib.rs
-#[stacksafe]
-fn descendant_subgraph<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
-    id: &'a K,
-    identifiers: &mut HashSet<K, S>,
-) where
-    K: Hash + Copy + Eq + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let node = nodes.index(id);
-
-    if identifiers.insert(*id) {
-        for child in node.to().into_iter() {
-            descendant_subgraph(nodes, child, identifiers);
-        }
-    }
-}
-
-pub fn node_identifiers<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    ids: impl Iterator<Item = &'a K>,
-) -> (Vec<K>, HashSet<K, S>)
-where
-    K: Hash + Copy + Eq + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let mut identifiers = Vec::with_capacity(nodes.len());
-    let mut identifier_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
-    for id in ids {
-        if nodes.contains_key(id) {
-            if let Some(node) = nodes.get(id) {
-                for parent in node.from() {
-                    identifier_set.insert(*parent);
-                }
-            }
-            topological_sort(nodes, id, &mut identifiers, &mut identifier_set);
-            if let Some(node) = nodes.get(id) {
-                for parent in node.from() {
-                    identifier_set.remove(parent);
-                }
-            }
-        }
-    }
-    (identifiers, identifier_set)
 }
 
 /*

@@ -133,6 +133,8 @@ where
     SetNodeChildOrdering { parent: Option<K>, children: Vec<K> },
     /// Caused by [`SortableBookmarkableWeave::sort_bookmarks_by()`] and [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     SetBookmarkOrdering(Vec<K>),
+    /// [`ActivePathWeave::set_active_path()`]
+    SetActivePath(Vec<K>),
     /// [`IndependentWeave::move_node()`]
     MoveNode { id: K, new_parents: Vec<K> },
     /// Caused by [`SemiIndependentWeave::get_contents_mut()`]
@@ -254,6 +256,8 @@ pub struct WeaveActionCount {
     pub sort_roots: usize,
     /// [`SortableBookmarkableWeave::sort_bookmarks_by()`] or [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     pub sort_bookmarks: usize,
+    /// [`ActivePathWeave::set_active_path()`]
+    pub set_active_path: usize,
     /// [`IndependentWeave::move_node()`]
     pub move_node: usize,
     /// [`SemiIndependentWeave::get_contents_mut()`]
@@ -289,6 +293,7 @@ impl WeaveActionCount {
             .saturating_add(self.sort_node_children)
             .saturating_add(self.sort_roots)
             .saturating_add(self.sort_bookmarks)
+            .saturating_add(self.set_active_path)
             .saturating_add(self.move_node)
             .saturating_add(self.get_contents_mut)
             .saturating_add(self.split_node)
@@ -322,6 +327,9 @@ impl WeaveActionCount {
             },
             WeaveAction::SetBookmarkOrdering(_ids) => {
                 self.sort_bookmarks = self.sort_bookmarks.saturating_add(1);
+            }
+            WeaveAction::SetActivePath(_) => {
+                self.set_active_path = self.set_active_path.saturating_add(1);
             }
             WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_add(1),
             WeaveAction::SetNodeContent { .. } => {
@@ -361,6 +369,9 @@ impl WeaveActionCount {
             WeaveAction::SetBookmarkOrdering(_ids) => {
                 self.sort_bookmarks = self.sort_bookmarks.saturating_sub(1);
             }
+            WeaveAction::SetActivePath(_) => {
+                self.set_active_path = self.set_active_path.saturating_sub(1);
+            }
             WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_sub(1),
             WeaveAction::SetNodeContent { .. } => {
                 self.get_contents_mut = self.get_contents_mut.saturating_sub(1);
@@ -395,6 +406,7 @@ where
         + BookmarkableWeave<K, N, T>
         + SortableWeave<K, N, T>
         + SortableBookmarkableWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
         + IndependentWeave<K, N, T>
         + SemiIndependentWeave<K, N, T>
         + DiscreteWeave<K, N, T>,
@@ -457,6 +469,9 @@ where
                 id_mapping.extend(ids.into_iter().enumerate().map(|(index, id)| (id, index)));
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
+            }
+            WeaveAction::SetActivePath(active) => {
+                self.set_active_path(active.into_iter());
             }
             WeaveAction::MoveNode { id, new_parents } => assert!(
                 self.move_node(&id, &new_parents),
@@ -544,7 +559,12 @@ where
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
-            WeaveAction::MoveNode { .. } => panic!("Weave does not implement move_node()"),
+            WeaveAction::SetActivePath(_) => {
+                panic!("Weave does not implement set_active_path()");
+            }
+            WeaveAction::MoveNode { .. } => {
+                panic!("Weave does not implement move_node()");
+            }
             WeaveAction::SetNodeContent { id, contents } => {
                 assert!(
                     self.get_contents_mut(&id, |c| *c = contents).is_some(),
@@ -625,6 +645,9 @@ where
                 id_mapping.extend(ids.into_iter().enumerate().map(|(index, id)| (id, index)));
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
+            }
+            WeaveAction::SetActivePath(active) => {
+                self.set_active_path(active.into_iter());
             }
             WeaveAction::MoveNode { id, new_parents } => assert!(
                 self.move_node(&id, &new_parents),
@@ -906,6 +929,12 @@ where
     #[inline]
     fn active(&self) -> &Self::Active {
         self.weave.active()
+    }
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
+        let active: Vec<K> = active.collect();
+
+        self.weave.set_active_path(active.iter().copied());
+        self.actions.push_back(WeaveAction::SetActivePath(active));
     }
 }
 
@@ -1224,6 +1253,11 @@ where
     #[inline]
     fn active(&self) -> &Self::Active {
         self.weave.active()
+    }
+    #[inline]
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
+        self.weave.set_active_path(active);
+        self.count.set_active_path = self.count.set_active_path.saturating_add(1);
     }
 }
 

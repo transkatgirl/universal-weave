@@ -3,8 +3,6 @@
 /*
 
 # 0.1.0 Checklist:
-- [ ] Add ActivePathWeave::set_active_nodes()
-- [ ] Linting using all available clippy lints
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
@@ -89,10 +87,10 @@
 #![allow(clippy::module_name_repetitions, reason = "Style")]
 #![allow(clippy::multiple_inherent_impl, reason = "Style")]
 #![allow(clippy::try_err, reason = "Style")]
+#![allow(clippy::allow_attributes_without_reason)] // TODO
 #![allow(clippy::indexing_slicing)] // TODO
 #![allow(clippy::unwrap_in_result)] // TODO
 #![allow(clippy::unwrap_used)] // TODO
-#![allow(clippy::allow_attributes_without_reason)] // TODO
 #![allow(clippy::missing_docs_in_private_items)] // TODO
 #![allow(clippy::shadow_unrelated)] // TODO
 #![allow(clippy::shadow_reuse)] // TODO
@@ -376,6 +374,10 @@ where
 
     /// Returns a reference to the identifiers of active nodes.
     fn active(&self) -> &Self::Active;
+    /// Replaces the active path.
+    ///
+    /// If the new active path would result in internal inconsistency, this function will correct the path in an implementation-specific manner.
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>);
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.

@@ -1152,6 +1152,19 @@ where
     fn active(&self) -> &Self::Active {
         &self.active
     }
+    #[invariant(self.validate())]
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
+        self.active.iter().for_each(|active| {
+            self.nodes.get_mut(active).unwrap().active = false;
+        });
+        self.active.clear();
+        self.active
+            .extend(active.filter(|id| self.nodes.contains_key(id)));
+        self.active.iter().for_each(|active| {
+            self.nodes.get_mut(active).unwrap().active = true;
+        });
+        self.fix_orphaned_activations();
+    }
 }
 
 impl<K, T, M, S> DiscreteWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
