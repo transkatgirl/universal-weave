@@ -379,14 +379,14 @@ where
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                 );
-
-                longest_path_to_root(
-                    &self.nodes,
-                    &self.scratchpad_list,
-                    &mut self.scratchpad_map,
-                    &mut self.scratchpad_list_2,
-                );
             }
+
+            longest_path_to_root(
+                &self.nodes,
+                &self.scratchpad_list,
+                &mut self.scratchpad_map,
+                &mut self.scratchpad_list_2,
+            );
 
             let target = self.scratchpad_list_2.first().copied();
 
@@ -443,7 +443,7 @@ where
             for parent in &self.nodes[id].from {
                 for sibling in self.nodes[parent].to.iter().copied() {
                     if self.scratchpad_set.insert(sibling) {
-                        self.scratchpad_list_2.push(sibling);
+                        self.scratchpad_list_2.push(sibling); // siblings
                     }
                 }
             }
@@ -484,6 +484,40 @@ where
                     node.active = true;
                 }
                 self.active.insert(path_item);
+            }
+
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
+            self.scratchpad_list.clear();
+
+            descendant_subgraph(
+                &self.nodes,
+                *id,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_set,
+            ); // decendants
+
+            self.scratchpad_set_2
+                .extend(self.active.intersection(&self.scratchpad_set));
+            self.scratchpad_set.clear();
+
+            topological_sort_subgraph(
+                &self.nodes,
+                &|id| self.scratchpad_set_2.contains(id),
+                id,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_list_2,
+                &mut self.scratchpad_set,
+            );
+
+            self.scratchpad_list
+                .extend(self.scratchpad_set_2.difference(&self.scratchpad_set));
+
+            for orphan in self.scratchpad_list.drain(..) {
+                self.active.remove(&orphan);
+                if let Some(node) = self.nodes.get_mut(&orphan) {
+                    node.active = false;
+                }
             }
         }
 

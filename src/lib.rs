@@ -3,6 +3,9 @@
 /*
 
 # 0.1.0 Checklist:
+- [ ] Reduce opportunities for internal inconsistency
+    - [ ] Add cycle checking to add_node()
+    - [ ] Add cycle checking to move_node()
 - [ ] Linting using all available clippy lints
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
@@ -24,8 +27,6 @@
 # 0.2.0 Checklist:
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Remove all opportunities for internal inconsistency
-    - [ ] Add cycle checking to add_node()
-    - [ ] Add cycle checking to move_node()
     - [ ] Add validation at deserialization time
 
 # Ideas for future releases:
