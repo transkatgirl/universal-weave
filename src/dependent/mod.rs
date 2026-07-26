@@ -88,6 +88,7 @@ where
     T: PartialEq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.id.eq(&other.id)
             && self.from.eq(&other.from)
@@ -111,6 +112,7 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn validate(&self) -> bool {
         self.from.is_none_or(|from| !self.to.contains(&from))
             && self.from != Some(self.id)
@@ -126,18 +128,23 @@ where
     type From = Option<K>;
     type To = IndexSet<K, S>;
 
+    #[inline]
     fn id(&self) -> K {
         self.id
     }
+    #[inline]
     fn from(&self) -> &Self::From {
         &self.from
     }
+    #[inline]
     fn to(&self) -> &Self::To {
         &self.to
     }
+    #[inline]
     fn is_active(&self) -> bool {
         self.active
     }
+    #[inline]
     fn contents(&self) -> &T {
         &self.contents
     }
@@ -204,6 +211,7 @@ where
             metadata,
         }
     }
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.nodes.capacity()
     }
@@ -309,24 +317,31 @@ where
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
 
+    #[inline]
     fn len(&self) -> usize {
         self.nodes.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
+    #[inline]
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K) -> bool {
         self.active == Some(*id)
     }
+    #[inline]
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -480,9 +495,11 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn metadata(&self) -> &M {
         &self.metadata
     }
+    #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         callback(&mut self.metadata)
     }
@@ -495,9 +512,11 @@ where
 {
     type Bookmarks = IndexSet<K, S>;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K) -> bool {
         self.bookmarked.contains(id)
     }
@@ -620,6 +639,7 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn active(&self) -> Option<K> {
         self.active
     }
@@ -747,6 +767,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         self.nodes
             .get_mut(id)
@@ -784,18 +805,23 @@ where
     type From = ArchivedOption<K::Archived>;
     type To = ArchivedIndexSet<K::Archived>;
 
+    #[inline]
     fn id(&self) -> K::Archived {
         self.id
     }
+    #[inline]
     fn from(&self) -> &Self::From {
         &self.from
     }
+    #[inline]
     fn to(&self) -> &Self::To {
         &self.to
     }
+    #[inline]
     fn is_active(&self) -> bool {
         self.active
     }
+    #[inline]
     fn contents(&self) -> &<T as Archive>::Archived {
         &self.contents
     }
@@ -814,24 +840,31 @@ where
     type Nodes = ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>;
     type Roots = ArchivedIndexSet<K::Archived>;
 
+    #[inline]
     fn len(&self) -> usize {
         self.nodes.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
+    #[inline]
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K::Archived) -> bool {
         self.active == Some(*id)
     }
+    #[inline]
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -879,6 +912,23 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, M, M2, S>
+    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn metadata(&self) -> &M::Archived {
+        &self.metadata
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
     ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
@@ -890,27 +940,13 @@ where
 {
     type Bookmarks = ArchivedIndexSet<K::Archived>;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K::Archived) -> bool {
         self.bookmarked.contains(id)
-    }
-}
-
-#[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
-    for ArchivedDependentWeave<K, T, M, S>
-where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
-    S: BuildHasher + Default + Clone,
-{
-    fn metadata(&self) -> &M::Archived {
-        &self.metadata
     }
 }
 
@@ -959,6 +995,7 @@ where
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn active(&self) -> ArchivedOption<K::Archived> {
         self.active
     }

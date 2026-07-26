@@ -38,6 +38,7 @@ impl<'a> VersionedBytes<'a> {
     }
     /// The total length in bytes after serialization.
     #[must_use]
+    #[inline]
     pub const fn output_length(&self) -> usize {
         32_usize.saturating_add(self.data.len())
     }

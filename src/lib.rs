@@ -34,10 +34,9 @@
 */
 
 #![forbid(unsafe_code)]
+#![forbid(non_ascii_idents)]
 #![warn(let_underscore)]
-#![warn(non_ascii_idents)]
 #![warn(clippy::pedantic)]
-#![allow(clippy::missing_errors_doc)] // TODO
 #![warn(clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, reason = "Unresolvable")]
 #![warn(clippy::nursery)]
@@ -127,7 +126,6 @@ pub trait DeduplicatableContents {
     fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
-// TODO: Add checks for cyclical connections!
 /// A document linking together multiple [`Node`] objects without cyclical links.
 ///
 /// # Internal inconsistency and Panics

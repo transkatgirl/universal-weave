@@ -37,6 +37,10 @@ use crate::{DiscreteWeave, Node};
 /// [`DiscreteWeave::split_node()`] and [`DiscreteWeave::merge_with_parent()`] are left intentionally unimplemented due to algorithmic limitations; Splitting/merging node contents must be done by adding a new [`Node`] with the updated contents to the [`Weave`].
 ///
 /// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
+///
+/// # Panics
+///
+/// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
 pub struct DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -78,6 +82,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn as_ref(&self) -> &DependentWeave<K, T, M, S> {
         &self.weave
     }
@@ -100,6 +105,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn from(value: DependentLoroWeave<K, T, M, S>) -> Self {
         value.weave
     }
@@ -122,6 +128,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn from(value: DependentLoroWeave<K, T, M, S>) -> Self {
         value.doc
     }
@@ -267,12 +274,20 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
+    /// Creates a [`DependentLoroWeave`] from a [`DependentWeave`].
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if creating a [`LoroDoc`] from the weave's state fails.
     pub fn new(weave: DependentWeave<K, T, M, S>) -> Result<Self, rancor::Error> {
         Self::try_from(weave)
     }
+    #[inline]
     pub fn into_weave(self) -> DependentWeave<K, T, M, S> {
         self.weave
     }
+    #[inline]
     pub fn into_doc(self) -> LoroDoc {
         self.doc
     }
@@ -442,36 +457,47 @@ where
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
 
+    #[inline]
     fn len(&self) -> usize {
         self.weave.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.weave.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         self.weave.nodes()
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
+    #[inline]
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
     }
+    #[inline]
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.weave.get_node(id)
     }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers_from(id, output);
     }
+    #[inline]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         self.weave.get_active_thread(output);
     }
+    #[inline]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_thread_from(id, output);
     }
@@ -641,6 +667,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn metadata(&self) -> &M {
         &self.weave.metadata
     }
@@ -677,9 +704,11 @@ where
 {
     type Bookmarks = IndexSet<K, S>;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         self.weave.bookmarks()
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K) -> bool {
         self.weave.contains_bookmark(id)
     }
@@ -724,10 +753,12 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_reversed_children(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_from_reversed_children(id, output);
@@ -870,6 +901,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn active(&self) -> Option<K> {
         self.weave.active()
     }
@@ -931,6 +963,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.weave.find_duplicates(id)
     }

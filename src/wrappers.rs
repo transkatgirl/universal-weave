@@ -51,6 +51,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn as_ref(&self) -> &W {
         &self.weave
     }
@@ -62,6 +63,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn from(value: W) -> Self {
         Self {
             weave: value,
@@ -76,12 +78,15 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     pub const fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T, M>>) -> Self {
         Self { weave, actions }
     }
+    #[inline]
     pub fn into_weave(self) -> W {
         self.weave
     }
+    #[inline]
     pub fn clear_actions(&mut self) {
         self.actions.clear();
     }
@@ -169,6 +174,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn as_ref(&self) -> &W {
         &self.weave
     }
@@ -180,6 +186,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn from(value: W) -> Self {
         Self {
             weave: value,
@@ -197,6 +204,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     pub const fn new(weave: W, count: WeaveActionCount) -> Self {
         Self {
             weave,
@@ -206,9 +214,11 @@ where
             _phantom_t: PhantomData,
         }
     }
+    #[inline]
     pub fn into_weave(self) -> W {
         self.weave
     }
+    #[inline]
     pub fn reset_count(&mut self) {
         self.count.reset();
     }
@@ -256,10 +266,12 @@ pub struct WeaveActionCount {
 
 impl WeaveActionCount {
     #[must_use]
+    #[inline]
     pub fn new() -> Self {
         Self::default()
     }
     /// Resets all action counts to zero.
+    #[inline]
     pub fn reset(&mut self) {
         *self = Self::default();
     }
@@ -567,36 +579,47 @@ where
     type Nodes = W::Nodes;
     type Roots = W::Roots;
 
+    #[inline]
     fn len(&self) -> usize {
         self.weave.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.weave.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         self.weave.nodes()
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
+    #[inline]
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
     }
+    #[inline]
     fn get_node(&self, id: &K) -> Option<&N> {
         self.weave.get_node(id)
     }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers_from(id, output);
     }
+    #[inline]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         self.weave.get_active_thread(output);
     }
+    #[inline]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_thread_from(id, output);
     }
@@ -646,6 +669,7 @@ where
     N: Node<K, T> + Clone,
     M: Clone,
 {
+    #[inline]
     fn metadata(&self) -> &M {
         self.weave.metadata()
     }
@@ -669,9 +693,11 @@ where
 {
     type Bookmarks = W::Bookmarks;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         self.weave.bookmarks()
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K) -> bool {
         self.weave.contains_bookmark(id)
     }
@@ -694,10 +720,12 @@ where
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
 {
+    #[inline]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_reversed_children(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_from_reversed_children(id, output);
@@ -783,6 +811,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T> + Clone,
 {
+    #[inline]
     fn active(&self) -> Option<K> {
         self.weave.active()
     }
@@ -796,6 +825,7 @@ where
 {
     type Active = W::Active;
 
+    #[inline]
     fn active(&self) -> &Self::Active {
         self.weave.active()
     }
@@ -880,6 +910,7 @@ where
     N: Node<K, T> + Clone,
     T: DeduplicatableContents,
 {
+    #[inline]
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.weave.find_duplicates(id)
     }
@@ -894,39 +925,51 @@ where
     type Nodes = W::Nodes;
     type Roots = W::Roots;
 
+    #[inline]
     fn len(&self) -> usize {
         self.weave.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.weave.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         self.weave.nodes()
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         self.weave.roots()
     }
+    #[inline]
     fn contains(&self, id: &K) -> bool {
         self.weave.contains(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K) -> bool {
         self.weave.contains_active(id)
     }
+    #[inline]
     fn get_node(&self, id: &K) -> Option<&N> {
         self.weave.get_node(id)
     }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers_from(id, output);
     }
+    #[inline]
     fn get_active_thread(&mut self, output: &mut Vec<K>) {
         self.weave.get_active_thread(output);
     }
+    #[inline]
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_thread_from(id, output);
     }
+    #[inline]
     fn add_node(&mut self, node: N) -> bool {
         if self.weave.add_node(node) {
             self.count.add_node = self.count.add_node.saturating_add(1);
@@ -935,6 +978,7 @@ where
             false
         }
     }
+    #[inline]
     fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         if self.weave.set_node_active_status(id, value) {
             self.count.set_node_active_status = self.count.set_node_active_status.saturating_add(1);
@@ -943,6 +987,7 @@ where
             false
         }
     }
+    #[inline]
     fn remove_node(&mut self, id: &K) -> Option<N> {
         if let Some(removed) = self.weave.remove_node(id) {
             self.count.remove_node = self.count.remove_node.saturating_add(1);
@@ -951,6 +996,7 @@ where
             None
         }
     }
+    #[inline]
     fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
         if self.weave.remove_node_tracked(id, on_removal) {
             self.count.remove_node = self.count.remove_node.saturating_add(1);
@@ -959,6 +1005,7 @@ where
             false
         }
     }
+    #[inline]
     fn remove_all_nodes(&mut self) {
         self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
         self.weave.remove_all_nodes();
@@ -973,12 +1020,15 @@ where
 {
     type Bookmarks = W::Bookmarks;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         self.weave.bookmarks()
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K) -> bool {
         self.weave.contains_bookmark(id)
     }
+    #[inline]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         if self.weave.set_node_bookmarked_status(id, value) {
             self.count.set_node_bookmarked_status =
@@ -996,9 +1046,11 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn metadata(&self) -> &M {
         self.weave.metadata()
     }
+    #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         self.weave.metadata_mut(|metadata| {
             self.count.metadata_mut = self.count.metadata_mut.saturating_add(1);
@@ -1013,14 +1065,17 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_reversed_children(output);
     }
+    #[inline]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave
             .get_ordered_node_identifiers_from_reversed_children(id, output);
     }
+    #[inline]
     fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
         if self.weave.sort_node_children_by(id, cmp) {
             self.count.sort_node_children = self.count.sort_node_children.saturating_add(1);
@@ -1029,6 +1084,7 @@ where
             false
         }
     }
+    #[inline]
     fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if self.weave.sort_node_children_by_id(id, cmp) {
             self.count.sort_node_children = self.count.sort_node_children.saturating_add(1);
@@ -1037,10 +1093,12 @@ where
             false
         }
     }
+    #[inline]
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
         self.count.sort_roots = self.count.sort_roots.saturating_add(1);
         self.weave.sort_roots_by(cmp);
     }
+    #[inline]
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.count.sort_roots = self.count.sort_roots.saturating_add(1);
         self.weave.sort_roots_by_id(cmp);
@@ -1053,10 +1111,12 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
         self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
         self.weave.sort_bookmarks_by(cmp);
     }
+    #[inline]
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
         self.weave.sort_bookmarks_by_id(cmp);
@@ -1069,6 +1129,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    #[inline]
     fn active(&self) -> Option<K> {
         self.weave.active()
     }
@@ -1082,6 +1143,7 @@ where
 {
     type Active = W::Active;
 
+    #[inline]
     fn active(&self) -> &Self::Active {
         self.weave.active()
     }
@@ -1094,6 +1156,7 @@ where
     N: Node<K, T>,
     T: IndependentContents,
 {
+    #[inline]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
         if self.weave.move_node(id, new_parents) {
             self.count.move_node = self.count.move_node.saturating_add(1);
@@ -1111,6 +1174,7 @@ where
     N: Node<K, T>,
     T: IndependentContents,
 {
+    #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         self.weave.get_contents_mut(id, |contents| {
             self.count.get_contents_mut = self.count.get_contents_mut.saturating_add(1);
@@ -1126,6 +1190,7 @@ where
     N: Node<K, T>,
     T: DiscreteContents,
 {
+    #[inline]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.weave.split_node(id, at, new_id) {
             self.count.split_node = self.count.split_node.saturating_add(1);
@@ -1134,6 +1199,7 @@ where
             false
         }
     }
+    #[inline]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         match self.weave.merge_with_parent(id) {
             Some(new_id) => {
@@ -1152,6 +1218,7 @@ where
     N: Node<K, T>,
     T: DeduplicatableContents,
 {
+    #[inline]
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.weave.find_duplicates(id)
     }
