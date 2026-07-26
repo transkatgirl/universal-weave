@@ -3,9 +3,6 @@
 /*
 
 # 0.1.0 Checklist:
-- [ ] Reduce opportunities for internal inconsistency
-    - [ ] Add cycle checking to add_node()
-    - [ ] Add cycle checking to move_node()
 - [ ] Linting using all available clippy lints
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
@@ -19,6 +16,7 @@
     - [ ] Property tests for LoggedWeave
     - [ ] Property tests for DependentLoroWeave CRDT merging
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
+    - [ ] Property tests for IndependentWeave cycle detection
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
     - [ ] Property tests for Archived structs
     - [ ] Add unit tests until test coverage is 100%
@@ -134,7 +132,6 @@ pub trait DeduplicatableContents {
 /// If a Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in unsafe behavior.
 ///
 /// Operations on a Weave should never result in internal inconsistency, except in the following cases:
-/// - A cyclical connection was created within the weave.
 /// - The weave was already internally inconsistent.
 /// - An operation resulted in a panic, and further operations were attempted on the same Weave through the use of [`std::panic::catch_unwind`].
 ///
@@ -181,13 +178,9 @@ where
     ///
     /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
     fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>);
-    /// Inserts a node into the Weave.
+    /// Inserts a node into the Weave, returning `true` if the insertion was successful.
     ///
     /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
-    ///
-    /// # Internal inconsistency
-    ///
-    /// This function does not comprehensively check for cyclical connections. Creating a cyclical connection of nodes within a Weave will violate internal consistency.
     fn add_node(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
@@ -335,13 +328,9 @@ where
     N: Node<K, T>,
     T: IndependentContents,
 {
-    /// Moves a node with the specified identifier to a new set of parent nodes.
+    /// Moves a node with the specified identifier to a new set of parent nodes, returning `true` if the move was successful.
     ///
     /// This function may change the active status of other nodes if it is necessary to preserve internal consistency.
-    ///
-    /// # Internal inconsistency
-    ///
-    /// This function does not comprehensively check for cyclical connections. Creating a cyclical connection of nodes within a Weave will violate internal consistency.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 

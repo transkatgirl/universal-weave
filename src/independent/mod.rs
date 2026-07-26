@@ -858,6 +858,27 @@ where
             return false;
         }
 
+        if !node.to.is_empty() && !node.from.is_empty() {
+            self.scratchpad_set.clear();
+
+            for parent in node.from.iter().copied() {
+                ancestor_subgraph(
+                    &self.nodes,
+                    parent,
+                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_set,
+                );
+            }
+
+            if node
+                .to
+                .iter()
+                .any(|child| self.scratchpad_set.contains(child))
+            {
+                return false;
+            }
+        }
+
         for child in &node.to {
             let child = &self.nodes[child];
             if child.from.is_empty() {
@@ -1322,6 +1343,29 @@ where
             .any(|new_parent| !self.nodes.contains_key(new_parent))
         {
             return false;
+        }
+
+        if let Some(node) = self.nodes.get(id)
+            && !node.to.is_empty()
+            && !new_parents.is_empty()
+        {
+            self.scratchpad_set.clear();
+
+            for child in node.to.iter().copied() {
+                descendant_subgraph(
+                    &self.nodes,
+                    child,
+                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_set,
+                );
+            }
+
+            if new_parents
+                .iter()
+                .any(|new_parent| self.scratchpad_set.contains(new_parent))
+            {
+                return false;
+            }
         }
 
         let new_parents: IndexSet<K, S> = new_parents.iter().copied().collect();
