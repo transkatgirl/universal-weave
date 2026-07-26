@@ -82,6 +82,7 @@ where
     pub contents: T,
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> PartialEq for IndependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -99,6 +100,7 @@ where
     }
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> Eq for IndependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -644,14 +646,17 @@ where
         for identifier in identifiers {
             let node = value.nodes.remove(&identifier).unwrap();
 
-            assert!(output.add_node(IndependentNode {
-                id: node.id,
-                from: node.from.into_iter().collect(),
-                to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
-                active: node.active,
-                bookmarked: node.bookmarked,
-                contents: node.contents,
-            }));
+            assert!(
+                output.add_node(IndependentNode {
+                    id: node.id,
+                    from: node.from.into_iter().collect(),
+                    to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
+                    active: node.active,
+                    bookmarked: node.bookmarked,
+                    contents: node.contents,
+                }),
+                "Failed to add node"
+            );
         }
 
         output

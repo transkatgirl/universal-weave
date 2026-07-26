@@ -82,6 +82,7 @@ where
     pub contents: T,
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> PartialEq for DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -99,6 +100,7 @@ where
     }
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> Eq for DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,

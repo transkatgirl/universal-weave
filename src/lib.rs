@@ -51,6 +51,51 @@
 #![warn(clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, reason = "Unresolvable")]
 #![warn(clippy::nursery)]
+#![warn(clippy::restriction)]
+#![allow(clippy::blanket_clippy_restriction_lints, reason = "Conflicting lint")]
+#![allow(clippy::allow_attributes, reason = "Conflicting lint")]
+#![allow(clippy::pattern_type_mismatch, reason = "Conflicting lint")]
+#![allow(clippy::separated_literal_suffix, reason = "Conflicting lint")]
+#![allow(
+    clippy::std_instead_of_core,
+    reason = "Crate depends on standard library"
+)]
+#![allow(
+    clippy::std_instead_of_alloc,
+    reason = "Crate depends on standard library"
+)]
+#![allow(
+    clippy::field_scoped_visibility_modifiers,
+    reason = "Used by IndependentWeave::from()"
+)]
+#![allow(
+    clippy::missing_inline_in_public_items,
+    reason = "Reasonable candidates have already been inlined"
+)]
+#![allow(clippy::exhaustive_enums, reason = "API")]
+#![allow(clippy::exhaustive_structs, reason = "API")]
+#![allow(clippy::little_endian_bytes, reason = "API")]
+#![allow(clippy::partial_pub_fields, reason = "API")]
+#![allow(clippy::pub_use, reason = "API")]
+#![allow(clippy::arbitrary_source_item_ordering, reason = "Readability")]
+#![allow(clippy::question_mark_used, reason = "Readability")]
+#![allow(clippy::single_call_fn, reason = "Readability")]
+#![allow(clippy::single_char_lifetime_names, reason = "Readability")]
+#![allow(clippy::else_if_without_else, reason = "Style")]
+#![allow(clippy::if_then_some_else_none, reason = "Style")]
+#![allow(clippy::implicit_return, reason = "Style")]
+#![allow(clippy::min_ident_chars, reason = "Style")]
+#![allow(clippy::mod_module_files, reason = "Style")]
+#![allow(clippy::module_name_repetitions, reason = "Style")]
+#![allow(clippy::multiple_inherent_impl, reason = "Style")]
+#![allow(clippy::try_err, reason = "Style")]
+#![allow(clippy::indexing_slicing)] // TODO
+#![allow(clippy::unwrap_in_result)] // TODO
+#![allow(clippy::unwrap_used)] // TODO
+#![allow(clippy::allow_attributes_without_reason)] // TODO
+#![allow(clippy::missing_docs_in_private_items)] // TODO
+#![allow(clippy::shadow_unrelated)] // TODO
+#![allow(clippy::shadow_reuse)] // TODO
 
 mod contract;
 pub mod dependent;

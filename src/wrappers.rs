@@ -405,14 +405,25 @@ where
 {
     fn apply(&mut self, action: WeaveAction<K, N, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => assert!(self.add_node(node)),
+            WeaveAction::AddNode(node) => {
+                assert!(self.add_node(node), "Failed to apply Weave action");
+            }
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value));
+                assert!(
+                    self.set_node_active_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value));
+                assert!(
+                    self.set_node_bookmarked_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveNode(id) => assert!(
+                self.remove_node(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
@@ -429,9 +440,12 @@ where
 
                 match parent {
                     Some(id) => {
-                        assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping[a].cmp(&id_mapping[b])
-                        }));
+                        assert!(
+                            self.sort_node_children_by_id(&id, |a, b| {
+                                id_mapping[a].cmp(&id_mapping[b])
+                            }),
+                            "Failed to apply Weave action"
+                        );
                     }
                     None => {
                         self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
@@ -444,12 +458,24 @@ where
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
-            WeaveAction::MoveNode { id, new_parents } => assert!(self.move_node(&id, &new_parents)),
+            WeaveAction::MoveNode { id, new_parents } => assert!(
+                self.move_node(&id, &new_parents),
+                "Failed to apply Weave action"
+            ),
             WeaveAction::SetNodeContent { id, contents } => {
-                self.get_contents_mut(&id, |c| *c = contents).unwrap();
+                assert!(
+                    self.get_contents_mut(&id, |c| *c = contents).is_some(),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(self.split_node(&id, at, new_id)),
-            WeaveAction::MergeNodeWithParent(id) => assert!(self.merge_with_parent(&id).is_some()),
+            WeaveAction::SplitNode { id, at, new_id } => assert!(
+                self.split_node(&id, at, new_id),
+                "Failed to apply Weave action"
+            ),
+            WeaveAction::MergeNodeWithParent(id) => assert!(
+                self.merge_with_parent(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
         }
     }
 }*/
@@ -462,16 +488,28 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
+    #[allow(clippy::panic, reason = "Necessary due to API shape")]
     fn apply(&mut self, action: WeaveAction<K, dependent::DependentNode<K, T, S>, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => assert!(self.add_node(node)),
+            WeaveAction::AddNode(node) => {
+                assert!(self.add_node(node), "Failed to apply Weave action");
+            }
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value));
+                assert!(
+                    self.set_node_active_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value));
+                assert!(
+                    self.set_node_bookmarked_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveNode(id) => assert!(
+                self.remove_node(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
@@ -488,9 +526,12 @@ where
 
                 match parent {
                     Some(id) => {
-                        assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping[a].cmp(&id_mapping[b])
-                        }));
+                        assert!(
+                            self.sort_node_children_by_id(&id, |a, b| {
+                                id_mapping[a].cmp(&id_mapping[b])
+                            }),
+                            "Failed to apply Weave action"
+                        );
                     }
                     None => {
                         self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
@@ -503,12 +544,21 @@ where
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
-            WeaveAction::MoveNode { .. } => unimplemented!(),
+            WeaveAction::MoveNode { .. } => panic!("Weave does not implement move_node()"),
             WeaveAction::SetNodeContent { id, contents } => {
-                self.get_contents_mut(&id, |c| *c = contents).unwrap();
+                assert!(
+                    self.get_contents_mut(&id, |c| *c = contents).is_some(),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(self.split_node(&id, at, new_id)),
-            WeaveAction::MergeNodeWithParent(id) => assert!(self.merge_with_parent(&id).is_some()),
+            WeaveAction::SplitNode { id, at, new_id } => assert!(
+                self.split_node(&id, at, new_id),
+                "Failed to apply Weave action"
+            ),
+            WeaveAction::MergeNodeWithParent(id) => assert!(
+                self.merge_with_parent(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
         }
     }
 }
@@ -523,14 +573,25 @@ where
 {
     fn apply(&mut self, action: WeaveAction<K, independent::IndependentNode<K, T, S>, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => assert!(self.add_node(node)),
+            WeaveAction::AddNode(node) => {
+                assert!(self.add_node(node), "Failed to apply Weave action");
+            }
             WeaveAction::SetNodeActiveStatus { id, value } => {
-                assert!(self.set_node_active_status(&id, value));
+                assert!(
+                    self.set_node_active_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
             WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(self.set_node_bookmarked_status(&id, value));
+                assert!(
+                    self.set_node_bookmarked_status(&id, value),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::RemoveNode(id) => assert!(self.remove_node(&id).is_some()),
+            WeaveAction::RemoveNode(id) => assert!(
+                self.remove_node(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
             WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
@@ -547,9 +608,12 @@ where
 
                 match parent {
                     Some(id) => {
-                        assert!(self.sort_node_children_by_id(&id, |a, b| {
-                            id_mapping[a].cmp(&id_mapping[b])
-                        }));
+                        assert!(
+                            self.sort_node_children_by_id(&id, |a, b| {
+                                id_mapping[a].cmp(&id_mapping[b])
+                            }),
+                            "Failed to apply Weave action"
+                        );
                     }
                     None => {
                         self.sort_roots_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
@@ -562,12 +626,24 @@ where
 
                 self.sort_bookmarks_by_id(|a, b| id_mapping[a].cmp(&id_mapping[b]));
             }
-            WeaveAction::MoveNode { id, new_parents } => assert!(self.move_node(&id, &new_parents)),
+            WeaveAction::MoveNode { id, new_parents } => assert!(
+                self.move_node(&id, &new_parents),
+                "Failed to apply Weave action"
+            ),
             WeaveAction::SetNodeContent { id, contents } => {
-                self.get_contents_mut(&id, |c| *c = contents).unwrap();
+                assert!(
+                    self.get_contents_mut(&id, |c| *c = contents).is_some(),
+                    "Failed to apply Weave action"
+                );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(self.split_node(&id, at, new_id)),
-            WeaveAction::MergeNodeWithParent(id) => assert!(self.merge_with_parent(&id).is_some()),
+            WeaveAction::SplitNode { id, at, new_id } => assert!(
+                self.split_node(&id, at, new_id),
+                "Failed to apply Weave action"
+            ),
+            WeaveAction::MergeNodeWithParent(id) => assert!(
+                self.merge_with_parent(&id).is_some(),
+                "Failed to apply Weave action"
+            ),
         }
     }
 }

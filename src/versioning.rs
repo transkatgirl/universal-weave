@@ -23,6 +23,7 @@ impl<'a> VersionedBytes<'a> {
     /// - The byte array is less than 32 bytes long
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     #[must_use]
+    #[inline]
     pub fn try_from_bytes(value: &'a [u8], format_identifier: [u8; 24]) -> Option<Self> {
         if value.starts_with(&format_identifier) && value.len() >= 32 {
             let (version_bytes, data) = value[24..].split_at(8);
@@ -43,6 +44,7 @@ impl<'a> VersionedBytes<'a> {
         32_usize.strict_add(self.data.len())
     }
     /// Serializes the header into the specified writer.
+    #[inline]
     pub fn write_header<W>(&self, writer: &mut W) -> Result<(), <W as Fallible>::Error>
     where
         W: Writer + Fallible,
@@ -53,6 +55,7 @@ impl<'a> VersionedBytes<'a> {
         Ok(())
     }
     /// Serializes the header and contents into the specified writer.
+    #[inline]
     pub fn write<W>(&self, writer: &mut W) -> Result<(), <W as Fallible>::Error>
     where
         W: Writer + Fallible,
