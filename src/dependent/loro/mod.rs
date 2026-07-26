@@ -370,15 +370,15 @@ where
                     || !self.weave.set_node_bookmarked_status(&bookmark, true)
                 {
                     bookmarks
-                        .delete(index - offset, 1)
+                        .delete(index.strict_sub(offset), 1)
                         .map_err(rancor::Error::new)?;
-                    offset += 1;
+                    offset = offset.strict_add(1);
                 }
             } else {
                 bookmarks
-                    .delete(index - offset, 1)
+                    .delete(index.strict_sub(offset), 1)
                     .map_err(rancor::Error::new)?;
-                offset += 1;
+                offset = offset.strict_add(1);
             }
         }
 

@@ -154,8 +154,6 @@ where
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
 /// However, this additional flexibility results in worse performance and memory usage characteristics overall.
-///
-/// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
@@ -853,7 +851,6 @@ where
             || !node.validate()
             || !node.from.iter().all(|id| self.nodes.contains_key(id))
             || !node.to.iter().all(|id| self.nodes.contains_key(id))
-            || !self.under_max_size()
         {
             return false;
         }
@@ -1167,7 +1164,7 @@ where
     #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
+        if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
 
@@ -1894,7 +1891,7 @@ fn archived_longest_path_to_root<'a, K, N, T>(
             .iter()
             .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
             .max()
-            .map(|l| l + 1)
+            .map(|l| l.strict_add(1))
             .unwrap_or_default();
 
         scratchpad_map.insert(*id, longest_distance);

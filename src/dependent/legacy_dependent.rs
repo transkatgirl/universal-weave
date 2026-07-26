@@ -63,8 +63,6 @@ where
 }
 
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
-///
-/// In order to reduce the serialized size, this weave implementation cannot contain more than [`i32::MAX`] nodes.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
@@ -140,10 +138,6 @@ where
                         .iter()
                         .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
-    }
-    #[must_use]
-    fn under_max_size(&self) -> bool {
-        (self.nodes.len() as u64) < (i32::MAX as u64)
     }
 }
 
@@ -317,11 +311,7 @@ where
         }
     }
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
-        if self.nodes.contains_key(&node.id)
-            || !node.validate()
-            || !node.to.is_empty()
-            || !self.under_max_size()
-        {
+        if self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty() {
             return false;
         }
 
@@ -526,7 +516,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.nodes.contains_key(&new_id) || *id == new_id || !self.under_max_size() {
+        if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
 

@@ -16,7 +16,7 @@ use stacksafe::stacksafe;
 use loro::LoroDoc;
 
 use crate::{
-    Weave,
+    Weave as _,
     dependent::loro::{DependentLoroWeave, from_bytes_aligned},
 };
 
@@ -118,7 +118,7 @@ where
             && node.from == parent
             && node.contents == contents
         {
-            *counter += 1;
+            *counter = counter.strict_add(1);
 
             let children = tree.children(target).unwrap_or_default();
 

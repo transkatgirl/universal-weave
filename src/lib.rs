@@ -3,12 +3,24 @@
 /*
 
 # 0.1.0 Checklist:
+- [ ] Add ActivePathWeave::set_active_nodes()
 - [ ] Linting using all available clippy lints
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
 - [ ] Add validate() to Weave
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
+    - [ ] Naming
+    - [ ] Interoperability
+    - [x] Macros
+    - [ ] Documentation
+    - [ ] Predictability
+    - [ ] Flexibility
+    - [ ] Type safety
+    - [ ] Dependability
+    - [ ] Debuggability
+    - [ ] Future proofing
+    - [x] Necessities
 - [ ] Full documentation review (including README)
     - [ ] Add crate examples
 - [ ] Full code review
@@ -703,7 +715,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
             .into_iter()
             .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
             .max()
-            .map(|l| l + 1)
+            .map(|l| l.strict_add(1))
             .unwrap_or_default();
 
         scratchpad_map.insert(*id, longest_distance);

@@ -45,8 +45,4 @@ where
                         .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
     }
-    #[must_use]
-    pub(super) fn under_max_size(&self) -> bool {
-        (self.nodes.len() as u64) < (i32::MAX as u64)
-    }
 }

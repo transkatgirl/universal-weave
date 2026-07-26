@@ -61,7 +61,7 @@ where
 
         for active_root in self.roots.iter().filter(|root| self.active.contains(root)) {
             threads.push(Vec::new());
-            let index = threads.len() - 1;
+            let index = threads.len().strict_sub(1);
             if !self.build_path(active_root, &mut threads, index) {
                 return false;
             }
@@ -90,7 +90,7 @@ where
 
             for active_child in node.to.iter().filter(|root| self.active.contains(root)) {
                 threads.push(threads[index].clone());
-                if !self.build_path(active_child, threads, threads.len() - 1) {
+                if !self.build_path(active_child, threads, threads.len().strict_sub(1)) {
                     return false;
                 }
             }
@@ -99,9 +99,5 @@ where
         } else {
             false
         }
-    }
-    #[must_use]
-    pub(super) fn under_max_size(&self) -> bool {
-        (self.nodes.len() as u64) < (i32::MAX as u64)
     }
 }

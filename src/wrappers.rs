@@ -111,6 +111,7 @@ where
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[non_exhaustive]
+#[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
 pub enum WeaveAction<K, N, T, M>
 where
     K: Hash + Copy + Eq,
@@ -233,6 +234,7 @@ where
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[non_exhaustive]
+#[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
 pub struct WeaveActionCount {
     /// [`Weave::add_node()`]
     pub add_node: usize,

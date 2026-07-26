@@ -40,7 +40,7 @@ impl<'a> VersionedBytes<'a> {
     #[must_use]
     #[inline]
     pub const fn output_length(&self) -> usize {
-        32_usize.saturating_add(self.data.len())
+        32_usize.strict_add(self.data.len())
     }
     /// Serializes the header into the specified writer.
     pub fn write_header<W>(&self, writer: &mut W) -> Result<(), <W as Fallible>::Error>
