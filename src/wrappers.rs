@@ -382,7 +382,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panics if applying the action fails.
+    /// May panic if applying the action fails.
     fn apply(&mut self, action: WeaveAction<K, N, T, M>);
 }
 
