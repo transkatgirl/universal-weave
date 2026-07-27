@@ -14,6 +14,7 @@
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
+        - [ ] IMPORTANT - Add cycle detection to validate()
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
