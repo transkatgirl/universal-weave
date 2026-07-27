@@ -10,8 +10,8 @@ use std::{
 use crate::{
     ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
     DeduplicatableWeave, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
-    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
-    dependent, independent,
+    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave,
+    ValidatableWeave, Weave, dependent, independent,
 };
 
 #[cfg(feature = "rkyv")]
@@ -763,6 +763,18 @@ where
     }
 }
 
+impl<W, K, N, T, M> ValidatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
+where
+    W: ValidatableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T> + Clone,
+{
+    #[inline]
+    fn validate(&self) -> bool {
+        self.weave.validate()
+    }
+}
+
 impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for LoggedWeave<W, K, N, T, M>
 where
     W: MetadataWeave<K, N, T, M>,
@@ -1119,6 +1131,37 @@ where
     }
 }
 
+impl<W, K, N, T> ValidatableWeave<K, N, T> for CountedWeave<W, K, N, T>
+where
+    W: ValidatableWeave<K, N, T>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    #[inline]
+    fn validate(&self) -> bool {
+        self.weave.validate()
+    }
+}
+
+impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for CountedWeave<W, K, N, T>
+where
+    W: MetadataWeave<K, N, T, M>,
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    #[inline]
+    fn metadata(&self) -> &M {
+        self.weave.metadata()
+    }
+    #[inline]
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        self.weave.metadata_mut(|metadata| {
+            self.count.metadata_mut = self.count.metadata_mut.saturating_add(1);
+            callback(metadata)
+        })
+    }
+}
+
 impl<W, K, N, T> BookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: BookmarkableWeave<K, N, T>,
@@ -1144,25 +1187,6 @@ where
         } else {
             false
         }
-    }
-}
-
-impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for CountedWeave<W, K, N, T>
-where
-    W: MetadataWeave<K, N, T, M>,
-    K: Hash + Copy + Eq,
-    N: Node<K, T>,
-{
-    #[inline]
-    fn metadata(&self) -> &M {
-        self.weave.metadata()
-    }
-    #[inline]
-    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
-        self.weave.metadata_mut(|metadata| {
-            self.count.metadata_mut = self.count.metadata_mut.saturating_add(1);
-            callback(metadata)
-        })
     }
 }
 

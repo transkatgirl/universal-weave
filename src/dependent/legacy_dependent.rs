@@ -1,4 +1,4 @@
-//! A deprecated version of `DependentWeave` used by `tapestry-weave`'s v0 format; Please don't use this!
+//! A legacy version of `DependentWeave` used by `tapestry-weave`'s v0 format; Please don't use this!
 
 use std::{
     cmp::Ordering,
@@ -35,7 +35,7 @@ use crate::{
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave,
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, path_to_root, topological_sort,
         topological_sort_rev,
@@ -107,45 +107,6 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
-    /// Validates that the weave is internally consistent.
-    ///
-    /// If this returns `false`, further actions on the weave will result in unexpected behavior, including but not limited to panics. However, since this function is fairly slow, it should only be called occasionally (such as when saving the weave to disk).
-    ///
-    /// This function will be removed in the future once this [`Weave`] implementation has undergone formal verification.
-    #[must_use]
-    pub fn validate(&self) -> bool {
-        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
-
-        self.roots.is_subset::<S>(&nodes)
-            && self
-                .active
-                .is_none_or(|active| self.nodes.contains_key(&active))
-            && self.bookmarked.is_subset(&nodes)
-            && self.nodes.iter().all(|(key, value)| {
-                value.validate()
-                    && value.id == *key
-                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
-                    && value.to.is_subset(&nodes)
-                    && value.from.is_none() == self.roots.contains(key)
-                    && value.active == (self.active == Some(*key))
-                    && value.bookmarked == self.bookmarked.contains(key)
-                    && value
-                        .from
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
-                    && value
-                        .to
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
-            })
-    }
-}
-
-impl<K, T, M, S> DependentWeave<K, T, M, S>
-where
-    K: Hash + Copy + Eq,
-    S: BuildHasher + Default + Clone,
-{
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, S::default()),
@@ -156,6 +117,7 @@ where
             metadata,
         }
     }
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.nodes.capacity()
     }
@@ -259,24 +221,31 @@ where
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
     type Roots = IndexSet<K, S>;
 
+    #[inline]
     fn len(&self) -> usize {
         self.nodes.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
+    #[inline]
     fn contains(&self, id: &K) -> bool {
         self.nodes.contains_key(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K) -> bool {
         self.active == Some(*id)
     }
+    #[inline]
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -382,14 +351,49 @@ where
     }
 }
 
+impl<K, T, M, S> ValidatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn validate(&self) -> bool {
+        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+
+        self.roots.is_subset::<S>(&nodes)
+            && self
+                .active
+                .is_none_or(|active| self.nodes.contains_key(&active))
+            && self.bookmarked.is_subset(&nodes)
+            && self.nodes.iter().all(|(key, value)| {
+                value.validate()
+                    && value.id == *key
+                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
+                    && value.to.is_subset(&nodes)
+                    && value.from.is_none() == self.roots.contains(key)
+                    && value.active == (self.active == Some(*key))
+                    && value.bookmarked == self.bookmarked.contains(key)
+                    && value
+                        .from
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value
+                        .to
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
+            })
+    }
+}
+
 impl<K, T, M, S> MetadataWeave<K, DependentNode<K, T, S>, T, M> for DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn metadata(&self) -> &M {
         &self.metadata
     }
+    #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         callback(&mut self.metadata)
     }
@@ -402,9 +406,11 @@ where
 {
     type Bookmarks = IndexSet<K, S>;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K) -> bool {
         self.bookmarked.contains(id)
     }
@@ -504,6 +510,7 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn active(&self) -> Option<K> {
         self.active
     }
@@ -614,6 +621,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         self.nodes
             .get_mut(id)
@@ -653,24 +661,31 @@ where
     type Nodes = ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>;
     type Roots = ArchivedIndexSet<K::Archived>;
 
+    #[inline]
     fn len(&self) -> usize {
         self.nodes.len()
     }
+    #[inline]
     fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
+    #[inline]
     fn nodes(&self) -> &Self::Nodes {
         &self.nodes
     }
+    #[inline]
     fn roots(&self) -> &Self::Roots {
         &self.roots
     }
+    #[inline]
     fn contains(&self, id: &K::Archived) -> bool {
         self.nodes.contains_key(id)
     }
+    #[inline]
     fn contains_active(&self, id: &K::Archived) -> bool {
         self.active == Some(*id)
     }
+    #[inline]
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
@@ -718,6 +733,23 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, M, M2, S>
+    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
+    for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive<Archived = K2> + Hash + Copy + Eq,
+    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    T: Archive<Archived = T2>,
+    M: Archive<Archived = M2>,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn metadata(&self) -> &M::Archived {
+        &self.metadata
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, K2, T, T2, M, M2, S>
     ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
@@ -729,27 +761,13 @@ where
 {
     type Bookmarks = ArchivedIndexSet<K::Archived>;
 
+    #[inline]
     fn bookmarks(&self) -> &Self::Bookmarks {
         &self.bookmarked
     }
+    #[inline]
     fn contains_bookmark(&self, id: &K::Archived) -> bool {
         self.bookmarked.contains(id)
-    }
-}
-
-#[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
-    for ArchivedDependentWeave<K, T, M, S>
-where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
-    S: BuildHasher + Default + Clone,
-{
-    fn metadata(&self) -> &M::Archived {
-        &self.metadata
     }
 }
 
@@ -798,6 +816,7 @@ where
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn active(&self) -> ArchivedOption<K::Archived> {
         self.active
     }

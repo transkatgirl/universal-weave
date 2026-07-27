@@ -8,7 +8,7 @@ use std::{
 };
 
 #[allow(unused_imports, reason = "False positive")]
-use ::contracts::{ensures, invariant};
+use contracts::{ensures, invariant};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -35,25 +35,25 @@ use crate::{
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave,
     contract::{
         lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
         valid_topological_sort,
     },
 };
 
-mod contracts;
-
 #[cfg(feature = "loro")]
 pub mod loro;
 
 #[cfg(feature = "legacy")]
+#[deprecated]
 pub mod legacy_dependent;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+/// A [`Node`] in a [`DependentWeave`] document.
 pub struct DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -483,6 +483,40 @@ where
         self.roots.clear();
         self.active = None;
         self.bookmarked.clear();
+    }
+}
+
+impl<K, T, M, S> ValidatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    S: BuildHasher + Default + Clone,
+{
+    fn validate(&self) -> bool {
+        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+
+        self.scratchpad.is_empty()
+            && self.roots.is_subset::<S>(&nodes)
+            && self
+                .active
+                .is_none_or(|active| self.nodes.contains_key(&active))
+            && self.bookmarked.is_subset(&nodes)
+            && self.nodes.iter().all(|(key, value)| {
+                value.validate()
+                    && value.id == *key
+                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
+                    && value.to.is_subset(&nodes)
+                    && value.from.is_none() == self.roots.contains(key)
+                    && value.active == (self.active == Some(*key))
+                    && value.bookmarked == self.bookmarked.contains(key)
+                    && value
+                        .from
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value
+                        .to
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
+            })
     }
 }
 

@@ -8,7 +8,7 @@ use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state
 use rkyv::{Archive, Deserialize, Serialize};
 use universal_weave::{
     BookmarkableWeave, IndependentContents, MetadataWeave, SemiIndependentWeave,
-    SortableBookmarkableWeave, SortableWeave, Weave,
+    SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave,
     dependent::{DependentNode, DependentWeave, loro::DependentLoroWeave},
 };
 

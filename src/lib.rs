@@ -1,12 +1,21 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
-
+//!
+//! This library aims to make building Loom implementations easier by providing the following primitives:
+//! - [`dependent::DependentWeave`] - A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
+//!     - [`dependent::loro::DependentLoroWeave`] - A [`dependent::DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
+//! - [`independent::IndependentWeave`] - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//!
+//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization), `wincode`, and `serde`. Deserialized weaves should be validated using [`ValidatableWeave::validate()`] before performing any operations on them.
+//!
+//! Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
+//!
 /*
 
 # 0.1.0 Checklist:
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
-- [ ] Add validate() to Weave
+- [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
     - [ ] Interoperability
@@ -34,6 +43,7 @@
 
 # 0.2.0 Checklist:
 - [ ] Separate bookmarking into a Weave wrapper?
+- [ ] Add node layout calculation behind a feature flag?
 - [ ] Remove all opportunities for internal inconsistency
     - [ ] Add validation at deserialization time
 
@@ -44,6 +54,7 @@
 
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
+//#![warn(missing_docs)] // TODO
 #![warn(let_underscore)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
@@ -184,7 +195,9 @@ pub trait DeduplicatableContents {
 ///
 /// # Internal inconsistency and Panics
 ///
-/// If a Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in unsafe behavior.
+/// If a Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in *unsafe* behavior.
+///
+/// The internal consistency of a weave can be validated using [`ValidatableWeave::validate()`].
 ///
 /// Operations on a Weave should never result in internal inconsistency, except in the following cases:
 /// - The weave was already internally inconsistent.
@@ -257,6 +270,19 @@ where
     fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
+}
+
+/// A [`Weave`] which can be checked for internal consistency.
+pub trait ValidatableWeave<K, N, T>: Weave<K, N, T>
+where
+    K: Hash + Copy + Eq,
+    N: Node<K, T>,
+{
+    /// Returns `true` if the weave is internally consistent.
+    ///
+    /// This function never panics or infinitely loops, even if internal consistency is violated.
+    #[must_use]
+    fn validate(&self) -> bool;
 }
 
 /// A [`Weave`] containing document-wide metadata.

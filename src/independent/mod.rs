@@ -7,7 +7,7 @@ use std::{
     mem,
 };
 
-use ::contracts::{ensures, invariant};
+use contracts::{ensures, invariant};
 use indexmap::IndexSet;
 use stacksafe::stacksafe;
 
@@ -33,19 +33,18 @@ use crate::{
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
+    Node, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave, ancestor_subgraph,
     contract::{lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
 };
 
-mod contracts;
-
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+/// A [`Node`] in a [`IndependentWeave`] document.
 pub struct IndependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -627,6 +626,50 @@ where
             false
         }
     }
+    fn validate_active(&self) -> bool {
+        let mut threads = Vec::new();
+
+        for active_root in self.roots.iter().filter(|root| self.active.contains(root)) {
+            threads.push(Vec::new());
+            let index = threads.len().strict_sub(1);
+            if !self.build_validation_path(active_root, &mut threads, index) {
+                return false;
+            }
+        }
+
+        let mut longest = (0, 0);
+
+        for (index, thread) in threads.iter().enumerate() {
+            if thread.len() > longest.0 {
+                longest = (thread.len(), index);
+            }
+        }
+
+        if threads.is_empty() {
+            return self.active.is_empty();
+        }
+
+        let thread = threads.swap_remove(longest.1);
+
+        thread.len() == self.active.len() && HashSet::from_iter(thread).is_subset(&self.active)
+    }
+    #[stacksafe]
+    fn build_validation_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
+        if let Some(node) = self.nodes.get(node) {
+            threads[index].push(node.id);
+
+            for active_child in node.to.iter().filter(|root| self.active.contains(root)) {
+                threads.push(threads[index].clone());
+                if !self.build_validation_path(active_child, threads, threads.len().strict_sub(1)) {
+                    return false;
+                }
+            }
+
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[allow(clippy::fallible_impl_from, reason = "Should never fail")]
@@ -970,6 +1013,47 @@ where
         self.roots.clear();
         self.active.clear();
         self.bookmarked.clear();
+    }
+}
+
+impl<K, T, M, S> ValidatableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn validate(&self) -> bool {
+        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+        let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
+        let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
+
+        self.scratchpad_queue.is_empty()
+            && self.roots.is_subset::<S>(&nodes)
+            && self.validate_active()
+            && self.active.is_subset(&nodes_std)
+            && self.bookmarked.is_subset::<S>(&nodes)
+            && self.nodes.iter().all(|(key, value)| {
+                value.validate()
+                    && value.id == *key
+                    && value.from.is_subset(&nodes)
+                    && value.to.is_subset(&nodes)
+                    && value.from.is_empty() == self.roots.contains(key)
+                    && value.active == self.active.contains(key)
+                    && value.bookmarked == self.bookmarked.contains(key)
+                    && value
+                        .from
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value
+                        .to
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from.contains(key)))
+                    && if value.active && !value.from.is_empty() {
+                        !value.from.is_disjoint::<S>(&active_index)
+                    } else {
+                        true
+                    }
+            })
     }
 }
 
