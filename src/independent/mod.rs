@@ -45,7 +45,7 @@ use crate::{
 #[must_use]
 pub struct IndependentNode<K, T, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -82,7 +82,7 @@ where
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> PartialEq for IndependentNode<K, T, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + PartialEq,
     S: BuildHasher + Default + Clone,
 {
@@ -100,7 +100,7 @@ where
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
 impl<K, T, S> Eq for IndependentNode<K, T, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + Eq,
     S: BuildHasher + Default + Clone,
 {
@@ -108,7 +108,7 @@ where
 
 impl<K, T, S> IndependentNode<K, T, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -121,7 +121,7 @@ where
 
 impl<K, T, S> Node<K, T> for IndependentNode<K, T, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -159,7 +159,7 @@ where
 #[must_use]
 pub struct IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -228,9 +228,37 @@ where
     pub metadata: M,
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<K, T, M, S> PartialEq for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents + PartialEq,
+    M: PartialEq,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes.eq(&other.nodes)
+            && self.roots.eq(&other.roots)
+            && self.active.eq(&other.active)
+            && self.bookmarked.eq(&other.bookmarked)
+            && self.metadata.eq(&other.metadata)
+    }
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<K, T, M, S> Eq for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents + Eq,
+    M: Eq,
+    S: BuildHasher + Default + Clone,
+{
+}
+
 impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -686,7 +714,7 @@ where
 #[allow(clippy::fallible_impl_from, reason = "Should never fail")]
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + Clone,
     M: Clone,
     S: BuildHasher + Default + Clone,
@@ -719,7 +747,7 @@ where
 
 impl<K, T, M, S> Weave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1031,7 +1059,7 @@ where
 
 impl<K, T, M, S> ValidatableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1073,7 +1101,7 @@ where
 
 impl<K, T, M, S> MetadataWeave<K, IndependentNode<K, T, S>, T, M> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1089,7 +1117,7 @@ where
 
 impl<K, T, M, S> BookmarkableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1126,7 +1154,7 @@ where
 
 impl<K, T, M, S> SortableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1218,7 +1246,7 @@ where
 impl<K, T, M, S> SortableBookmarkableWeave<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1240,7 +1268,7 @@ where
 
 impl<K, T, M, S> ActivePathWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1267,7 +1295,7 @@ where
 
 impl<K, T, M, S> DiscreteWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1403,7 +1431,7 @@ where
 impl<K, T, M, S> crate::SemiIndependentWeave<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1418,7 +1446,7 @@ where
 impl<K, T, M, S> DeduplicatableWeave<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DeduplicatableContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1440,7 +1468,7 @@ where
 impl<K, T, M, S> crate::IndependentWeave<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1535,8 +1563,8 @@ where
 #[cfg(feature = "rkyv")]
 impl<K, K2, T, T2, S> Node<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -1570,8 +1598,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -1758,8 +1786,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedMetadataWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -1775,8 +1803,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedBookmarkableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -1798,8 +1826,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -1846,8 +1874,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedActivePathWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2> + IndependentContents,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -1869,7 +1897,7 @@ fn archived_topological_sort<'a, K, N, T>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     scratchpad.push(*id);
@@ -1902,7 +1930,7 @@ fn archived_topological_sort_subgraph<'a, K, N, T>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     scratchpad.push(*id);
@@ -1934,7 +1962,7 @@ fn archived_topological_sort_rev<'a, K, N, T>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     scratchpad.push(*id);
@@ -1967,7 +1995,7 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T>(
     scratchpad_set: &mut HashSet<K>,
     path: &mut Vec<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     scratchpad.push(Step::Enter(*id));
@@ -2007,7 +2035,7 @@ fn archived_longest_path_to_root<'a, K, N, T>(
     scratchpad_map: &mut HashMap<K, usize>,
     reversed_path: &mut Vec<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     let mut longest_global_distance = None;
@@ -2056,7 +2084,7 @@ fn archived_ancestor_subgraph<'a, K, N, T>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut HashSet<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
     scratchpad.push(id);

@@ -46,7 +46,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -70,7 +71,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -93,7 +95,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -116,7 +119,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -139,7 +143,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -209,7 +214,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -262,7 +268,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -459,7 +466,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -672,7 +680,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>> + Eq,
@@ -786,7 +795,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -821,7 +831,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -872,7 +883,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -967,7 +979,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -1020,7 +1033,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
@@ -1044,7 +1058,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive
@@ -1080,7 +1095,8 @@ where
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
         + Hash
         + Copy
-        + Eq,
+        + Eq
+        + Ord,
     for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
         + Deserialize<K, Strategy<Pool, rancor::Error>>,
     for<'a> T: Archive

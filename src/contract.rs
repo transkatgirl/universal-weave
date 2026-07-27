@@ -28,7 +28,7 @@ where
 
 pub fn valid_topological_sort<'a, K, N, T, S>(nodes: &'a HashMap<K, N, S>, value: &'a [K]) -> bool
 where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -58,7 +58,7 @@ pub fn matches_topological_sort<'a, K, N, T, S>(
     value: &'a [K],
 ) -> bool
 where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -93,7 +93,7 @@ pub fn matches_topological_sort_rev<'a, K, N, T, S>(
     value: &'a [K],
 ) -> bool
 where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -124,7 +124,7 @@ where
 
 pub fn valid_path<'a, K, N, T>(nodes: &'a impl Index<&'a K, Output = N>, value: &'a [K]) -> bool
 where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,

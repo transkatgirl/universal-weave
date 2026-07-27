@@ -32,10 +32,8 @@
     - [ ] Add crate examples
 - [ ] Full code review
 - [ ] Improve test coverage
-    - [ ] Property tests for LoggedWeave
     - [ ] Property tests for DependentLoroWeave CRDT merging
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
-    - [ ] Property tests for IndependentWeave cycle detection
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
     - [ ] Property tests for Archived structs
     - [ ] Add unit tests until test coverage is 100%
@@ -141,7 +139,7 @@ pub use serde;
 #[must_use]
 pub trait Node<K, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
 {
     /// Identifiers corresponding to the node's parents.
     type From;
@@ -217,7 +215,7 @@ pub trait DeduplicatableContents {
 #[must_use]
 pub trait Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Mapping between identifiers and nodes.
@@ -293,7 +291,7 @@ where
 /// A [`Weave`] which can be checked for internal consistency.
 pub trait ValidatableWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns `true` if the weave is internally consistent.
@@ -306,7 +304,7 @@ where
 /// A [`Weave`] containing document-wide metadata.
 pub trait MetadataWeave<K, N, T, M>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns a reference to the Weave's associated metadata.
@@ -323,7 +321,7 @@ where
 /// A [`Weave`] where nodes can be bookmarked.
 pub trait BookmarkableWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Identifiers of bookmarked nodes.
@@ -342,7 +340,7 @@ where
 /// A [`Weave`] where the ordering of nodes is stable and can be user-defined.
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
@@ -383,7 +381,7 @@ where
 pub trait SortableBookmarkableWeave<K, N, T>:
     BookmarkableWeave<K, N, T> + SortableWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Sorts bookmarked nodes using the comparison function `cmp`.
@@ -403,7 +401,7 @@ where
 /// A [`Weave`] where only one [`Node`] can be considered "active" at a time.
 pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
@@ -414,7 +412,7 @@ where
 /// A [`Weave`] where every [`Node`] in the active path is always considered "active".
 pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Identifiers of active nodes.
@@ -432,7 +430,7 @@ where
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.
 pub trait IndependentWeave<K, N, T>: Weave<K, N, T> + SemiIndependentWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: IndependentContents,
 {
@@ -445,7 +443,7 @@ where
 /// A [`Weave`] where [`Node`] objects do not depend on the *contents* of their parents in order to be meaningful.
 pub trait SemiIndependentWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: IndependentContents,
 {
@@ -460,7 +458,7 @@ where
 /// A [`Weave`] where the contents of [`Node`] objects can be split and merged.
 pub trait DiscreteWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: DiscreteContents,
 {
@@ -477,7 +475,7 @@ where
 /// A [`Weave`] where [`Node`] objects can be meaningfully deduplicated by their contents.
 pub trait DeduplicatableWeave<K, N, T>: Weave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: DeduplicatableContents,
 {
@@ -491,7 +489,7 @@ where
 #[must_use]
 pub trait ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Mapping between identifiers and nodes.
@@ -544,7 +542,7 @@ where
 /// An [`ArchivedWeave`] containing document-wide metadata.
 pub trait ArchivedMetadataWeave<K, N, T, M>: ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns a reference to the Weave's associated metadata.
@@ -556,7 +554,7 @@ where
 /// An [`ArchivedWeave`] where nodes can be bookmarked.
 pub trait ArchivedBookmarkableWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Identifiers of bookmarked nodes.
@@ -574,7 +572,7 @@ where
 /// An [`ArchivedWeave`] where the ordering of nodes is stable and can be user-defined.
 pub trait ArchivedSortableWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
@@ -591,7 +589,7 @@ where
 /// An [`ArchivedWeave`] where only one [`Node`] can be considered "active" at a time.
 pub trait ArchivedActiveSingularWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
@@ -603,7 +601,7 @@ where
 /// An [`ArchivedWeave`] where every [`Node`] in the active path is always considered "active".
 pub trait ArchivedActivePathWeave<K, N, T>: ArchivedWeave<K, N, T>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Identifiers of active nodes.
@@ -614,7 +612,7 @@ where
     fn active(&self) -> &Self::Active;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum Step<K> {
     Enter(K),
     Exit(K),
@@ -627,7 +625,7 @@ fn topological_sort<'a, K, N, T, S>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -661,7 +659,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -695,7 +693,7 @@ fn topological_sort_rev<'a, K, N, T, S>(
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -730,7 +728,7 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -775,7 +773,7 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -817,7 +815,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
     scratchpad_map: &mut HashMap<K, usize, S>,
     reversed_path: &mut Vec<K>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -870,7 +868,7 @@ fn ancestor_subgraph<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T>,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
@@ -893,7 +891,7 @@ fn descendant_subgraph<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut HashSet<K, S>,
 ) where
-    K: Hash + Copy + Eq + 'a,
+    K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T>,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,

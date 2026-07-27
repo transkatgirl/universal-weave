@@ -5,7 +5,7 @@ use rkyv::{rancor::Fallible, ser::Writer};
 /// A set of bytes accompanied by file header information.
 ///
 /// Buffers deserialized using [`rkyv`] must be [aligned to 16-byte boundaries](https://rkyv.org/format/alignment.html). [`VersionedBytes`] is capable of preserving 16-byte memory alignment if the backing byte buffer is correctly aligned.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[must_use]
 pub struct VersionedBytes<'a> {
     /// The magic bytes at the start of the file indicating the format used.

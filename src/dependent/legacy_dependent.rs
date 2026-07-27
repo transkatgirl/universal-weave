@@ -44,7 +44,7 @@ use crate::Node;
 
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for NewDependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
@@ -65,7 +65,7 @@ where
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     #[cfg_attr(
@@ -99,9 +99,37 @@ where
     pub metadata: M,
 }
 
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<K, T, M, S> PartialEq for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: PartialEq,
+    M: PartialEq,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.nodes.eq(&other.nodes)
+            && self.roots.eq(&other.roots)
+            && self.active.eq(&other.active)
+            && self.bookmarked.eq(&other.bookmarked)
+            && self.metadata.eq(&other.metadata)
+    }
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<K, T, M, S> Eq for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: Eq,
+    M: Eq,
+    S: BuildHasher + Default + Clone,
+{
+}
+
 impl<K, T, M, S> DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     /// Creates a new, empty [`DependentWeave`] with at least the specified capacity.
@@ -216,7 +244,7 @@ where
 
 impl<K, T, M, S> Weave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     type Nodes = HashMap<K, DependentNode<K, T, S>, S>;
@@ -354,7 +382,7 @@ where
 
 impl<K, T, M, S> ValidatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     fn validate(&self) -> bool {
@@ -387,7 +415,7 @@ where
 
 impl<K, T, M, S> MetadataWeave<K, DependentNode<K, T, S>, T, M> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     #[inline]
@@ -402,7 +430,7 @@ where
 
 impl<K, T, M, S> BookmarkableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     type Bookmarks = IndexSet<K, S>;
@@ -434,7 +462,7 @@ where
 
 impl<K, T, M, S> SortableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
@@ -491,7 +519,7 @@ where
 impl<K, T, M, S> SortableBookmarkableWeave<K, DependentNode<K, T, S>, T>
     for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     fn sort_bookmarks_by(
@@ -508,7 +536,7 @@ where
 
 impl<K, T, M, S> ActiveSingularWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
     #[inline]
@@ -519,7 +547,7 @@ where
 
 impl<K, T, M, S> DiscreteWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
@@ -618,7 +646,7 @@ where
 
 impl<K, T, M, S> SemiIndependentWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
@@ -632,7 +660,7 @@ where
 
 impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
     S: BuildHasher + Default + Clone,
 {
@@ -653,8 +681,8 @@ where
 impl<K, K2, T, T2, M, M2, S> ArchivedWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2>,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -737,8 +765,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2>,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -754,8 +782,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2>,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -777,8 +805,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2>,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,
@@ -811,8 +839,8 @@ impl<K, K2, T, T2, M, M2, S>
     ArchivedActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq,
-    <K as Archive>::Archived: Hash + Copy + Eq + 'static,
+    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
     T: Archive<Archived = T2>,
     M: Archive<Archived = M2>,
     S: BuildHasher + Default + Clone,

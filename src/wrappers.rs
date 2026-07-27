@@ -32,7 +32,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 pub struct LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// The [`Weave`] being wrapped.
@@ -47,7 +47,7 @@ where
 impl<W, K, N, T, M> AsRef<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -59,7 +59,7 @@ where
 impl<W, K, N, T, M> From<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -74,7 +74,7 @@ where
 impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Creates a [`LoggedWeave`] with at least the specified capacity from a [`Weave`].
@@ -130,7 +130,7 @@ where
 #[must_use]
 pub enum WeaveAction<K, N, T, M>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// [`Weave::add_node()`]
@@ -171,7 +171,7 @@ where
 pub struct CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// The [`Weave`] being wrapped.
@@ -190,7 +190,7 @@ where
 impl<W, K, N, T> AsRef<W> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -202,7 +202,7 @@ where
 impl<W, K, N, T> From<W> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -220,7 +220,7 @@ where
 impl<W, K, N, T> CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Creates a [`CountedWeave`] from a [`Weave`] and [`WeaveActionCount`] pair.
@@ -264,7 +264,7 @@ where
 ///
 /// When possible, actions map to a function of the [`Weave`] trait or its supertraits.
 /// Some actions not logged here may change the [`Weave`]'s inner state but not its outwardly facing state.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
@@ -336,7 +336,7 @@ impl WeaveActionCount {
     /// Increments the action count corresponding to the [`WeaveAction`]'s type.
     pub const fn increment<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
-        K: Hash + Copy + Eq,
+        K: Hash + Copy + Eq + Ord,
         N: Node<K, T>,
     {
         match action {
@@ -377,7 +377,7 @@ impl WeaveActionCount {
     /// Decrements the action count corresponding to the [`WeaveAction`]'s type.
     pub const fn decrement<K, N, T, M>(&mut self, action: &WeaveAction<K, N, T, M>)
     where
-        K: Hash + Copy + Eq,
+        K: Hash + Copy + Eq + Ord,
         N: Node<K, T>,
     {
         match action {
@@ -420,7 +420,7 @@ impl WeaveActionCount {
 /// A [`Weave`] which can have [`WeaveAction`]s applied to it.
 pub trait ActionableWeave<K, N, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     S: BuildHasher + Default + Clone,
 {
@@ -443,7 +443,7 @@ where
         + IndependentWeave<K, N, T>
         + SemiIndependentWeave<K, N, T>
         + DiscreteWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
@@ -532,7 +532,7 @@ where
 impl<K, T, M, S> ActionableWeave<K, dependent::DependentNode<K, T, S>, T, M, S>
     for dependent::DependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
@@ -620,7 +620,7 @@ where
 impl<K, T, M, S> ActionableWeave<K, independent::IndependentNode<K, T, S>, T, M, S>
     for independent::IndependentWeave<K, T, M, S>
 where
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
@@ -707,7 +707,7 @@ where
 impl<W, K, N, T, M> Weave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
 {
     type Nodes = W::Nodes;
@@ -799,7 +799,7 @@ where
 impl<W, K, N, T, M> ValidatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ValidatableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
 {
     #[inline]
@@ -811,7 +811,7 @@ where
 impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for LoggedWeave<W, K, N, T, M>
 where
     W: MetadataWeave<K, N, T, M>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     M: Clone,
 {
@@ -834,7 +834,7 @@ where
 impl<W, K, N, T, M> BookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: BookmarkableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
 {
     type Bookmarks = W::Bookmarks;
@@ -861,7 +861,7 @@ where
 impl<W, K, N, T, M> SortableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SortableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
@@ -931,7 +931,7 @@ where
 impl<W, K, N, T, M> SortableBookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SortableBookmarkableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
@@ -954,7 +954,7 @@ where
 impl<W, K, N, T, M> ActiveSingularWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActiveSingularWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
 {
     #[inline]
@@ -966,7 +966,7 @@ where
 impl<W, K, N, T, M> ActivePathWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActivePathWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
 {
     type Active = W::Active;
@@ -986,7 +986,7 @@ where
 impl<W, K, N, T, M> IndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: IndependentWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     T: IndependentContents + Clone,
 {
@@ -1006,7 +1006,7 @@ where
 impl<W, K, N, T, M> SemiIndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SemiIndependentWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     T: IndependentContents + Clone,
 {
@@ -1027,7 +1027,7 @@ where
 impl<W, K, N, T, M> DiscreteWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: DiscreteWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     T: DiscreteContents,
 {
@@ -1058,7 +1058,7 @@ where
 impl<W, K, N, T, M> DeduplicatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: DeduplicatableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T> + Clone,
     T: DeduplicatableContents,
 {
@@ -1071,7 +1071,7 @@ where
 impl<W, K, N, T> Weave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     type Nodes = W::Nodes;
@@ -1167,7 +1167,7 @@ where
 impl<W, K, N, T> ValidatableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: ValidatableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -1179,7 +1179,7 @@ where
 impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for CountedWeave<W, K, N, T>
 where
     W: MetadataWeave<K, N, T, M>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -1198,7 +1198,7 @@ where
 impl<W, K, N, T> BookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: BookmarkableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     type Bookmarks = W::Bookmarks;
@@ -1226,7 +1226,7 @@ where
 impl<W, K, N, T> SortableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SortableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -1272,7 +1272,7 @@ where
 impl<W, K, N, T> SortableBookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SortableBookmarkableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -1290,7 +1290,7 @@ where
 impl<W, K, N, T> ActiveSingularWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: ActiveSingularWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     #[inline]
@@ -1302,7 +1302,7 @@ where
 impl<W, K, N, T> ActivePathWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: ActivePathWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     type Active = W::Active;
@@ -1321,7 +1321,7 @@ where
 impl<W, K, N, T> IndependentWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: IndependentWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: IndependentContents,
 {
@@ -1339,7 +1339,7 @@ where
 impl<W, K, N, T> SemiIndependentWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SemiIndependentWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: IndependentContents,
 {
@@ -1355,7 +1355,7 @@ where
 impl<W, K, N, T> DiscreteWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: DiscreteContents,
 {
@@ -1383,7 +1383,7 @@ where
 impl<W, K, N, T> DeduplicatableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: DeduplicatableWeave<K, N, T>,
-    K: Hash + Copy + Eq,
+    K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
     T: DeduplicatableContents,
 {
