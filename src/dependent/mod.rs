@@ -195,6 +195,7 @@ where
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad: Vec<K>,
 
+    /// The metadata associated with the weave.
     pub metadata: M,
 }
 
@@ -203,6 +204,7 @@ where
     K: Hash + Copy + Eq,
     S: BuildHasher + Default + Clone,
 {
+    /// Creates a new, empty [`DependentWeave`] with at least the specified capacity.
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, S::default()),
@@ -213,10 +215,12 @@ where
             metadata,
         }
     }
+    /// Returns the number of nodes the weave can hold without reallocating.
     #[inline]
     pub fn capacity(&self) -> usize {
         self.nodes.capacity()
     }
+    /// Reserves capacity for at least `additional` more nodes.
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
@@ -226,6 +230,7 @@ where
         self.scratchpad
             .reserve(self.nodes.capacity().saturating_sub(self.scratchpad.len()));
     }
+    /// Shrinks the capacity of the weave with a lower limit.
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);

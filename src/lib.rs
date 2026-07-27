@@ -183,6 +183,7 @@ pub trait DiscreteContents: Sized {
 }
 
 /// A type representing the results of an action on a [`DiscreteContents`] item.
+#[allow(missing_docs, reason = "Enum items are self-explanatory")]
 pub enum DiscreteContentResult<T> {
     One(T),
     Two(T, T),

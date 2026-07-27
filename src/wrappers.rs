@@ -1,5 +1,7 @@
 //! Wrappers which add additional functionality to [`Weave`] implementations.
 
+#![allow(missing_docs, reason = "False positives")]
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, VecDeque},
@@ -79,18 +81,35 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    /// Creates a [`LoggedWeave`] with at least the specified capacity from a [`Weave`].
     #[inline]
-    pub const fn new(weave: W, actions: VecDeque<WeaveAction<K, N, T, M>>) -> Self {
-        Self { weave, actions }
+    pub fn with_capacity(weave: W, capacity: usize) -> Self {
+        Self {
+            actions: VecDeque::with_capacity(capacity),
+            weave,
+        }
     }
+    /// Converts a [`LoggedWeave`] into it's inner [`Weave`].
     #[inline]
     pub fn into_weave(self) -> W {
         self.weave
     }
+    /// Returns a reference to the inner [`Weave`].
+    #[inline]
+    pub const fn as_weave(&self) -> &W {
+        &self.weave
+    }
+    /// Returns a reference to the list of actions performed on the [`Weave`].
+    #[inline]
+    pub const fn as_actions(&self) -> &VecDeque<WeaveAction<K, N, T, M>> {
+        &self.actions
+    }
+    /// Clears the inner list of actions performed on the [`Weave`].
     #[inline]
     pub fn clear_actions(&mut self) {
         self.actions.clear();
     }
+    /// Returns a [`WeaveActionCount`] calculated from the inner list of actions performed on the [`Weave`].
     pub fn count_actions(&self) -> WeaveActionCount {
         let mut count = WeaveActionCount::new();
 
@@ -210,6 +229,7 @@ where
     K: Hash + Copy + Eq,
     N: Node<K, T>,
 {
+    /// Creates a [`CountedWeave`] from a [`Weave`] and [`WeaveActionCount`] pair.
     #[inline]
     pub const fn new(weave: W, count: WeaveActionCount) -> Self {
         Self {
@@ -220,10 +240,26 @@ where
             _phantom_t: PhantomData,
         }
     }
+    /// Creates a [`CountedWeave`] from a [`Weave`].
+    pub fn from_weave(weave: W) -> Self {
+        Self::new(weave, WeaveActionCount::new())
+    }
+    /// Converts a [`CountedWeave`] into it's inner [`Weave`].
     #[inline]
     pub fn into_weave(self) -> W {
         self.weave
     }
+    /// Returns a reference to the inner [`Weave`].
+    #[inline]
+    pub const fn as_weave(&self) -> &W {
+        &self.weave
+    }
+    /// Returns a reference to the inner [`WeaveActionCount`].
+    #[inline]
+    pub const fn as_count(&self) -> &WeaveActionCount {
+        &self.count
+    }
+    /// Resets the inner [`WeaveActionCount`] to zero.
     #[inline]
     pub fn reset_count(&mut self) {
         self.count.reset();
