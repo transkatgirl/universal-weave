@@ -30,6 +30,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[must_use]
 pub struct LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
@@ -110,8 +111,9 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-#[non_exhaustive]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
+#[non_exhaustive]
+#[must_use]
 pub enum WeaveAction<K, N, T, M>
 where
     K: Hash + Copy + Eq,
@@ -152,6 +154,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[must_use]
 pub struct CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
@@ -235,8 +238,9 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-#[non_exhaustive]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
+#[non_exhaustive]
+#[must_use]
 pub struct WeaveActionCount {
     /// [`Weave::add_node()`]
     pub add_node: usize,
@@ -271,7 +275,7 @@ pub struct WeaveActionCount {
 }
 
 impl WeaveActionCount {
-    #[must_use]
+    /// Creates a new action count initalized to zero.
     #[inline]
     pub fn new() -> Self {
         Self::default()

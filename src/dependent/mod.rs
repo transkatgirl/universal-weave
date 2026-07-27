@@ -54,6 +54,7 @@ pub mod legacy_dependent;
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`DependentWeave`] document.
+#[must_use]
 pub struct DependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -157,6 +158,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[must_use]
 pub struct DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,

@@ -40,6 +40,7 @@ use crate::{DiscreteWeave, Node};
 /// # Panics
 ///
 /// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
+#[must_use]
 pub struct DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
@@ -273,20 +274,37 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    #[inline]
     /// Creates a [`DependentLoroWeave`] from a [`DependentWeave`].
     ///
     /// # Errors
     ///
     /// Will return `Err` if creating a [`LoroDoc`] from the weave's state fails.
-    pub fn new(weave: DependentWeave<K, T, M, S>) -> Result<Self, rancor::Error> {
+    #[inline]
+    pub fn from_weave(weave: DependentWeave<K, T, M, S>) -> Result<Self, rancor::Error> {
         Self::try_from(weave)
     }
+    /// Creates a [`DependentLoroWeave`] from a [`LoroDoc`].
+    ///
+    /// # Errors
+    ///
+    /// Will return `Err` if creating a [`DependentWeave`] from the document fails.
+    #[inline]
+    pub fn from_doc(doc: LoroDoc) -> Result<Self, rancor::Error> {
+        Self::try_from(doc)
+    }
+    /// Converts a [`DependentLoroWeave`] into a [`DependentWeave`].
     #[inline]
     pub fn into_weave(self) -> DependentWeave<K, T, M, S> {
         self.weave
     }
+    /// Returns a reference to the inner [`DependentWeave`].
     #[inline]
+    pub const fn as_weave(&self) -> &DependentWeave<K, T, M, S> {
+        &self.weave
+    }
+    /// Converts a [`DependentLoroWeave`] into a [`LoroDoc`].
+    #[inline]
+    #[must_use]
     pub fn into_doc(self) -> LoroDoc {
         self.doc
     }

@@ -6,6 +6,7 @@ use rkyv::{rancor::Fallible, ser::Writer};
 ///
 /// Note: Buffers deserialized using [`rkyv`] must be [aligned to 16-byte boundaries](https://rkyv.org/format/alignment.html). [`VersionedBytes`] is capable of preserving 16-byte memory alignment if the backing byte buffer is correctly aligned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[must_use]
 pub struct VersionedBytes<'a> {
     /// The magic bytes at the start of the file indicating the format used.
     pub format_identifier: [u8; 24],
@@ -44,6 +45,10 @@ impl<'a> VersionedBytes<'a> {
         32_usize.strict_add(self.data.len())
     }
     /// Serializes the header into the specified writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if writing to the given writer fails.
     #[inline]
     pub fn write_header<W>(&self, writer: &mut W) -> Result<(), <W as Fallible>::Error>
     where
@@ -55,6 +60,10 @@ impl<'a> VersionedBytes<'a> {
         Ok(())
     }
     /// Serializes the header and contents into the specified writer.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if writing to the given writer fails.
     #[inline]
     pub fn write<W>(&self, writer: &mut W) -> Result<(), <W as Fallible>::Error>
     where

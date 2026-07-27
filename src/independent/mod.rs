@@ -45,6 +45,7 @@ use crate::{
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`IndependentWeave`] document.
+#[must_use]
 pub struct IndependentNode<K, T, S>
 where
     K: Hash + Copy + Eq,
@@ -159,6 +160,7 @@ where
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[must_use]
 pub struct IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq,

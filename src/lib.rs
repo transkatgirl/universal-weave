@@ -44,6 +44,7 @@
 # 0.2.0 Checklist:
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Add node layout calculation behind a feature flag?
+- [ ] Add no-std support
 - [ ] Remove all opportunities for internal inconsistency
     - [ ] Add validation at deserialization time
 
@@ -54,7 +55,7 @@
 
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
-//#![warn(missing_docs)] // TODO
+#![warn(missing_docs)]
 #![warn(let_underscore)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
@@ -138,6 +139,7 @@ use rkyv::option::ArchivedOption;
 pub use serde;
 
 /// An item within a [`Weave`] which can be connected to other items.
+#[must_use]
 pub trait Node<K, T>
 where
     K: Hash + Copy + Eq,
@@ -212,6 +214,7 @@ pub trait DeduplicatableContents {
 /// - An operation resulted in a panic, and further operations were attempted on the same Weave through the use of [`std::panic::catch_unwind`].
 ///
 /// However, Weave objects which have been deserialized from an untrusted source may be internally inconsistent.
+#[must_use]
 pub trait Weave<K, N, T>
 where
     K: Hash + Copy + Eq,
@@ -485,6 +488,7 @@ where
 
 #[cfg(feature = "rkyv")]
 /// A read-only [`Weave`] which has been decoded using zero-copy deserialization.
+#[must_use]
 pub trait ArchivedWeave<K, N, T>
 where
     K: Hash + Copy + Eq,
