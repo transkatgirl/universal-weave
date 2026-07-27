@@ -148,16 +148,21 @@ where
     type To;
 
     /// Returns the node's unique identifier.
+    #[must_use]
     fn id(&self) -> K;
     /// Returns a reference to the identifiers corresponding to the node's parents.
+    #[must_use]
     fn from(&self) -> &Self::From;
     /// Returns a reference to the identifiers corresponding to the node's children.
+    #[must_use]
     fn to(&self) -> &Self::To;
     /// Returns `true` if the node is considered "active".
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
+    #[must_use]
     fn is_active(&self) -> bool;
     /// Returns a reference to the node's contents.
+    #[must_use]
     fn contents(&self) -> &T;
 }
 
@@ -166,10 +171,12 @@ pub trait DiscreteContents: Sized {
     /// Splits the item at specified index.
     ///
     /// If splitting the item fails, the original contents are returned.
+    #[must_use]
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
     ///
     /// If merging the two items fails, the original contents are returned in the order they were specified in.
+    #[must_use]
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
@@ -188,6 +195,7 @@ pub trait IndependentContents {}
 /// For all `a` and `b`, `a == b` implies `b == a` and `a != b` implies `!(a == b)`.
 pub trait DeduplicatableContents {
     /// Tests if `self` and `other` should be considered duplicates of each other.
+    #[must_use]
     fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
@@ -215,20 +223,27 @@ where
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
+    #[must_use]
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
+    #[must_use]
     fn is_empty(&self) -> bool;
     /// Returns a reference to the identifier:node mapping.
+    #[must_use]
     fn nodes(&self) -> &Self::Nodes;
     /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    #[must_use]
     fn roots(&self) -> &Self::Roots;
     /// Returns `true` if the Weave contains a node with the specified identifier.
+    #[must_use]
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
+    #[must_use]
     fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
+    #[must_use]
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
@@ -292,6 +307,7 @@ where
     N: Node<K, T>,
 {
     /// Returns a reference to the Weave's associated metadata.
+    #[must_use]
     fn metadata(&self) -> &M;
     /// Mutable access to the Weave's associated metadata.
     ///
@@ -311,8 +327,10 @@ where
     type Bookmarks;
 
     /// Returns a reference to the identifiers of bookmarked nodes.
+    #[must_use]
     fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    #[must_use]
     fn contains_bookmark(&self, id: &K) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
@@ -386,6 +404,7 @@ where
     N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
+    #[must_use]
     fn active(&self) -> Option<K>;
 }
 
@@ -399,6 +418,7 @@ where
     type Active;
 
     /// Returns a reference to the identifiers of active nodes.
+    #[must_use]
     fn active(&self) -> &Self::Active;
     /// Replaces the active path.
     ///
@@ -459,6 +479,7 @@ where
     T: DeduplicatableContents,
 {
     /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
+    #[must_use]
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
@@ -475,20 +496,27 @@ where
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
+    #[must_use]
     fn len(&self) -> usize;
     /// Returns `true` if the Weave does not contain any nodes.
+    #[must_use]
     fn is_empty(&self) -> bool;
     /// Returns a reference to the identifier:node mapping.
+    #[must_use]
     fn nodes(&self) -> &Self::Nodes;
     /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    #[must_use]
     fn roots(&self) -> &Self::Roots;
     /// Returns `true` if the Weave contains a node with the specified identifier.
+    #[must_use]
     fn contains(&self, id: &K) -> bool;
     /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
+    #[must_use]
     fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
+    #[must_use]
     fn get_node(&self, id: &K) -> Option<&N>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
@@ -516,6 +544,7 @@ where
     N: Node<K, T>,
 {
     /// Returns a reference to the Weave's associated metadata.
+    #[must_use]
     fn metadata(&self) -> &M;
 }
 
@@ -530,8 +559,10 @@ where
     type Bookmarks;
 
     /// Returns a reference to the identifiers of bookmarked nodes.
+    #[must_use]
     fn bookmarks(&self) -> &Self::Bookmarks;
     /// Returns `true` if the Weave contains a bookmarked node with the specified identifier.
+    #[must_use]
     fn contains_bookmark(&self, id: &K) -> bool;
 }
 
@@ -560,6 +591,7 @@ where
     N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
+    #[must_use]
     fn active(&self) -> ArchivedOption<K>;
 }
 
@@ -574,6 +606,7 @@ where
     type Active;
 
     /// Returns a reference to the identifiers of active nodes.
+    #[must_use]
     fn active(&self) -> &Self::Active;
 }
 
