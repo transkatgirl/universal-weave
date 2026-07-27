@@ -24,7 +24,7 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 	- Merging
 	- Deduplication
 - Weaves:
-	- Serialization and deserialization (supports rkyv, serde, wincode)
+	- Serialization and deserialization (supports rkyv and serde)
 		- Zero-copy deserialization (requires rkyv)
 		- Format versioning (requires rkyv)
 	- Unbounded depth (currently unsupported for WASM and [some niche targets](https://github.com/rust-lang/stacker/#platform-support); this will be fixed in the future)

@@ -27,9 +27,6 @@ loro = [
 	"rkyv",
 	"dep:loro",
 ]
-wincode = [
-	"dep:wincode",
-]
 serde = [
 	"dep:serde",
 	"indexmap/serde",
@@ -52,10 +49,6 @@ rkyv = { version = "0.8.17", features = [
 	"indexmap-2",
 ], optional = true }
 loro = { version = "1.13.7", optional = true }
-wincode = { version = "0.6.0", features = [
-	"indexmap",
-	"derive",
-], optional = true }
 serde = { version = "1.0.229", features = [
 	"derive",
 ], optional = true }

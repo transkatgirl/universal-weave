@@ -20,9 +20,6 @@ use rkyv::{
     with::Skip,
 };
 
-#[cfg(feature = "wincode")]
-use wincode::{SchemaRead, SchemaWrite};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -51,7 +48,6 @@ pub mod legacy_dependent;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`DependentWeave`] document.
 #[must_use]
@@ -156,7 +152,6 @@ where
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
 pub struct DependentWeave<K, T, M, S>
@@ -191,7 +186,6 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad: Vec<K>,
 

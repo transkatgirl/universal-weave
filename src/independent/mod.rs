@@ -18,9 +18,6 @@ use rkyv::{
     with::Skip,
 };
 
-#[cfg(feature = "wincode")]
-use wincode::{SchemaRead, SchemaWrite};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -42,7 +39,6 @@ use crate::{
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`IndependentWeave`] document.
 #[must_use]
@@ -158,7 +154,6 @@ where
 /// However, this additional flexibility results in worse performance and memory usage characteristics overall.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
 pub struct IndependentWeave<K, T, M, S>
@@ -201,32 +196,26 @@ where
     bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_list: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_list_2: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set: HashSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_set_2: HashSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_map: HashMap<K, usize, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "wincode", wincode(skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_queue: VecDeque<K>,
 

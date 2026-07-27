@@ -5,14 +5,13 @@
 //!     - [`dependent::loro::DependentLoroWeave`] - A [`dependent::DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
 //! - [`independent::IndependentWeave`] - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
-//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization), `wincode`, and `serde`. Weaves should be validated immediately before serialization and immediately after deserialization using [`ValidatableWeave::validate()`].
+//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`. Weaves should be validated immediately before serialization and immediately after deserialization using [`ValidatableWeave::validate()`].
 //!
 //! Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
 //!
 /*
 
 # 0.1.0 Checklist:
-- [ ] Rewrite all traversal logic to be non-recursive
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
 - [ ] Add validation to Archived weaves
@@ -42,6 +41,7 @@
 - [ ] Publish to crates.io
 
 # 0.2.0 Checklist:
+- [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Add node layout calculation behind a feature flag?
 - [ ] Add no-std support

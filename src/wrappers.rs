@@ -19,9 +19,6 @@ use crate::{
 #[cfg(feature = "rkyv")]
 use rkyv::{Archive, Deserialize, Serialize};
 
-#[cfg(feature = "wincode")]
-use wincode::{SchemaRead, SchemaWrite};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -30,7 +27,6 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 /// See [`WeaveAction`] for the complete list of loggable actions.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
 pub struct LoggedWeave<W, K, N, T, M>
@@ -128,7 +124,6 @@ where
 /// Some actions not logged here may change the [`Weave`]'s inner state but not its outwardly facing state.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
 #[non_exhaustive]
@@ -171,7 +166,6 @@ where
 /// See [`WeaveActionCount`] for the complete list of loggable actions.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
 pub struct CountedWeave<W, K, N, T>
@@ -272,7 +266,6 @@ where
 /// Some actions not logged here may change the [`Weave`]'s inner state but not its outwardly facing state.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
 #[non_exhaustive]

@@ -16,9 +16,6 @@ use rkyv::{
     option::ArchivedOption,
 };
 
-#[cfg(feature = "wincode")]
-use wincode::{SchemaRead, SchemaWrite};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
@@ -65,7 +62,6 @@ where
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "wincode", derive(SchemaRead, SchemaWrite))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 pub struct DependentWeave<K, T, M, S>
 where
