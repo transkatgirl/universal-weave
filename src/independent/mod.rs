@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
     mem,
 };
@@ -30,7 +30,8 @@ use crate::{
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave, ancestor_subgraph,
+    Node, SortableBookmarkableWeave, SortableWeave, Step, ValidatableWeave, Weave,
+    ancestor_subgraph,
     contract::{lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
@@ -217,7 +218,11 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_queue: VecDeque<K>,
+    scratchpad_stack: Vec<K>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_step_stack: Vec<Step<K>>,
 
     /// The metadata associated with the weave.
     pub metadata: M,
@@ -241,7 +246,8 @@ where
             scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_set_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_map: HashMap::with_capacity_and_hasher(capacity, S::default()),
-            scratchpad_queue: VecDeque::with_capacity(capacity),
+            scratchpad_stack: Vec::with_capacity(capacity),
+            scratchpad_step_stack: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -284,10 +290,15 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_map.len()),
         );
-        self.scratchpad_queue.reserve(
+        self.scratchpad_stack.reserve(
             self.nodes
                 .capacity()
-                .saturating_sub(self.scratchpad_queue.len()),
+                .saturating_sub(self.scratchpad_stack.len()),
+        );
+        self.scratchpad_step_stack.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_step_stack.len()),
         );
     }
     /// Shrinks the capacity of the weave with a lower limit.
@@ -301,7 +312,8 @@ where
         self.scratchpad_set.shrink_to(min_capacity);
         self.scratchpad_set_2.shrink_to(min_capacity);
         self.scratchpad_map.shrink_to(min_capacity);
-        self.scratchpad_queue.shrink_to(min_capacity);
+        self.scratchpad_stack.shrink_to(min_capacity);
+        self.scratchpad_step_stack.shrink_to(min_capacity);
     }
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
@@ -356,7 +368,7 @@ where
             ancestor_subgraph(
                 &self.nodes,
                 *id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_set,
             ); // ancestors
 
@@ -370,7 +382,7 @@ where
                     &self.nodes,
                     &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                     &active_root,
-                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_stack,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                 );
@@ -410,6 +422,7 @@ where
                     &self.nodes,
                     id,
                     &|node| node.id == target,
+                    &mut self.scratchpad_step_stack,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
@@ -419,6 +432,7 @@ where
                     &self.nodes,
                     id,
                     &|node| node.from.is_empty(),
+                    &mut self.scratchpad_step_stack,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
@@ -447,7 +461,7 @@ where
             descendant_subgraph(
                 &self.nodes,
                 *id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_set,
             ); // decendants
 
@@ -469,6 +483,7 @@ where
                 &self.nodes,
                 id,
                 &|node| node.active && &node.id != id,
+                &mut self.scratchpad_step_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
                 &mut self.scratchpad_list_2,
@@ -488,7 +503,7 @@ where
             descendant_subgraph(
                 &self.nodes,
                 *id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_set,
             ); // decendants
 
@@ -500,7 +515,7 @@ where
                 &self.nodes,
                 &|id| self.scratchpad_set_2.contains(id),
                 id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_list_2,
                 &mut self.scratchpad_set,
             );
@@ -536,7 +551,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 &active_root,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
@@ -749,7 +764,7 @@ where
             topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -771,7 +786,7 @@ where
             topological_sort::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -797,7 +812,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 &active_root,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
@@ -828,7 +843,7 @@ where
         ancestor_subgraph(
             &self.nodes,
             *id,
-            &mut self.scratchpad_queue,
+            &mut self.scratchpad_stack,
             &mut self.scratchpad_set,
         );
 
@@ -842,7 +857,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                 &active_root,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
             );
@@ -863,6 +878,7 @@ where
                 &self.nodes,
                 id,
                 &|node| node.id == target,
+                &mut self.scratchpad_step_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
                 output,
@@ -875,6 +891,7 @@ where
                 &self.nodes,
                 id,
                 &|node| node.from.is_empty(),
+                &mut self.scratchpad_step_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
                 output,
@@ -906,7 +923,7 @@ where
                 ancestor_subgraph(
                     &self.nodes,
                     parent,
-                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_stack,
                     &mut self.scratchpad_set,
                 );
             }
@@ -1023,7 +1040,8 @@ where
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
         let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
 
-        self.scratchpad_queue.is_empty()
+        self.scratchpad_stack.is_empty()
+            && self.scratchpad_step_stack.is_empty()
             && self.roots.is_subset::<S>(&nodes)
             && self.validate_active()
             && self.active.is_subset(&nodes_std)
@@ -1122,7 +1140,7 @@ where
             topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 root,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -1144,7 +1162,7 @@ where
             topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
                 &self.nodes,
                 id,
-                &mut self.scratchpad_queue,
+                &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
             ); // Compiler limitation
@@ -1450,7 +1468,7 @@ where
                 descendant_subgraph(
                     &self.nodes,
                     child,
-                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_stack,
                     &mut self.scratchpad_set,
                 );
             }
@@ -1666,6 +1684,7 @@ where
         let mut scratchpad_list_2 = Vec::with_capacity(self.len());
         let mut scratchpad_list_3 = Vec::with_capacity(self.len());
         let mut scratchpad_list_4 = Vec::with_capacity(self.len());
+        let mut scratchpad_stack = Vec::with_capacity(self.len());
         let mut scratchpad_set = HashSet::with_capacity(self.len());
         let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
         let mut scratchpad_map = HashMap::with_capacity(self.len());
@@ -1702,6 +1721,7 @@ where
         }
 
         scratchpad_list.clear();
+        scratchpad_list_3.clear();
         scratchpad_set_2.clear();
 
         if let Some(target) = scratchpad_list_2.first().copied() {
@@ -1709,7 +1729,9 @@ where
                 &self.nodes,
                 id,
                 &|node| node.id == target,
+                &mut scratchpad_stack,
                 &mut scratchpad_list,
+                &mut scratchpad_list_3,
                 &mut scratchpad_set_2,
                 output,
             );
@@ -1721,7 +1743,9 @@ where
                 &self.nodes,
                 id,
                 &|node| node.from.is_empty(),
+                &mut scratchpad_stack,
                 &mut scratchpad_list,
+                &mut scratchpad_list_3,
                 &mut scratchpad_set_2,
                 output,
             );
@@ -1932,42 +1956,47 @@ fn archived_topological_sort_rev<'a, K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-#[stacksafe::stacksafe]
+#[allow(clippy::too_many_arguments, reason = "Rkyv limitation")]
 fn archived_shortest_path_to_ancestor<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
+    scratchpad: &mut Vec<Step<K>>,
     scratchpad_list: &mut Vec<K>,
+    scratchpad_list_2: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K>,
     path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
-    let node = nodes.get(id).unwrap();
+    scratchpad.push(Step::Enter(*id));
 
-    if scratchpad_set.insert(*id) {
-        scratchpad_list.push(*id);
+    while let Some(step) = scratchpad.pop() {
+        match step {
+            Step::Enter(id) => {
+                if scratchpad_set.insert(id) {
+                    scratchpad_list.push(id);
+                    scratchpad.push(Step::Exit(id));
 
-        if target(node) {
-            if path.is_empty() || path.len() > scratchpad_list.len() {
-                path.clone_from(scratchpad_list);
+                    let node = &nodes[&id];
+
+                    if target(node) {
+                        if path.is_empty() || path.len() > scratchpad_list.len() {
+                            path.clone_from(scratchpad_list);
+                        }
+                    } else {
+                        scratchpad_list_2.extend(node.from().iter().copied());
+                        scratchpad_list_2.reverse();
+                        scratchpad.extend(scratchpad_list_2.drain(..).map(Step::Enter));
+                    }
+                }
             }
-        } else {
-            for parent in node.from().iter() {
-                archived_shortest_path_to_ancestor(
-                    nodes,
-                    parent,
-                    target,
-                    scratchpad_list,
-                    scratchpad_set,
-                    path,
-                );
+            Step::Exit(id) => {
+                scratchpad_list.pop();
+                scratchpad_set.remove(&id);
             }
         }
-
-        scratchpad_list.pop();
-        scratchpad_set.remove(id);
     }
 }
 

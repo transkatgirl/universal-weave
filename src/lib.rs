@@ -14,6 +14,7 @@
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
+- [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
@@ -41,7 +42,6 @@
 - [ ] Publish to crates.io
 
 # 0.2.0 Checklist:
-- [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Add node layout calculation behind a feature flag?
 - [ ] Add no-std support
@@ -117,9 +117,8 @@ pub mod versioning;
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
-    ops::Index,
 };
 
 pub use contracts;
@@ -615,10 +614,16 @@ where
     fn active(&self) -> &Self::Active;
 }
 
+#[derive(Debug, Clone)]
+enum Step<K> {
+    Enter(K),
+    Exit(K),
+}
+
 fn topological_sort<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
-    scratchpad: &mut VecDeque<K>,
+    scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -630,9 +635,9 @@ fn topological_sort<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push_back(*id);
+    scratchpad.push(*id);
 
-    while let Some(id) = scratchpad.pop_back() {
+    while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
         if !identifier_set.contains(&id)
@@ -652,7 +657,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     filter: &impl Fn(&K) -> bool,
     id: &'a K,
-    scratchpad: &mut VecDeque<K>,
+    scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -664,9 +669,9 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push_back(*id);
+    scratchpad.push(*id);
 
-    while let Some(id) = scratchpad.pop_back() {
+    while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
         if filter(&id)
@@ -686,7 +691,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
 fn topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
-    scratchpad: &mut VecDeque<K>,
+    scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
 ) where
@@ -698,9 +703,9 @@ fn topological_sort_rev<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push_back(*id);
+    scratchpad.push(*id);
 
-    while let Some(id) = scratchpad.pop_back() {
+    while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
         if !identifier_set.contains(&id)
@@ -716,11 +721,11 @@ fn topological_sort_rev<'a, K, N, T, S>(
     }
 }
 
-#[stacksafe::stacksafe]
 fn shortest_path_to_ancestor<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
+    nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
+    scratchpad: &mut Vec<Step<K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
@@ -733,38 +738,39 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push(Step::Enter(*id));
 
-    if scratchpad_set.insert(*id) {
-        scratchpad_list.push(*id);
+    while let Some(step) = scratchpad.pop() {
+        match step {
+            Step::Enter(id) => {
+                if scratchpad_set.insert(id) {
+                    scratchpad_list.push(id);
+                    scratchpad.push(Step::Exit(id));
 
-        if target(node) {
-            if path.is_empty() || path.len() > scratchpad_list.len() {
-                path.clone_from(scratchpad_list);
+                    let node = &nodes[&id];
+
+                    if target(node) {
+                        if path.is_empty() || path.len() > scratchpad_list.len() {
+                            path.clone_from(scratchpad_list);
+                        }
+                    } else {
+                        scratchpad.extend(node.from().into_iter().rev().copied().map(Step::Enter));
+                    }
+                }
             }
-        } else {
-            for parent in node.from() {
-                shortest_path_to_ancestor(
-                    nodes,
-                    parent,
-                    target,
-                    scratchpad_list,
-                    scratchpad_set,
-                    path,
-                );
+            Step::Exit(id) => {
+                scratchpad_list.pop();
+                scratchpad_set.remove(&id);
             }
         }
-
-        scratchpad_list.pop();
-        scratchpad_set.remove(id);
     }
 }
 
-#[stacksafe::stacksafe]
 fn shortest_path_to_descendant<'a, K, N, T, S>(
-    nodes: &'a impl Index<&'a K, Output = N>,
+    nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
+    scratchpad: &mut Vec<Step<K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
@@ -777,30 +783,31 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let node = nodes.index(id);
+    scratchpad.push(Step::Enter(*id));
 
-    if scratchpad_set.insert(*id) {
-        scratchpad_list.push(*id);
+    while let Some(step) = scratchpad.pop() {
+        match step {
+            Step::Enter(id) => {
+                if scratchpad_set.insert(id) {
+                    scratchpad_list.push(id);
+                    scratchpad.push(Step::Exit(id));
 
-        if target(node) {
-            if path.is_empty() || path.len() > scratchpad_list.len() {
-                path.clone_from(scratchpad_list);
+                    let node = &nodes[&id];
+
+                    if target(node) {
+                        if path.is_empty() || path.len() > scratchpad_list.len() {
+                            path.clone_from(scratchpad_list);
+                        }
+                    } else {
+                        scratchpad.extend(node.to().into_iter().rev().copied().map(Step::Enter));
+                    }
+                }
             }
-        } else {
-            for child in node.to() {
-                shortest_path_to_descendant(
-                    nodes,
-                    child,
-                    target,
-                    scratchpad_list,
-                    scratchpad_set,
-                    path,
-                );
+            Step::Exit(id) => {
+                scratchpad_list.pop();
+                scratchpad_set.remove(&id);
             }
         }
-
-        scratchpad_list.pop();
-        scratchpad_set.remove(id);
     }
 }
 
@@ -860,7 +867,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
 fn ancestor_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: K,
-    scratchpad: &mut VecDeque<K>,
+    scratchpad: &mut Vec<K>,
     identifiers: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + 'a,
@@ -871,9 +878,9 @@ fn ancestor_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push_back(id);
+    scratchpad.push(id);
 
-    while let Some(id) = scratchpad.pop_back() {
+    while let Some(id) = scratchpad.pop() {
         if identifiers.insert(id) {
             scratchpad.extend(nodes[&id].from().into_iter().rev().copied());
         }
@@ -883,7 +890,7 @@ fn ancestor_subgraph<'a, K, N, T, S>(
 fn descendant_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: K,
-    scratchpad: &mut VecDeque<K>,
+    scratchpad: &mut Vec<K>,
     identifiers: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + 'a,
@@ -894,9 +901,9 @@ fn descendant_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push_back(id);
+    scratchpad.push(id);
 
-    while let Some(id) = scratchpad.pop_back() {
+    while let Some(id) = scratchpad.pop() {
         if identifiers.insert(id) {
             scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
         }

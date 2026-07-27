@@ -1,7 +1,7 @@
 #![allow(clippy::impl_trait_in_params, reason = "Readability")]
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
     ops::Index,
 };
@@ -68,7 +68,7 @@ where
 {
     let mut identifiers = Vec::with_capacity(value.len());
     let mut identifier_set = HashSet::with_capacity_and_hasher(value.len(), S::default());
-    let mut scratchpad = VecDeque::with_capacity(value.len());
+    let mut scratchpad = Vec::with_capacity(value.len());
 
     for id in ids {
         let node = nodes.index(id);
@@ -103,7 +103,7 @@ where
 {
     let mut identifiers = Vec::with_capacity(value.len());
     let mut identifier_set = HashSet::with_capacity_and_hasher(value.len(), S::default());
-    let mut scratchpad = VecDeque::with_capacity(value.len());
+    let mut scratchpad = Vec::with_capacity(value.len());
 
     for id in ids {
         let node = nodes.index(id);
