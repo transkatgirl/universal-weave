@@ -37,5 +37,7 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 		- Node moving
 	- Support for Weave wrapper implementations
 		- Built-in action queuing wrapper (can be used to implement undo/redo)
+- Supports `no_std` environments (requires `alloc`)
+	- Loro must be disabled when building for `no_std`
 
 TODO: Publish to crates.io and add badges to README
