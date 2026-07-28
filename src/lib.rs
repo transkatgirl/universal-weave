@@ -49,7 +49,6 @@
 */
 
 #![no_std]
-#![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![warn(missing_docs)]
 #![warn(let_underscore)]
