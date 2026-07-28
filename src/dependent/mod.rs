@@ -529,24 +529,24 @@ where
             && self.roots.is_subset::<S>(&nodes)
             && self
                 .active
-                .is_none_or(|active| self.nodes.contains_key(&active))
+                .as_ref()
+                .is_none_or(|active| self.nodes.contains_key(active))
             && self.bookmarked.is_subset(&nodes)
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
-                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
-                    && value.to.is_subset(&nodes)
+                    && value
+                        .from
+                        .as_ref()
+                        .is_none_or(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value.to.iter().all(|v| {
+                        self.nodes
+                            .get(v)
+                            .is_some_and(|p| p.from.as_ref() == Some(key))
+                    })
                     && value.from.is_none() == self.roots.contains(key)
                     && value.active == (self.active == Some(*key))
                     && value.bookmarked == self.bookmarked.contains(key)
-                    && value
-                        .from
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
-                    && value
-                        .to
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
             && !detect_cycles(
                 &self.nodes,

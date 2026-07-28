@@ -1066,24 +1066,17 @@ where
     fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
-        let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad_stack.is_empty()
             && self.scratchpad_step_stack.is_empty()
             && self.roots.is_subset::<S>(&nodes)
-            && self.validate_active()
             && self.active.is_subset(&nodes_std)
             && self.bookmarked.is_subset::<S>(&nodes)
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
-                    && value.from.is_subset(&nodes)
-                    && value.to.is_subset(&nodes)
-                    && value.from.is_empty() == self.roots.contains(key)
-                    && value.active == self.active.contains(key)
-                    && value.bookmarked == self.bookmarked.contains(key)
                     && value
                         .from
                         .iter()
@@ -1092,12 +1085,11 @@ where
                         .to
                         .iter()
                         .all(|v| self.nodes.get(v).is_some_and(|p| p.from.contains(key)))
-                    && if value.active && !value.from.is_empty() {
-                        !value.from.is_disjoint::<S>(&active_index)
-                    } else {
-                        true
-                    }
+                    && value.from.is_empty() == self.roots.contains(key)
+                    && value.active == self.active.contains(key)
+                    && value.bookmarked == self.bookmarked.contains(key)
             })
+            && self.validate_active()
             && !detect_cycles(
                 &self.nodes,
                 self.roots.iter().copied(),
