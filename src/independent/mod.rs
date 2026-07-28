@@ -1531,11 +1531,11 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> Node<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
+impl<K, T, S> Node<K::Archived, T::Archived> for ArchivedIndependentNode<K, T, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
+    T: Archive + IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     type From = ArchivedIndexSet<K::Archived>;
@@ -1564,14 +1564,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    M: Archive<Archived = M2>,
+    T: Archive + IndependentContents,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     type Nodes = ArchivedHashMap<K::Archived, ArchivedIndependentNode<K, T, S>>;
@@ -1752,14 +1751,14 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
+impl<K, T, M, S>
     ArchivedMetadataWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    M: Archive<Archived = M2>,
+    T: Archive + IndependentContents,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     #[inline]
@@ -1769,14 +1768,14 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
+impl<K, T, M, S>
     ArchivedBookmarkableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    M: Archive<Archived = M2>,
+    T: Archive + IndependentContents,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     type Bookmarks = ArchivedIndexSet<K::Archived>;
@@ -1792,14 +1791,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    M: Archive<Archived = M2>,
+    T: Archive + IndependentContents,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
@@ -1840,14 +1838,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedActivePathWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedActivePathWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2> + IndependentContents,
-    M: Archive<Archived = M2>,
+    T: Archive + IndependentContents,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     type Active = ArchivedHashSet<K::Archived>;

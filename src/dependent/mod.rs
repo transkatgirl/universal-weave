@@ -900,11 +900,11 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, S> Node<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
+impl<K, T, S> Node<K::Archived, T::Archived> for ArchivedDependentNode<K, T, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
+    T: Archive,
     S: BuildHasher + Default + Clone,
 {
     type From = ArchivedOption<K::Archived>;
@@ -933,13 +933,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S> ArchivedWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
+    T: Archive,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     type Nodes = ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>;
@@ -1016,14 +1016,14 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
+impl<K, T, M, S>
     ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
+    T: Archive,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     #[inline]
@@ -1033,14 +1033,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
+    T: Archive,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     type Bookmarks = ArchivedIndexSet<K::Archived>;
@@ -1056,14 +1055,13 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
-    ArchivedSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ArchivedSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
+    T: Archive,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
@@ -1090,14 +1088,14 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, K2, T, T2, M, M2, S>
+impl<K, T, M, S>
     ArchivedActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive<Archived = T2>,
-    M: Archive<Archived = M2>,
+    T: Archive,
+    M: Archive,
     S: BuildHasher + Default + Clone,
 {
     #[inline]
@@ -1182,14 +1180,14 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_path_to_root<K, K2, T, T2, S>(
+fn archived_path_to_root<K, T, S>(
     nodes: &ArchivedHashMap<K::Archived, ArchivedDependentNode<K, T, S>>,
     mut id: K::Archived,
     thread: &mut Vec<K::Archived>,
 ) where
-    K: Archive<Archived = K2> + Hash + Copy + Eq + Ord,
+    K: Archive + Hash + Copy + Eq + Ord,
     <K as Archive>::Archived: Hash + Copy + Eq + Ord,
-    T: Archive<Archived = T2>,
+    T: Archive,
     S: BuildHasher + Default + Clone,
 {
     thread.push(id);
