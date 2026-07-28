@@ -32,7 +32,7 @@ use crate::{
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
     Node, SortableBookmarkableWeave, SortableWeave, Step, ValidatableWeave, Weave,
     ancestor_subgraph,
-    contract::{lacks_duplicates, valid_path, valid_topological_sort},
+    contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
@@ -665,50 +665,6 @@ where
             false
         }
     }
-    fn validate_active(&self) -> bool {
-        let mut threads = Vec::new();
-
-        for active_root in self.roots.iter().filter(|root| self.active.contains(root)) {
-            threads.push(Vec::new());
-            let index = threads.len().strict_sub(1);
-            if !self.build_validation_path(active_root, &mut threads, index) {
-                return false;
-            }
-        }
-
-        let mut longest = (0, 0);
-
-        for (index, thread) in threads.iter().enumerate() {
-            if thread.len() > longest.0 {
-                longest = (thread.len(), index);
-            }
-        }
-
-        if threads.is_empty() {
-            return self.active.is_empty();
-        }
-
-        let thread = threads.swap_remove(longest.1);
-
-        thread.len() == self.active.len() && HashSet::from_iter(thread).is_subset(&self.active)
-    }
-    #[stacksafe]
-    fn build_validation_path(&self, node: &K, threads: &mut Vec<Vec<K>>, index: usize) -> bool {
-        if let Some(node) = self.nodes.get(node) {
-            threads[index].push(node.id);
-
-            for active_child in node.to.iter().filter(|root| self.active.contains(root)) {
-                threads.push(threads[index].clone());
-                if !self.build_validation_path(active_child, threads, threads.len().strict_sub(1)) {
-                    return false;
-                }
-            }
-
-            true
-        } else {
-            false
-        }
-    }
 }
 
 #[allow(clippy::fallible_impl_from, reason = "Should never fail")]
@@ -1089,7 +1045,7 @@ where
                     && value.active == self.active.contains(key)
                     && value.bookmarked == self.bookmarked.contains(key)
             })
-            && self.validate_active()
+            && active_path_is_valid(&self.nodes, self.roots.iter(), &self.active)
             && !detect_cycles(
                 &self.nodes,
                 self.roots.iter().copied(),

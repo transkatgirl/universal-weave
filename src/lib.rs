@@ -13,7 +13,6 @@
 
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
-    - [ ] IMPORTANT - Review validate() behavior
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
@@ -863,7 +862,7 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
 
 fn longest_path_to_root<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
-    topological_order: &'a [K],
+    topological_order: &[K],
     scratchpad_map: &mut HashMap<K, usize, S>,
     reversed_path: &mut Vec<K>,
 ) where
@@ -872,7 +871,7 @@ fn longest_path_to_root<'a, K, N, T, S>(
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
     &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
     let mut longest_global_distance = None;
