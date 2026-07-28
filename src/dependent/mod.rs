@@ -46,7 +46,7 @@ pub mod loro;
 #[deprecated]
 pub mod legacy_dependent;
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`DependentWeave`] document.
@@ -150,7 +150,7 @@ where
 }
 
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]

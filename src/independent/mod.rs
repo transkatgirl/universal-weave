@@ -38,7 +38,7 @@ use crate::{
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 /// A [`Node`] in a [`IndependentWeave`] document.
@@ -153,7 +153,7 @@ where
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
 /// However, this additional flexibility results in worse performance and memory usage characteristics overall.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
