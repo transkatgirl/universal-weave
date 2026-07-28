@@ -6,7 +6,7 @@ General-purpose building blocks for [Loom](https://generative.ink/posts/loom-int
 
 Loom implementations *seem* deceptively simple to implement, to the point where it feels silly to use a library for the underlying data structure.
 
-However, it's incredibly easy to create subtle bugs in your implementation, especially if you're interested in more advanced features such as CRDT-based collaboration or DAG-based documents.
+However, it's incredibly easy to create subtle bugs and oversights in your implementation, especially if you're dealing with untrusted user data or you're interested in more advanced features such as CRDT-based collaboration or DAG-based documents.
 
 This library is the culmination of everything I've learned over the past 1 1/2 years of attempting to build a worthy successor to the original Loom. It seems deceptively simple, but it is the end product of a long process that you probably don't want to repeat yourself.
 

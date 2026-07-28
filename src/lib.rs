@@ -768,7 +768,7 @@ where
         }
     }
 
-    false
+    scratchpad_map.len() != nodes.len()
 }
 
 fn shortest_path_to_ancestor<'a, K, N, T, S>(

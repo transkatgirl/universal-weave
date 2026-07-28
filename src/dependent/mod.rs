@@ -1140,7 +1140,7 @@ where
         scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
     }
 
-    false
+    scratchpad_set.len() != nodes.len()
 }
 
 #[cfg(feature = "rkyv")]
