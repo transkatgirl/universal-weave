@@ -25,7 +25,7 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
 ///
 /// See [`WeaveAction`] for the complete list of loggable actions.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
@@ -122,7 +122,7 @@ where
 /// When possible, actions map to a function of the [`Weave`] trait (or its supertraits), and use the same argument ordering as their corresponding function.
 ///
 /// Some actions not logged here may change the [`Weave`]'s inner state but not its outwardly facing state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[allow(clippy::doc_paragraphs_missing_punctuation, reason = "False positive")]
@@ -164,7 +164,7 @@ where
 /// A [`Weave`] wrapper which logs the number of actions successfully performed on the inner [`Weave`].
 ///
 /// See [`WeaveActionCount`] for the complete list of loggable actions.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]

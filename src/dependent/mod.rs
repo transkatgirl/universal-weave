@@ -10,7 +10,6 @@ use std::{
 #[allow(unused_imports, reason = "False positive")]
 use contracts::{ensures, invariant};
 use indexmap::IndexSet;
-use stacksafe::stacksafe;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -32,7 +31,8 @@ use crate::{
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave,
+    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, ValidatableWeave,
+    Weave,
     contract::{
         lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
         valid_topological_sort,
@@ -189,6 +189,10 @@ where
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad: Vec<K>,
 
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_step_stack: Vec<Step<K>>,
+
     /// The metadata associated with the weave.
     pub metadata: M,
 }
@@ -234,6 +238,7 @@ where
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad: Vec::with_capacity(capacity),
+            scratchpad_step_stack: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -251,6 +256,11 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
         self.scratchpad
             .reserve(self.nodes.capacity().saturating_sub(self.scratchpad.len()));
+        self.scratchpad_step_stack.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_step_stack.len()),
+        );
     }
     /// Shrinks the capacity of the weave with a lower limit.
     pub fn shrink_to(&mut self, min_capacity: usize) {
@@ -258,6 +268,7 @@ where
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad.shrink_to(min_capacity);
+        self.scratchpad_step_stack.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -279,61 +290,6 @@ where
                     .filter(|id| *id != node.id)
                     .filter_map(|id| self.nodes.get(&id)),
             ),
-        }
-    }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[stacksafe]
-    fn remove_node_unverified(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        if let Some(node) = self.nodes.remove(id) {
-            self.roots.shift_remove(id);
-            self.bookmarked.shift_remove(id);
-            for child in &node.to {
-                self.remove_node_unverified(child);
-            }
-            if node.active {
-                self.active = node.from;
-                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                    parent.active = true;
-                } else {
-                    self.active = None;
-                }
-            }
-            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                parent.to.shift_remove(id);
-            }
-            Some(node)
-        } else {
-            None
-        }
-    }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[stacksafe]
-    fn remove_node_unverified_tracked(
-        &mut self,
-        id: &K,
-        callback: &mut impl FnMut(DependentNode<K, T, S>),
-    ) -> bool {
-        if let Some(node) = self.nodes.remove(id) {
-            self.roots.shift_remove(id);
-            self.bookmarked.shift_remove(id);
-            for child in &node.to {
-                self.remove_node_unverified_tracked(child, callback);
-            }
-            if node.active {
-                self.active = node.from;
-                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                    parent.active = true;
-                } else {
-                    self.active = None;
-                }
-            }
-            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                parent.to.shift_remove(id);
-            }
-            callback(node);
-            true
-        } else {
-            false
         }
     }
 }
@@ -482,6 +438,8 @@ where
         }
     }
     #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(ret.is_some() == old(self.nodes.contains_key(id)))]
+    #[ensures(ret.as_ref().is_none_or(|node| &node.id == id))]
     #[ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len())]
     #[ensures(ret.is_none() || old(self.bookmarked.len()) >= self.bookmarked.len())]
     #[ensures(ret.is_some() || old(self.nodes.len()) == self.nodes.len())]
@@ -489,9 +447,48 @@ where
     #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        self.remove_node_unverified(id)
+        self.scratchpad_step_stack.push(Step::Enter(*id));
+
+        while let Some(step) = self.scratchpad_step_stack.pop() {
+            match step {
+                Step::Enter(id) => {
+                    if let Some(node) = self.nodes.get(&id) {
+                        if node.from.is_none() {
+                            self.roots.shift_remove(&id);
+                        }
+                        if node.bookmarked {
+                            self.bookmarked.shift_remove(&id);
+                        }
+
+                        self.scratchpad_step_stack.push(Step::Exit(id));
+                        self.scratchpad_step_stack
+                            .extend(node.to.iter().rev().copied().map(Step::Enter));
+                    }
+                }
+                Step::Exit(id) => {
+                    if let Some(node) = self.nodes.remove(&id) {
+                        if node.active {
+                            self.active = node.from;
+                            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                                parent.active = true;
+                            }
+                        }
+                        if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                            parent.to.shift_remove(&id);
+                        }
+
+                        if self.scratchpad_step_stack.is_empty() {
+                            return Some(node);
+                        }
+                    }
+                }
+            }
+        }
+
+        None
     }
     #[ensures(!self.nodes.contains_key(id))]
+    #[ensures(ret == old(self.nodes.contains_key(id)))]
     #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
     #[ensures(!ret || old(self.bookmarked.len()) >= self.bookmarked.len())]
     #[ensures(ret || old(self.nodes.len()) == self.nodes.len())]
@@ -503,7 +500,46 @@ where
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
-        self.remove_node_unverified_tracked(id, &mut on_removal)
+        self.scratchpad_step_stack.push(Step::Enter(*id));
+
+        while let Some(step) = self.scratchpad_step_stack.pop() {
+            match step {
+                Step::Enter(id) => {
+                    if let Some(node) = self.nodes.get(&id) {
+                        if node.from.is_none() {
+                            self.roots.shift_remove(&id);
+                        }
+                        if node.bookmarked {
+                            self.bookmarked.shift_remove(&id);
+                        }
+
+                        self.scratchpad_step_stack.push(Step::Exit(id));
+                        self.scratchpad_step_stack
+                            .extend(node.to.iter().rev().copied().map(Step::Enter));
+                    }
+                }
+                Step::Exit(id) => {
+                    if let Some(node) = self.nodes.remove(&id) {
+                        if node.active {
+                            self.active = node.from;
+                            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                                parent.active = true;
+                            }
+                        }
+                        if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                            parent.to.shift_remove(&id);
+                        }
+
+                        on_removal(node);
+                        if self.scratchpad_step_stack.is_empty() {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        false
     }
     #[ensures(self.nodes.is_empty())]
     #[invariant(self.validate())]
@@ -526,6 +562,7 @@ where
         let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad.is_empty()
+            && self.scratchpad_step_stack.is_empty()
             && self.roots.is_subset::<S>(&nodes)
             && self
                 .active

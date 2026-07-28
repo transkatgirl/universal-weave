@@ -39,6 +39,7 @@ use crate::{DiscreteWeave, Node};
 /// # Panics
 ///
 /// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct DependentLoroWeave<K, T, M, S>
 where
