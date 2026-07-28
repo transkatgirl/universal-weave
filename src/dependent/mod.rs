@@ -51,11 +51,6 @@ pub mod legacy_dependent;
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-#[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
-#[cfg_attr(
-    feature = "serde",
-    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
-)]
 /// A [`Node`] in a [`DependentWeave`] document.
 #[must_use]
 pub struct DependentNode<K, T, S>
@@ -932,27 +927,6 @@ where
             true
         }) && self.from != Some(self.id)
             && !self.to.contains(&self.id)
-    }
-}
-
-#[cfg(feature = "rkyv")]
-// SAFETY:
-// All fields are safe to access and no unsafe functions are called
-unsafe impl<K, T, S, C> Verify<C> for ArchivedDependentNode<K, T, S>
-where
-    K: Archive + Hash + Copy + Eq + Ord,
-    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive,
-    S: BuildHasher + Default + Clone,
-    C: Fallible + ?Sized,
-    C::Error: Source,
-{
-    fn verify(&self, _context: &mut C) -> Result<(), C::Error> {
-        if !self.validate() {
-            fail!(ValidationError)
-        }
-
-        Ok(())
     }
 }
 
