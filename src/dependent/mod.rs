@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
     iter,
 };
@@ -522,6 +522,8 @@ where
 {
     fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+        let mut scratchpad = Vec::with_capacity(self.nodes.len());
+        let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad.is_empty()
             && self.roots.is_subset::<S>(&nodes)
@@ -546,6 +548,12 @@ where
                         .iter()
                         .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
+            && !detect_cycles(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut scratchpad,
+                &mut scratchpad_set,
+            )
     }
 }
 
@@ -1110,6 +1118,29 @@ fn topological_sort_rev<K, N, T, S>(
         identifiers.push(id);
         scratchpad.extend(nodes[&id].to().into_iter().copied());
     }
+}
+
+fn detect_cycles<K, N, T, S>(
+    nodes: &HashMap<K, N, S>,
+    roots: impl Iterator<Item = K>,
+    scratchpad: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T, From = Option<K>, To = IndexSet<K, S>>,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.extend(roots);
+
+    while let Some(id) = scratchpad.pop() {
+        if !scratchpad_set.insert(id) {
+            return true;
+        }
+        scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
+    }
+
+    false
 }
 
 #[cfg(feature = "rkyv")]

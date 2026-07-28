@@ -34,7 +34,7 @@ use crate::{
     ancestor_subgraph,
     contract::{lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
-    descendant_subgraph, longest_path_to_root, shortest_path_to_ancestor,
+    descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
 };
 
@@ -1067,6 +1067,8 @@ where
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
         let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
         let active_index: IndexSet<_, _> = self.active.iter().copied().collect();
+        let mut scratchpad = Vec::with_capacity(self.nodes.len());
+        let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad_stack.is_empty()
             && self.scratchpad_step_stack.is_empty()
@@ -1096,6 +1098,12 @@ where
                         true
                     }
             })
+            && !detect_cycles(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut scratchpad,
+                &mut scratchpad_map,
+            )
     }
 }
 

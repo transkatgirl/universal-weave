@@ -14,7 +14,6 @@
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
     - [ ] IMPORTANT - Review validate() behavior
-        - [ ] IMPORTANT - Add cycle detection to validate()
 - [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
@@ -116,7 +115,7 @@ pub mod versioning;
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     hash::{BuildHasher, Hash},
 };
 
@@ -718,6 +717,58 @@ fn topological_sort_rev<'a, K, N, T, S>(
             scratchpad.extend(node.to().into_iter().copied());
         }
     }
+}
+
+fn detect_cycles<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    roots: impl Iterator<Item = K>,
+    scratchpad: &mut Vec<Step<K>>,
+    scratchpad_map: &mut HashMap<K, bool, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    for root in roots {
+        if scratchpad_map.contains_key(&root) {
+            continue;
+        }
+
+        scratchpad.push(Step::Enter(root));
+
+        while let Some(step) = scratchpad.pop() {
+            match step {
+                Step::Enter(id) => {
+                    scratchpad.push(Step::Exit(id));
+
+                    match scratchpad_map.entry(id) {
+                        Entry::Occupied(entry) => {
+                            if !entry.get() {
+                                return true;
+                            }
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert_entry(false);
+
+                            scratchpad.extend(
+                                nodes[&id].to().into_iter().rev().copied().map(Step::Enter),
+                            );
+                        }
+                    }
+                }
+                Step::Exit(id) => {
+                    scratchpad_map.insert(id, true);
+                }
+            }
+        }
+    }
+
+    false
 }
 
 fn shortest_path_to_ancestor<'a, K, N, T, S>(
