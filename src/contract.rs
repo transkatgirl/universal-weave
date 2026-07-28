@@ -2,6 +2,8 @@
 
 use alloc::vec::Vec;
 use core::{
+    error::Error,
+    fmt,
     hash::{BuildHasher, Hash},
     ops::Index,
 };
@@ -198,3 +200,15 @@ where
     scratchpad_set.len() == active.len()
         && scratchpad_set.into_iter().all(|id| active.contains(&id))
 }
+
+#[derive(Debug)]
+pub struct ValidationError;
+
+impl fmt::Display for ValidationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Validation failed")
+    }
+}
+
+#[allow(clippy::missing_trait_methods, reason = "API limitation")]
+impl Error for ValidationError {}

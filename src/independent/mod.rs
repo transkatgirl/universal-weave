@@ -14,7 +14,9 @@ use indexmap::IndexSet;
 #[cfg(feature = "rkyv")]
 use rkyv::{
     Archive, Deserialize, Serialize,
+    bytecheck::Verify,
     collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet},
+    rancor::{Fallible, Source, fail},
     with::Skip,
 };
 
@@ -35,7 +37,7 @@ use crate::{
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave,
+    ArchivedSortableWeave, ArchivedWeave, contract::ValidationError,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -1527,6 +1529,46 @@ where
         }
 
         true
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, T, S> ArchivedIndependentNode<K, T, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive + IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn validate(&self) -> bool {
+        (if self.from.len() <= self.to.len() {
+            self.from.iter().all(|v| !self.to.contains(v))
+        } else {
+            self.to.iter().all(|v| !self.from.contains(v))
+        }) && !self.from.contains(&self.id)
+            && !self.to.contains(&self.id)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+// SAFETY:
+// All fields are safe to access and no unsafe functions are called
+unsafe impl<K, T, S, C> Verify<C> for ArchivedIndependentNode<K, T, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive + IndependentContents,
+    S: BuildHasher + Default + Clone,
+    C: Fallible + ?Sized,
+    C::Error: Source,
+{
+    fn verify(&self, _context: &mut C) -> Result<(), C::Error> {
+        if !self.validate() {
+            fail!(ValidationError)
+        }
+
+        Ok(())
     }
 }
 
