@@ -192,7 +192,7 @@ pub trait DeduplicatableContents {
 ///
 /// # Deserialization
 ///
-/// If a Weave implementation supports deserialization, it must be robust to untrusted inputs. This can either be accomplished by making invalid states unrepresentable, or by verifying internal consistency during the deserialization process.
+/// If a Weave implementation supports deserialization, it must be robust to untrusted inputs. This can be accomplished by either making invalid states unrepresentable or verifying internal consistency during the deserialization process.
 #[must_use]
 pub trait Weave<K, N, T>
 where
