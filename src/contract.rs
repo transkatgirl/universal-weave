@@ -204,9 +204,16 @@ where
 #[derive(Debug)]
 pub struct ValidationError;
 
+#[cfg(feature = "serde")]
+impl ValidationError {
+    pub const fn from_bool(value: bool) -> Result<(), Self> {
+        if value { Ok(()) } else { Err(Self) }
+    }
+}
+
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Validation failed")
+        write!(f, "validation failed")
     }
 }
 

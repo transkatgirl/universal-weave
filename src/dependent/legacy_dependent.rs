@@ -18,7 +18,7 @@ use rkyv::{
 };
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
@@ -39,6 +39,9 @@ use crate::{
         archived_topological_sort_rev,
     },
 };
+
+#[cfg(feature = "serde")]
+use crate::contract::ValidationError;
 
 #[cfg(doc)]
 use crate::Node;
@@ -67,6 +70,10 @@ where
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
+)]
 pub struct DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,

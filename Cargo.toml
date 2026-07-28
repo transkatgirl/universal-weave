@@ -30,6 +30,7 @@ loro = [
 ]
 serde = [
 	"dep:serde",
+	"dep:serdev",
 	"hashbrown/serde",
 	"indexmap/serde",
 ]
@@ -64,6 +65,7 @@ serde = { version = "1.0.229", features = [
 	"alloc",
 	"derive",
 ], default-features = false, optional = true }
+serdev = { version = "0.3.2", optional = true }
 
 [dev-dependencies]
 proptest               = "1.11.0"

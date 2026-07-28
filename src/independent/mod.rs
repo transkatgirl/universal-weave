@@ -21,7 +21,7 @@ use rkyv::{
 };
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
@@ -43,6 +43,10 @@ use crate::{
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
+)]
 /// A [`Node`] in a [`IndependentWeave`] document.
 #[must_use]
 pub struct IndependentNode<K, T, S>
@@ -158,6 +162,10 @@ where
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
+)]
 #[must_use]
 pub struct IndependentWeave<K, T, M, S>
 where

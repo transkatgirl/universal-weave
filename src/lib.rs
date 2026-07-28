@@ -5,7 +5,7 @@
 //!     - [`dependent::loro::DependentLoroWeave`] - A [`dependent::DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
 //! - [`independent::IndependentWeave`] - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
-//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`. Weaves should be validated immediately before serialization and immediately after deserialization using [`ValidatableWeave::validate()`].
+//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`. When using `rkyv`, weaves should be validated immediately after deserialization using [`ValidatableWeave::validate()`].
 //!
 //! Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
 //!
