@@ -51,6 +51,7 @@ pub mod legacy_dependent;
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
 #[cfg_attr(
     feature = "serde",
     serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
@@ -159,6 +160,7 @@ where
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
 #[cfg_attr(
     feature = "serde",
     serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
