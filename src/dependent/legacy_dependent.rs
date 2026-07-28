@@ -102,7 +102,7 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_step_stack: Vec<Step<K>>,
+    scratchpad_step_stack: Vec<Step<K, K>>,
 
     /// The metadata associated with the weave.
     pub metadata: M,

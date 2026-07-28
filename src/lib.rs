@@ -612,9 +612,9 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum Step<K> {
-    Enter(K),
-    Exit(K),
+enum Step<A, B> {
+    Enter(A),
+    Exit(B),
 }
 
 fn topological_sort<'a, K, N, T, S>(
@@ -721,7 +721,7 @@ fn topological_sort_rev<'a, K, N, T, S>(
 fn detect_cycles<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     roots: impl Iterator<Item = K>,
-    scratchpad: &mut Vec<Step<K>>,
+    scratchpad: &mut Vec<Step<K, K>>,
     scratchpad_map: &mut HashMap<K, bool, S>,
 ) -> bool
 where
@@ -774,7 +774,7 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K>>,
+    scratchpad: &mut Vec<Step<K, K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
@@ -819,7 +819,7 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K>>,
+    scratchpad: &mut Vec<Step<K, K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,

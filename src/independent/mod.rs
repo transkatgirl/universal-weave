@@ -222,7 +222,7 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_step_stack: Vec<Step<K>>,
+    scratchpad_step_stack: Vec<Step<K, K>>,
 
     /// The metadata associated with the weave.
     pub metadata: M,
@@ -1945,7 +1945,7 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K>>,
+    scratchpad: &mut Vec<Step<K, K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_list_2: &mut Vec<K>,
     scratchpad_set: &mut HashSet<K>,
