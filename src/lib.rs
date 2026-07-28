@@ -33,7 +33,8 @@
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
     - [ ] Property tests for Archived structs
-    - [ ] Add unit tests until test coverage is 100%
+    - [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
+    - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
 - [ ] Publish to crates.io
 
 # 0.2.0 Checklist:
