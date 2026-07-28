@@ -1,12 +1,13 @@
-use std::hash::{BuildHasher, RandomState};
+use std::hash::{BuildHasher, Hash, RandomState};
 
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use universal_weave::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave,
+    IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node,
     SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
     wrappers::{ActionableWeave, LoggedWeave},
@@ -74,8 +75,9 @@ enum WeaveTransition {
         content_seed: u32,
         length: u32,
     },
-    #[proptest(weight = 5)]
+    #[proptest(weight = 4)]
     AddNodeTo {
+        filter_cycles: bool,
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
         to_seeds: Vec<u32>,
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
@@ -134,6 +136,7 @@ enum WeaveTransition {
     },
     #[proptest(weight = 3)]
     MoveNode {
+        filter_cycles: bool,
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
         new_parents_seeds: Vec<u32>,
         id_seed: u32,
@@ -167,6 +170,7 @@ struct WeaveWrapper {
     secondary_weave: InnerWeave,
     counter: u32,
     scratchpad: Vec<u32>,
+    scratchpad_set: HashSet<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -229,6 +233,7 @@ impl StateMachineTest for WeaveWrapper {
             ),
             counter: 0,
             scratchpad: Vec::with_capacity(ref_state.len()),
+            scratchpad_set: HashSet::with_capacity(ref_state.len()),
         }
     }
     fn apply(
@@ -322,6 +327,7 @@ impl StateMachineTest for WeaveWrapper {
                 state.weave.add_node(node);
             }
             WeaveTransition::AddNodeTo {
+                filter_cycles,
                 from_seeds,
                 to_seeds,
                 active,
@@ -329,7 +335,7 @@ impl StateMachineTest for WeaveWrapper {
                 length,
                 content_seed,
             } => {
-                let node = IndependentNode {
+                let mut node = IndependentNode {
                     id: state.counter,
                     from: from_seeds.into_iter().map(&map_id).collect(),
                     to: to_seeds.into_iter().map(&map_id).collect(),
@@ -340,6 +346,28 @@ impl StateMachineTest for WeaveWrapper {
                         content_seed: content_seed % 4,
                     },
                 };
+                if filter_cycles {
+                    state.scratchpad.clear();
+                    state.scratchpad_set.clear();
+
+                    for parent in node.from.iter().copied() {
+                        ancestor_subgraph(
+                            state.weave.nodes(),
+                            parent,
+                            &mut state.scratchpad,
+                            &mut state.scratchpad_set,
+                        );
+                    }
+
+                    state.scratchpad.clear();
+                    state.scratchpad.extend(
+                        node.to
+                            .drain(..)
+                            .filter(|id| !state.scratchpad_set.contains(id)),
+                    );
+                    node.to.extend(state.scratchpad.drain(..));
+                }
+
                 /*println!(
                     "weave.add_node(IndependentNode {{ id: {}, from: IndexSet::from_iter({:?}), to: IndexSet::from_iter({:?}), active: {}, bookmarked: {}, contents:  WeaveContent {{ length: {}, content_seed: {} }} }});",
                     node.id,
@@ -464,13 +492,37 @@ impl StateMachineTest for WeaveWrapper {
                 state.weave.set_active_path(active.into_iter());
             }
             WeaveTransition::MoveNode {
+                filter_cycles,
                 id_seed,
                 new_parents_seeds,
             } => {
-                let new_parents: Vec<u32> = new_parents_seeds.into_iter().map(&map_id).collect();
+                let id = map_id(id_seed);
+                let mut new_parents: Vec<u32> =
+                    new_parents_seeds.into_iter().map(&map_id).collect();
+                if filter_cycles && let Some(node) = state.weave.get_node(&id) {
+                    state.scratchpad.clear();
+                    state.scratchpad_set.clear();
 
-                //println!("weave.move_node(&{}, &{:?});", map_id(id_seed), new_parents);
-                state.weave.move_node(&map_id(id_seed), &new_parents);
+                    for child in node.to().iter().copied() {
+                        descendant_subgraph(
+                            state.weave.nodes(),
+                            child,
+                            &mut state.scratchpad,
+                            &mut state.scratchpad_set,
+                        );
+                    }
+
+                    state.scratchpad.clear();
+                    state.scratchpad.extend(
+                        new_parents
+                            .drain(..)
+                            .filter(|id| !state.scratchpad_set.contains(id)),
+                    );
+                    new_parents.append(&mut state.scratchpad);
+                }
+
+                //println!("weave.move_node(&{}, &{:?});", id, new_parents);
+                state.weave.move_node(&id, &new_parents);
             }
             WeaveTransition::GetContentsMut {
                 id_seed,
@@ -526,6 +578,58 @@ impl StateMachineTest for WeaveWrapper {
         _state: &Self::SystemUnderTest,
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
+    }
+}
+
+// Copied from src/lib.rs
+fn ancestor_subgraph<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    id: K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut HashSet<K>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T>,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push(id);
+
+    while let Some(id) = scratchpad.pop() {
+        if identifiers.insert(id)
+            && let Some(node) = nodes.get(&id)
+        {
+            scratchpad.extend(node.from().into_iter().rev().copied());
+        }
+    }
+}
+
+// Copied from src/lib.rs
+fn descendant_subgraph<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    id: K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut HashSet<K>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T>,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push(id);
+
+    while let Some(id) = scratchpad.pop() {
+        if identifiers.insert(id)
+            && let Some(node) = nodes.get(&id)
+        {
+            scratchpad.extend(node.to().into_iter().rev().copied());
+        }
     }
 }
 
