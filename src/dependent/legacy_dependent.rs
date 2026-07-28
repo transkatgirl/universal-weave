@@ -2,7 +2,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
 };
 
@@ -34,8 +34,8 @@ use crate::{
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
     SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, ValidatableWeave, Weave,
     dependent::{
-        DependentNode, DependentWeave as NewDependentWeave, path_to_root, topological_sort,
-        topological_sort_rev,
+        DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
+        topological_sort, topological_sort_rev,
     },
 };
 
@@ -387,6 +387,8 @@ where
 {
     fn validate(&self) -> bool {
         let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+        let mut scratchpad = Vec::with_capacity(self.nodes.len());
+        let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.roots.is_subset::<S>(&nodes)
             && self
@@ -410,6 +412,12 @@ where
                         .iter()
                         .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
+            && !detect_cycles(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut scratchpad,
+                &mut scratchpad_set,
+            )
     }
 }
 
