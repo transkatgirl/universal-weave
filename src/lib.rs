@@ -5,7 +5,7 @@
 //!     - [`dependent::loro::DependentLoroWeave`] - A [`dependent::DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
 //! - [`independent::IndependentWeave`] - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
-//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`. When using `rkyv`, weaves should be validated immediately after deserialization using [`ValidatableWeave::validate()`].
+//! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`.
 //!
 //! Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
 //!
@@ -40,8 +40,6 @@
 # 0.2.0 Checklist:
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Add node layout calculation behind a feature flag?
-- [ ] Remove all opportunities for internal inconsistency
-    - [ ] Add validation at deserialization time
 
 # Ideas for future releases:
 - Formal verification using Verus once it supports enough of the language features
@@ -193,18 +191,6 @@ pub trait DeduplicatableContents {
 }
 
 /// A document linking together multiple [`Node`] objects without cyclical links.
-///
-/// # Internal inconsistency and Panics
-///
-/// If a Weave is internally inconsistent, operations on it may panic, infinitely loop, or exhibit undocumented behavior. However, an internally inconsistent Weave will never result in *unsafe* behavior.
-///
-/// The internal consistency of a weave can be validated using [`ValidatableWeave::validate()`].
-///
-/// Operations on a Weave should never result in internal inconsistency, except in the following cases:
-/// - The weave was already internally inconsistent.
-/// - An operation resulted in a panic, and further operations were attempted on the same Weave through the use of [`std::panic::catch_unwind`].
-///
-/// However, Weave objects which have been deserialized from an untrusted source may be internally inconsistent.
 #[must_use]
 pub trait Weave<K, N, T>
 where
@@ -279,19 +265,6 @@ where
     fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     fn remove_all_nodes(&mut self);
-}
-
-/// A [`Weave`] which can be checked for internal consistency.
-pub trait ValidatableWeave<K, N, T>: Weave<K, N, T>
-where
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
-{
-    /// Returns `true` if the weave is internally consistent.
-    ///
-    /// This function never panics or infinitely loops, even if internal consistency is violated.
-    #[must_use]
-    fn validate(&self) -> bool;
 }
 
 /// A [`Weave`] containing document-wide metadata.

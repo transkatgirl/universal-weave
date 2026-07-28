@@ -20,8 +20,8 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
     DeduplicatableWeave, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
-    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave,
-    ValidatableWeave, Weave, dependent, independent,
+    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    dependent, independent,
 };
 
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
@@ -798,18 +798,6 @@ where
     }
 }
 
-impl<W, K, N, T, M> ValidatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
-where
-    W: ValidatableWeave<K, N, T>,
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
-{
-    #[inline]
-    fn validate(&self) -> bool {
-        self.weave.validate()
-    }
-}
-
 impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for LoggedWeave<W, K, N, T, M>
 where
     W: MetadataWeave<K, N, T, M>,
@@ -1163,18 +1151,6 @@ where
     fn remove_all_nodes(&mut self) {
         self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
         self.weave.remove_all_nodes();
-    }
-}
-
-impl<W, K, N, T> ValidatableWeave<K, N, T> for CountedWeave<W, K, N, T>
-where
-    W: ValidatableWeave<K, N, T>,
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
-{
-    #[inline]
-    fn validate(&self) -> bool {
-        self.weave.validate()
     }
 }
 

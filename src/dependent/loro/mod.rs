@@ -24,7 +24,7 @@ use rkyv::{
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     IndependentContents, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, ValidatableWeave, Weave,
+    SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
@@ -676,7 +676,7 @@ where
     }
 }
 
-impl<K, T, M, S> ValidatableWeave<K, DependentNode<K, T, S>, T> for DependentLoroWeave<K, T, M, S>
+impl<K, T, M, S> DependentLoroWeave<K, T, M, S>
 where
     for<'a> K: Archive
         + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
@@ -694,7 +694,8 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    fn validate(&self) -> bool {
+    /// Validates that the internal [`LoroDoc`] is consistent with the [`DependentWeave`]'s state.
+    pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 
         let tree = self.doc.get_tree("tree");

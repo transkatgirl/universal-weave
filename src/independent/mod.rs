@@ -12,6 +12,9 @@ use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 
 #[cfg(feature = "rkyv")]
+use hashbrown::hash_map::Entry;
+
+#[cfg(feature = "rkyv")]
 use rkyv::{
     Archive, Deserialize, Serialize,
     bytecheck::Verify,
@@ -26,8 +29,7 @@ use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SortableBookmarkableWeave, SortableWeave, Step, ValidatableWeave, Weave,
-    ancestor_subgraph,
+    Node, SortableBookmarkableWeave, SortableWeave, Step, Weave, ancestor_subgraph,
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::DependentWeave,
     descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
@@ -1037,23 +1039,31 @@ where
     }
 }
 
-impl<K, T, M, S> ValidatableWeave<K, IndependentNode<K, T, S>, T> for IndependentWeave<K, T, M, S>
+impl<K, T, M, S> IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    fn validate(&self) -> bool {
-        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
-        let nodes_std: HashSet<_, _> = self.nodes.keys().copied().collect();
+    /// Validates that the weave is internally consistent.
+    pub fn validate(&self) -> bool {
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad_stack.is_empty()
             && self.scratchpad_step_stack.is_empty()
-            && self.roots.is_subset::<S>(&nodes)
-            && self.active.is_subset(&nodes_std)
-            && self.bookmarked.is_subset::<S>(&nodes)
+            && self
+                .roots
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
+            && self
+                .active
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
+            && self
+                .bookmarked
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
@@ -1069,13 +1079,13 @@ where
                     && value.active == self.active.contains(key)
                     && value.bookmarked == self.bookmarked.contains(key)
             })
-            && active_path_is_valid(&self.nodes, self.roots.iter(), &self.active)
             && !detect_cycles(
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut scratchpad,
                 &mut scratchpad_map,
             )
+            && active_path_is_valid(&self.nodes, self.roots.iter(), &self.active)
     }
 }
 
@@ -1614,6 +1624,78 @@ where
 }
 
 #[cfg(feature = "rkyv")]
+impl<K, T, M, S> ArchivedIndependentWeave<K, T, M, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive + IndependentContents,
+    M: Archive,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn validate(&self) -> bool {
+        let mut scratchpad = Vec::with_capacity(self.nodes.len());
+        let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
+
+        self.roots
+            .iter()
+            .all(move |value| self.nodes.contains_key(value))
+            && self
+                .active
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
+            && self
+                .bookmarked
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
+            && self.nodes.iter().all(|(key, value)| {
+                value.validate()
+                    && value.id == *key
+                    && value
+                        .from
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value
+                        .to
+                        .iter()
+                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from.contains(key)))
+                    && value.from.is_empty() == self.roots.contains(key)
+                    && value.active == self.active.contains(key)
+                    && value.bookmarked == self.bookmarked.contains(key)
+            })
+            && !archived_detect_cycles(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut scratchpad,
+                &mut scratchpad_map,
+            )
+            && archived_active_path_is_valid(&self.nodes, self.roots.iter(), &self.active)
+    }
+}
+
+#[cfg(feature = "rkyv")]
+// SAFETY:
+// All fields are safe to access and no unsafe functions are called
+unsafe impl<K, T, M, S, C> Verify<C> for ArchivedIndependentWeave<K, T, M, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive + IndependentContents,
+    M: Archive,
+    S: BuildHasher + Default + Clone,
+    C: Fallible + ?Sized,
+    C::Error: Source,
+{
+    fn verify(&self, _context: &mut C) -> Result<(), C::Error> {
+        if !self.validate() {
+            fail!(ValidationError)
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(feature = "rkyv")]
 impl<K, T, M, S> ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
@@ -2004,6 +2086,53 @@ fn archived_topological_sort_rev<'a, K, N, T, S>(
 }
 
 #[cfg(feature = "rkyv")]
+fn archived_detect_cycles<'a, K, N, T, S>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    roots: impl Iterator<Item = K>,
+    scratchpad: &mut Vec<Step<K, K>>,
+    scratchpad_map: &mut HashMap<K, bool, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
+{
+    for root in roots {
+        if scratchpad_map.contains_key(&root) {
+            continue;
+        }
+
+        scratchpad.push(Step::Enter(root));
+
+        while let Some(step) = scratchpad.pop() {
+            match step {
+                Step::Enter(id) => {
+                    scratchpad.push(Step::Exit(id));
+
+                    match scratchpad_map.entry(id) {
+                        Entry::Occupied(entry) => {
+                            if !entry.get() {
+                                return true;
+                            }
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert_entry(false);
+
+                            scratchpad.extend(nodes[&id].to().iter().copied().map(Step::Enter));
+                        }
+                    }
+                }
+                Step::Exit(id) => {
+                    scratchpad_map.insert(id, true);
+                }
+            }
+        }
+    }
+
+    scratchpad_map.len() != nodes.len()
+}
+
+#[cfg(feature = "rkyv")]
 #[allow(clippy::too_many_arguments, reason = "Rkyv limitation")]
 fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
@@ -2117,4 +2246,48 @@ fn archived_ancestor_subgraph<'a, K, N, T, S>(
             scratchpad.extend(nodes[&id].from().iter().copied());
         }
     }
+}
+
+#[cfg(feature = "rkyv")]
+fn archived_active_path_is_valid<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    roots: impl Iterator<Item = &'a K>,
+    active: &'a ArchivedHashSet<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+{
+    let mut scratchpad = Vec::with_capacity(nodes.len());
+    let mut scratchpad_list = Vec::with_capacity(nodes.len());
+    let mut scratchpad_list_2 = Vec::with_capacity(nodes.len());
+    let mut scratchpad_set = HashSet::with_capacity(nodes.len());
+    let mut scratchpad_map = HashMap::with_capacity(nodes.len());
+
+    for active_root in roots.filter(|root| active.contains(*root)) {
+        archived_topological_sort_subgraph(
+            nodes,
+            &|id| active.contains(id),
+            active_root,
+            &mut scratchpad,
+            &mut scratchpad_list_2,
+            &mut scratchpad_list,
+            &mut scratchpad_set,
+        );
+    }
+
+    scratchpad_set.clear();
+    scratchpad_list_2.clear();
+
+    archived_longest_path_to_root(
+        nodes,
+        &scratchpad_list,
+        &mut scratchpad_map,
+        &mut scratchpad_list_2,
+    );
+
+    scratchpad_set.extend(scratchpad_list_2);
+
+    scratchpad_set.len() == active.len()
+        && scratchpad_set.into_iter().all(|id| active.contains(&id))
 }

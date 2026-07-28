@@ -12,8 +12,10 @@ use indexmap::IndexSet;
 #[cfg(feature = "rkyv")]
 use rkyv::{
     Archive, Deserialize, Serialize,
+    bytecheck::Verify,
     collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet},
     option::ArchivedOption,
+    rancor::{Fallible, Source, fail},
     with::Skip,
 };
 
@@ -23,7 +25,7 @@ use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, ValidatableWeave, Weave,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, Weave,
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
         topological_sort, topological_sort_rev,
@@ -35,8 +37,8 @@ use crate::{
     ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
     ArchivedSortableWeave, ArchivedWeave,
     dependent::{
-        ArchivedDependentNode, archived_path_to_root, archived_topological_sort,
-        archived_topological_sort_rev,
+        ArchivedDependentNode, archived_detect_cycles, archived_path_to_root,
+        archived_topological_sort, archived_topological_sort_rev,
     },
 };
 
@@ -428,38 +430,44 @@ where
     }
 }
 
-impl<K, T, M, S> ValidatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
+impl<K, T, M, S> DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
-    fn validate(&self) -> bool {
-        let nodes: IndexSet<_, _> = self.nodes.keys().copied().collect();
+    /// Validates that the weave is internally consistent.
+    pub fn validate(&self) -> bool {
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad_step_stack.is_empty()
-            && self.roots.is_subset::<S>(&nodes)
+            && self
+                .roots
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
             && self
                 .active
-                .is_none_or(|active| self.nodes.contains_key(&active))
-            && self.bookmarked.is_subset(&nodes)
+                .as_ref()
+                .is_none_or(|active| self.nodes.contains_key(active))
+            && self
+                .bookmarked
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
             && self.nodes.iter().all(|(key, value)| {
                 value.validate()
                     && value.id == *key
-                    && value.from.is_none_or(|from| self.nodes.contains_key(&from))
-                    && value.to.is_subset(&nodes)
+                    && value
+                        .from
+                        .as_ref()
+                        .is_none_or(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value.to.iter().all(|v| {
+                        self.nodes
+                            .get(v)
+                            .is_some_and(|p| p.from.as_ref() == Some(key))
+                    })
                     && value.from.is_none() == self.roots.contains(key)
                     && value.active == (self.active == Some(*key))
                     && value.bookmarked == self.bookmarked.contains(key)
-                    && value
-                        .from
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
-                    && value
-                        .to
-                        .iter()
-                        .all(|v| self.nodes.get(v).is_some_and(|p| p.from == Some(*key)))
             })
             && !detect_cycles(
                 &self.nodes,
@@ -731,6 +739,78 @@ where
                 }
             })
         })
+    }
+}
+
+#[cfg(feature = "rkyv")]
+impl<K, T, M, S> ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive,
+    M: Archive,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn validate(&self) -> bool {
+        let mut scratchpad = Vec::with_capacity(self.nodes.len());
+        let mut scratchpad_set = HashSet::with_capacity(self.nodes.len());
+
+        self.roots
+            .iter()
+            .all(move |value| self.nodes.contains_key(value))
+            && self
+                .active
+                .as_ref()
+                .is_none_or(|active| self.nodes.contains_key(active))
+            && self
+                .bookmarked
+                .iter()
+                .all(move |value| self.nodes.contains_key(value))
+            && self.nodes.iter().all(|(key, value)| {
+                value.validate()
+                    && value.id == *key
+                    && value
+                        .from
+                        .as_ref()
+                        .is_none_or(|v| self.nodes.get(v).is_some_and(|p| p.to.contains(key)))
+                    && value.to.iter().all(|v| {
+                        self.nodes
+                            .get(v)
+                            .is_some_and(|p| p.from.as_ref() == Some(key))
+                    })
+                    && value.from.is_none() == self.roots.contains(key)
+                    && value.active == (self.active == Some(*key))
+                    && value.bookmarked == self.bookmarked.contains(key)
+            })
+            && !archived_detect_cycles(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut scratchpad,
+                &mut scratchpad_set,
+            )
+    }
+}
+
+#[cfg(feature = "rkyv")]
+// SAFETY:
+// All fields are safe to access and no unsafe functions are called
+unsafe impl<K, T, M, S, C> Verify<C> for ArchivedDependentWeave<K, T, M, S>
+where
+    K: Archive + Hash + Copy + Eq + Ord,
+    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
+    T: Archive,
+    M: Archive,
+    S: BuildHasher + Default + Clone,
+    C: Fallible + ?Sized,
+    C::Error: Source,
+{
+    fn verify(&self, _context: &mut C) -> Result<(), C::Error> {
+        if !self.validate() {
+            fail!(ValidationError)
+        }
+
+        Ok(())
     }
 }
 
