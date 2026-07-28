@@ -42,7 +42,7 @@ use crate::{
     },
 };
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "serde", feature = "rkyv"))]
 use crate::contract::ValidationError;
 
 #[cfg(doc)]

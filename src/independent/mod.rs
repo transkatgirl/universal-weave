@@ -39,8 +39,11 @@ use crate::{
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave, contract::ValidationError,
+    ArchivedSortableWeave, ArchivedWeave,
 };
+
+#[cfg(any(feature = "serde", feature = "rkyv"))]
+use crate::contract::ValidationError;
 
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]

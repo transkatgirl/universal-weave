@@ -2,11 +2,12 @@
 
 use alloc::vec::Vec;
 use core::{
-    error::Error,
-    fmt,
     hash::{BuildHasher, Hash},
     ops::Index,
 };
+
+#[cfg(any(feature = "serde", feature = "rkyv"))]
+use core::{error::Error, fmt};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -201,6 +202,7 @@ where
         && scratchpad_set.into_iter().all(|id| active.contains(&id))
 }
 
+#[cfg(any(feature = "serde", feature = "rkyv"))]
 #[derive(Debug)]
 pub struct ValidationError;
 
@@ -211,11 +213,13 @@ impl ValidationError {
     }
 }
 
+#[cfg(any(feature = "serde", feature = "rkyv"))]
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "validation failed")
     }
 }
 
+#[cfg(any(feature = "serde", feature = "rkyv"))]
 #[allow(clippy::missing_trait_methods, reason = "API limitation")]
 impl Error for ValidationError {}

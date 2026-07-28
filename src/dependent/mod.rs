@@ -38,8 +38,11 @@ use crate::{
 #[cfg(feature = "rkyv")]
 use crate::{
     ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave, contract::ValidationError,
+    ArchivedSortableWeave, ArchivedWeave,
 };
+
+#[cfg(any(feature = "serde", feature = "rkyv"))]
+use crate::contract::ValidationError;
 
 #[cfg(feature = "loro")]
 pub mod loro;
