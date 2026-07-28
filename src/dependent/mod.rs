@@ -1,14 +1,15 @@
 //! [`DependentWeave`] is a tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 
-use std::{
+use alloc::{boxed::Box, vec::Vec};
+use core::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
     iter,
 };
 
 #[allow(unused_imports, reason = "False positive")]
 use contracts::{ensures, invariant};
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 
 #[cfg(feature = "rkyv")]
@@ -22,12 +23,6 @@ use rkyv::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-#[cfg(feature = "rkyv")]
-use crate::{
-    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave,
-};
-
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
@@ -37,6 +32,12 @@ use crate::{
         lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
         valid_topological_sort,
     },
+};
+
+#[cfg(feature = "rkyv")]
+use crate::{
+    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
+    ArchivedSortableWeave, ArchivedWeave,
 };
 
 #[cfg(feature = "loro")]
@@ -341,7 +342,7 @@ where
         }
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(matches_topological_sort(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
+    #[ensures(matches_topological_sort(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(*id)), output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
@@ -661,7 +662,7 @@ where
         }
     }
     #[ensures(lacks_duplicates(output))]
-    #[ensures(matches_topological_sort_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(id)), output))]
+    #[ensures(matches_topological_sort_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(*id)), output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 

@@ -8,6 +8,7 @@ license = "Unlicense"
 description = "General-purpose building blocks for \"Loom\" implementations."
 categories = [
 	"data-structures",
+	"no-std",
 ]
 keywords = [
 	"loom",
@@ -29,6 +30,7 @@ loro = [
 ]
 serde = [
 	"dep:serde",
+	"hashbrown/serde",
 	"indexmap/serde",
 ]
 
@@ -40,17 +42,28 @@ legacy = [  ]
 contracts = { version = "0.6.8", features = [
 	"override_debug",
 ] }
-indexmap = "2.14.0"
+hashbrown = { version = "0.17.1", features = [
+	"allocator-api2",
+	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: Function contracts (only enabled in debug mode) and Archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
+	"default-hasher",
+	"equivalent",
+	"inline-more",
+], default-features = false }
+indexmap = { version = "2.14.0", default-features = false }
 rkyv = { version = "0.8.17", features = [
+	"alloc",
+	"bytecheck",
 	"little_endian",
 	"aligned",
 	"pointer_width_32",
+	"hashbrown-0_17",
 	"indexmap-2",
-], optional = true }
+], default-features = false, optional = true }
 loro = { version = "1.13.7", optional = true }
 serde = { version = "1.0.229", features = [
+	"alloc",
 	"derive",
-], optional = true }
+], default-features = false, optional = true }
 
 [dev-dependencies]
 proptest               = "1.11.0"

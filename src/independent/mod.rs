@@ -1,13 +1,14 @@
 //! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 
-use std::{
+use alloc::{boxed::Box, vec::Vec};
+use core::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
     mem,
 };
 
 use contracts::{ensures, invariant};
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 
 #[cfg(feature = "rkyv")]
@@ -20,12 +21,6 @@ use rkyv::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-#[cfg(feature = "rkyv")]
-use crate::{
-    ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave,
-};
-
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
@@ -35,6 +30,12 @@ use crate::{
     dependent::DependentWeave,
     descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
+};
+
+#[cfg(feature = "rkyv")]
+use crate::{
+    ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
+    ArchivedSortableWeave, ArchivedWeave,
 };
 
 #[derive(Default, Debug, Clone)]
@@ -1858,16 +1859,17 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort<'a, K, N, T>(
+fn archived_topological_sort<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     scratchpad: &mut Vec<K>,
     scratchpad_2: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     scratchpad.push(*id);
 
@@ -1890,17 +1892,18 @@ fn archived_topological_sort<'a, K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort_subgraph<'a, K, N, T>(
+fn archived_topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     filter: &impl Fn(&K) -> bool,
     id: &'a K,
     scratchpad: &mut Vec<K>,
     scratchpad_2: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     scratchpad.push(*id);
 
@@ -1924,15 +1927,16 @@ fn archived_topological_sort_subgraph<'a, K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort_rev<'a, K, N, T>(
+fn archived_topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K>,
+    identifier_set: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     scratchpad.push(*id);
 
@@ -1954,18 +1958,19 @@ fn archived_topological_sort_rev<'a, K, N, T>(
 
 #[cfg(feature = "rkyv")]
 #[allow(clippy::too_many_arguments, reason = "Rkyv limitation")]
-fn archived_shortest_path_to_ancestor<'a, K, N, T>(
+fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
     scratchpad: &mut Vec<Step<K, K>>,
     scratchpad_list: &mut Vec<K>,
     scratchpad_list_2: &mut Vec<K>,
-    scratchpad_set: &mut HashSet<K>,
+    scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     scratchpad.push(Step::Enter(*id));
 
@@ -1998,14 +2003,15 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_longest_path_to_root<'a, K, N, T>(
+fn archived_longest_path_to_root<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
-    scratchpad_map: &mut HashMap<K, usize>,
+    scratchpad_map: &mut HashMap<K, usize, S>,
     reversed_path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     let mut longest_global_distance = None;
 
@@ -2047,14 +2053,15 @@ fn archived_longest_path_to_root<'a, K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_ancestor_subgraph<'a, K, N, T>(
+fn archived_ancestor_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: K,
     scratchpad: &mut Vec<K>,
-    identifiers: &mut HashSet<K>,
+    identifiers: &mut HashSet<K, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
 {
     scratchpad.push(id);
 

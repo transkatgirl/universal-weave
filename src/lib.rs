@@ -13,7 +13,6 @@
 
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
-- [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
     - [ ] Interoperability
@@ -40,7 +39,6 @@
 # 0.2.0 Checklist:
 - [ ] Separate bookmarking into a Weave wrapper?
 - [ ] Add node layout calculation behind a feature flag?
-- [ ] Add no-std support
 - [ ] Remove all opportunities for internal inconsistency
     - [ ] Add validation at deserialization time
 
@@ -49,6 +47,7 @@
 
 */
 
+#![no_std]
 #![forbid(unsafe_code)]
 #![forbid(non_ascii_idents)]
 #![warn(missing_docs)]
@@ -62,14 +61,6 @@
 #![allow(clippy::allow_attributes, reason = "Conflicting lint")]
 #![allow(clippy::pattern_type_mismatch, reason = "Conflicting lint")]
 #![allow(clippy::separated_literal_suffix, reason = "Conflicting lint")]
-#![allow(
-    clippy::std_instead_of_core,
-    reason = "Crate depends on standard library"
-)]
-#![allow(
-    clippy::std_instead_of_alloc,
-    reason = "Crate depends on standard library"
-)]
 #![allow(
     clippy::field_scoped_visibility_modifiers,
     reason = "Used by IndependentWeave::from()"
@@ -111,13 +102,8 @@ pub mod wrappers;
 #[cfg(feature = "rkyv")]
 pub mod versioning;
 
-use std::{
-    cmp::Ordering,
-    collections::{HashMap, HashSet, hash_map::Entry},
-    hash::{BuildHasher, Hash},
-};
-
 pub use contracts;
+pub use hashbrown;
 pub use indexmap;
 
 #[cfg(feature = "rkyv")]
@@ -125,6 +111,16 @@ pub use rkyv;
 
 #[cfg(feature = "loro")]
 pub use loro;
+
+extern crate alloc;
+
+use alloc::vec::Vec;
+use core::{
+    cmp::Ordering,
+    hash::{BuildHasher, Hash},
+};
+
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 
 #[cfg(feature = "rkyv")]
 use rkyv::option::ArchivedOption;

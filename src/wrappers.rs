@@ -2,12 +2,20 @@
 
 #![allow(missing_docs, reason = "False positives")]
 
-use std::{
+use alloc::{collections::VecDeque, vec::Vec};
+use core::{
     cmp::Ordering,
-    collections::{HashMap, VecDeque},
     hash::{BuildHasher, Hash},
     marker::PhantomData,
 };
+
+use hashbrown::HashMap;
+
+#[cfg(feature = "rkyv")]
+use rkyv::{Archive, Deserialize, Serialize};
+
+#[cfg(feature = "serde")]
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
     ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
@@ -15,12 +23,6 @@ use crate::{
     MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave,
     ValidatableWeave, Weave, dependent, independent,
 };
-
-#[cfg(feature = "rkyv")]
-use rkyv::{Archive, Deserialize, Serialize};
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
 ///

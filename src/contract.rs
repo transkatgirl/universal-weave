@@ -1,10 +1,12 @@
 #![allow(clippy::impl_trait_in_params, reason = "Readability")]
 
-use std::{
-    collections::{HashMap, HashSet},
+use alloc::vec::Vec;
+use core::{
     hash::{BuildHasher, Hash},
     ops::Index,
 };
+
+use hashbrown::{HashMap, HashSet};
 
 use crate::{
     Node, longest_path_to_root, topological_sort, topological_sort_rev, topological_sort_subgraph,
@@ -171,7 +173,7 @@ where
     let mut scratchpad_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
     let mut scratchpad_map = HashMap::with_capacity_and_hasher(nodes.len(), S::default());
 
-    for active_root in roots.filter(|root| active.contains(root)) {
+    for active_root in roots.filter(|root| active.contains(*root)) {
         topological_sort_subgraph(
             nodes,
             &|id| active.contains(id),

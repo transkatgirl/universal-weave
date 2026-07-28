@@ -1,11 +1,12 @@
 //! A legacy version of `DependentWeave` used by `tapestry-weave`'s v0 format; Please don't use this!
 
-use std::{
+use alloc::{boxed::Box, vec::Vec};
+use core::{
     cmp::Ordering,
-    collections::{HashMap, HashSet},
     hash::{BuildHasher, Hash},
 };
 
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 
 #[cfg(feature = "rkyv")]
@@ -19,16 +20,6 @@ use rkyv::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
-#[cfg(feature = "rkyv")]
-use crate::{
-    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave,
-    dependent::{
-        ArchivedDependentNode, archived_path_to_root, archived_topological_sort,
-        archived_topological_sort_rev,
-    },
-};
-
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
@@ -36,6 +27,16 @@ use crate::{
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
         topological_sort, topological_sort_rev,
+    },
+};
+
+#[cfg(feature = "rkyv")]
+use crate::{
+    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
+    ArchivedSortableWeave, ArchivedWeave,
+    dependent::{
+        ArchivedDependentNode, archived_path_to_root, archived_topological_sort,
+        archived_topological_sort_rev,
     },
 };
 

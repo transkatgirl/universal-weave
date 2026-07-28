@@ -1,11 +1,12 @@
 //! [`loro`] wrapper for [`DependentWeave`].
 
-use std::{
+use alloc::vec::Vec;
+use core::{
     cmp::Ordering,
-    collections::HashMap,
     hash::{BuildHasher, Hash},
 };
 
+use hashbrown::HashMap;
 use indexmap::IndexSet;
 use loro::{LoroDoc, LoroTree, LoroValue, TreeID, ValueOrContainer};
 use rkyv::{
