@@ -9,7 +9,6 @@ use std::{
 
 use contracts::{ensures, invariant};
 use indexmap::IndexSet;
-use stacksafe::stacksafe;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -606,65 +605,6 @@ where
             }
         }
     }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[stacksafe]
-    fn remove_node_unverified(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
-        if let Some(node) = self.nodes.remove(id) {
-            self.roots.shift_remove(id);
-            self.bookmarked.shift_remove(id);
-            self.active.remove(id);
-            for parent in &node.from {
-                if let Some(parent) = self.nodes.get_mut(parent) {
-                    parent.to.shift_remove(&node.id);
-                }
-            }
-            for child in &node.to {
-                if let Some(child) = self.nodes.get_mut(child) {
-                    child.from.shift_remove(&node.id);
-
-                    let identifier = child.id;
-                    if child.from.is_empty() {
-                        self.remove_node_unverified(&identifier);
-                    }
-                }
-            }
-            Some(node)
-        } else {
-            None
-        }
-    }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[stacksafe]
-    fn remove_node_unverified_tracked(
-        &mut self,
-        id: &K,
-        callback: &mut impl FnMut(IndependentNode<K, T, S>),
-    ) -> bool {
-        if let Some(node) = self.nodes.remove(id) {
-            self.roots.shift_remove(id);
-            self.bookmarked.shift_remove(id);
-            self.active.remove(id);
-            for parent in &node.from {
-                if let Some(parent) = self.nodes.get_mut(parent) {
-                    parent.to.shift_remove(&node.id);
-                }
-            }
-            for child in &node.to {
-                if let Some(child) = self.nodes.get_mut(child) {
-                    child.from.shift_remove(&node.id);
-
-                    let identifier = child.id;
-                    if child.from.is_empty() {
-                        self.remove_node_unverified_tracked(&identifier, callback);
-                    }
-                }
-            }
-            callback(node);
-            true
-        } else {
-            false
-        }
-    }
 }
 
 #[allow(clippy::fallible_impl_from, reason = "Should never fail")]
@@ -977,11 +917,49 @@ where
     #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
-        let result = self.remove_node_unverified(id);
-        if result.is_some() {
-            self.fix_orphaned_activations();
+        let mut removed_node = None;
+
+        self.scratchpad_stack.push(*id);
+
+        while let Some(id) = self.scratchpad_stack.pop() {
+            if let Some(node) = self.nodes.remove(&id) {
+                if node.from.is_empty() {
+                    self.roots.shift_remove(&id);
+                }
+                if node.bookmarked {
+                    self.bookmarked.shift_remove(&id);
+                }
+                if node.active {
+                    self.active.remove(&id);
+                }
+
+                for parent in &node.from {
+                    if let Some(parent) = self.nodes.get_mut(parent) {
+                        parent.to.shift_remove(&node.id);
+                    }
+                }
+                for child in node.to.iter().rev() {
+                    if let Some(child) = self.nodes.get_mut(child) {
+                        child.from.shift_remove(&node.id);
+
+                        if child.from.is_empty() {
+                            self.scratchpad_stack.push(child.id);
+                        }
+                    }
+                }
+
+                if removed_node.is_none() {
+                    removed_node = Some(node);
+                }
+            }
         }
-        result
+
+        if removed_node.is_some() {
+            self.fix_orphaned_activations();
+            removed_node
+        } else {
+            None
+        }
     }
     #[ensures(!self.nodes.contains_key(id))]
     #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
@@ -996,7 +974,42 @@ where
         id: &K,
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
     ) -> bool {
-        if self.remove_node_unverified_tracked(id, &mut on_removal) {
+        let had_node = self.nodes.contains_key(id);
+
+        self.scratchpad_stack.push(*id);
+
+        while let Some(id) = self.scratchpad_stack.pop() {
+            if let Some(node) = self.nodes.remove(&id) {
+                if node.from.is_empty() {
+                    self.roots.shift_remove(&id);
+                }
+                if node.bookmarked {
+                    self.bookmarked.shift_remove(&id);
+                }
+                if node.active {
+                    self.active.remove(&id);
+                }
+
+                for parent in &node.from {
+                    if let Some(parent) = self.nodes.get_mut(parent) {
+                        parent.to.shift_remove(&node.id);
+                    }
+                }
+                for child in node.to.iter().rev() {
+                    if let Some(child) = self.nodes.get_mut(child) {
+                        child.from.shift_remove(&node.id);
+
+                        if child.from.is_empty() {
+                            self.scratchpad_stack.push(child.id);
+                        }
+                    }
+                }
+
+                on_removal(node);
+            }
+        }
+
+        if had_node {
             self.fix_orphaned_activations();
             true
         } else {

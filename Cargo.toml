@@ -41,7 +41,6 @@ contracts = { version = "0.6.8", features = [
 	"override_debug",
 ] }
 indexmap = "2.14.0"
-stacksafe = "1.0.2"
 rkyv = { version = "0.8.17", features = [
 	"little_endian",
 	"aligned",

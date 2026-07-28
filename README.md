@@ -27,7 +27,7 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 	- Serialization and deserialization (supports rkyv and serde)
 		- Zero-copy deserialization (requires rkyv)
 		- Format versioning (requires rkyv)
-	- Unbounded depth (currently unsupported for WASM and [some niche targets](https://github.com/rust-lang/stacker/#platform-support); this will be fixed in the future)
+	- Unbounded depth
 	- Convenient traversal methods
 	- Stable node ordering
 		- Node sorting

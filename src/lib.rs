@@ -13,7 +13,6 @@
 
 # 0.1.0 Checklist:
 - [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
-- [ ] Rewrite all traversal logic to be non-recursive
 - [ ] Add validation to Archived weaves
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
@@ -120,7 +119,6 @@ use std::{
 
 pub use contracts;
 pub use indexmap;
-pub use stacksafe;
 
 #[cfg(feature = "rkyv")]
 pub use rkyv;
@@ -273,7 +271,7 @@ where
     ///
     /// This function may update other nodes if it is necessary to preserve internal consistency.
     ///
-    /// This function uses [`Weave::remove_node_tracked`] internally.
+    /// This function uses the same removal logic as [`Weave::remove_node_tracked`].
     fn remove_node(&mut self, id: &K) -> Option<N>;
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
