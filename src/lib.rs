@@ -195,18 +195,10 @@ where
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
-    /// Builds a thread starting at the deepest active node within the Weave.
-    ///
-    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
-    ///
-    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(&mut self, output: &mut Vec<K>);
-    /// Builds a thread starting at the specified node.
-    ///
-    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
-    ///
-    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>);
+    /// Builds the longest contiguous path of active nodes which ends at a root node.
+    fn get_active_path(&mut self, output: &mut Vec<K>);
+    /// Builds a path through the Weave starting at the specified node and ending at a root node.
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Inserts a node into the Weave, returning `true` if the insertion was successful.
     ///
     /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
@@ -456,18 +448,10 @@ where
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     fn get_ordered_node_identifiers_from(&self, id: &K, output: &mut Vec<K>);
-    /// Builds a thread starting at the deepest active node within the Weave.
-    ///
-    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
-    ///
-    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_active_thread(&self, output: &mut Vec<K>);
-    /// Builds a thread starting at the specified node.
-    ///
-    /// A thread is an identifier list of directly connected nodes which always ends at a root node.
-    ///
-    /// In Weave implementations where nodes can contain multiple parents, the thread always uses the active parent if one is present, falling back to the first parent if the node does not contain any active parents.
-    fn get_thread_from(&self, id: &K, output: &mut Vec<K>);
+    /// Builds the longest contiguous path of active nodes which ends at a root node.
+    fn get_active_path(&self, output: &mut Vec<K>);
+    /// Builds a path through the Weave starting at the specified node and ending at a root node.
+    fn get_path_from(&self, id: &K, output: &mut Vec<K>);
 }
 
 #[cfg(feature = "rkyv")]

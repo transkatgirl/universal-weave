@@ -520,12 +520,12 @@ where
         self.weave.get_ordered_node_identifiers_from(id, output);
     }
     #[inline]
-    fn get_active_thread(&mut self, output: &mut Vec<K>) {
-        self.weave.get_active_thread(output);
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
+        self.weave.get_active_path(output);
     }
     #[inline]
-    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
-        self.weave.get_thread_from(id, output);
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_path_from(id, output);
     }
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         let id = node.id;

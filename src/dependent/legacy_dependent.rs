@@ -269,14 +269,14 @@ where
             topological_sort(&self.nodes, *id, &mut self.thread, output);
         }
     }
-    fn get_active_thread(&mut self, output: &mut Vec<K>) {
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         if let Some(active) = self.active {
             path_to_root(&self.nodes, active, output);
         }
     }
-    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
@@ -883,14 +883,14 @@ where
             archived_topological_sort(&self.nodes, *id, &mut scratchpad, &mut scratchpad_2, output);
         }
     }
-    fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
+    fn get_active_path(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if let ArchivedOption::Some(active) = self.active {
             archived_path_to_root(&self.nodes, active, output);
         }
     }
-    fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+    fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if self.nodes.contains_key(id) {

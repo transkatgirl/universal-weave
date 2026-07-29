@@ -31,7 +31,7 @@ use crate::{
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
     Node, SortableBookmarkableWeave, SortableWeave, Step, Weave, ancestor_subgraph,
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
-    dependent::DependentWeave,
+    dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
 };
@@ -78,7 +78,7 @@ where
     pub to: IndexSet<K, S>,
     /// If the node should be considered active.
     ///
-    /// Unlike [`DependentWeave`], [`IndependentWeave`] considers all nodes within an active thread to be active.
+    /// Unlike [`DependentWeave`], [`IndependentWeave`] considers all nodes within an active path to be active.
     pub active: bool,
     /// If the node is bookmarked.
     pub bookmarked: bool,
@@ -154,6 +154,24 @@ where
     #[inline]
     fn contents(&self) -> &T {
         &self.contents
+    }
+}
+
+impl<K, T, S> From<DependentNode<K, T, S>> for IndependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents + Clone,
+    S: BuildHasher + Default + Clone,
+{
+    fn from(value: DependentNode<K, T, S>) -> Self {
+        Self {
+            id: value.id,
+            from: IndexSet::from_iter(value.from),
+            to: value.to,
+            active: value.active,
+            bookmarked: value.bookmarked,
+            contents: value.contents,
+        }
     }
 }
 
@@ -628,27 +646,39 @@ where
     M: Clone,
     S: BuildHasher + Default + Clone,
 {
-    fn from(mut value: DependentWeave<K, T, M, S>) -> Self {
-        let mut identifiers = Vec::with_capacity(value.len());
-        value.get_ordered_node_identifiers(&mut identifiers);
+    fn from(value: DependentWeave<K, T, M, S>) -> Self {
+        let mut output = Self {
+            active: HashSet::with_capacity_and_hasher(value.nodes.capacity(), S::default()),
+            scratchpad_list: Vec::with_capacity(value.nodes.capacity()),
+            scratchpad_list_2: Vec::with_capacity(value.nodes.capacity()),
+            scratchpad_set: HashSet::with_capacity_and_hasher(value.nodes.capacity(), S::default()),
+            scratchpad_set_2: HashSet::with_capacity_and_hasher(
+                value.nodes.capacity(),
+                S::default(),
+            ),
+            scratchpad_map: HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default()),
+            scratchpad_stack: Vec::with_capacity(value.nodes.capacity()),
+            scratchpad_step_stack: Vec::with_capacity(value.nodes.capacity()),
+            nodes: {
+                let mut map =
+                    HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default());
+                map.extend(value.nodes.into_iter().map(|(id, mut node)| {
+                    node.active = false;
+                    (id, node.into())
+                }));
 
-        let mut output = Self::with_capacity(value.capacity(), value.metadata);
+                map
+            },
+            roots: value.roots,
+            bookmarked: value.bookmarked,
+            metadata: value.metadata,
+        };
 
-        for identifier in identifiers {
-            let node = value.nodes.remove(&identifier).unwrap();
-
-            assert!(
-                output.add_node(IndependentNode {
-                    id: node.id,
-                    from: node.from.into_iter().collect(),
-                    to: IndexSet::with_capacity_and_hasher(node.to.len(), S::default()),
-                    active: node.active,
-                    bookmarked: node.bookmarked,
-                    contents: node.contents,
-                }),
-                "Failed to add node"
-            );
+        if let Some(active) = value.active {
+            output.set_node_active_status(&active, true);
         }
+
+        debug_assert!(output.validate(), "Converted weave is malformed");
 
         output
     }
@@ -731,7 +761,7 @@ where
     #[ensures(output.iter().all(|i| self.active.contains(i)))]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
-    fn get_active_thread(&mut self, output: &mut Vec<K>) {
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
@@ -764,7 +794,7 @@ where
     #[ensures(self.nodes.contains_key(id) || output.is_empty())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
-    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         if !self.nodes.contains_key(id) {
             return;
@@ -1746,7 +1776,7 @@ where
             );
         }
     }
-    fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
+    fn get_active_path(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut scratchpad_list = Vec::with_capacity(self.len());
         let mut scratchpad_list_2 = Vec::with_capacity(self.len());
@@ -1778,7 +1808,7 @@ where
             );
         }
     }
-    fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+    fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
         if !self.nodes.contains_key(id) {
             return;

@@ -76,7 +76,7 @@ where
     pub to: IndexSet<K, S>,
     /// If the node should be considered "active".
     ///
-    /// [`DependentWeave`] only considers the node at the start of an active thread to be "active".
+    /// [`DependentWeave`] only considers the node at the start of an active path to be "active".
     pub active: bool,
     /// If the node is bookmarked.
     pub bookmarked: bool,
@@ -184,8 +184,8 @@ where
             deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
         ))
     )]
-    roots: IndexSet<K, S>,
-    active: Option<K>,
+    pub(super) roots: IndexSet<K, S>,
+    pub(super) active: Option<K>,
     #[cfg_attr(
         feature = "serde",
         serde(bound(
@@ -193,7 +193,7 @@ where
             deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
         ))
     )]
-    bookmarked: IndexSet<K, S>,
+    pub(super) bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
@@ -362,7 +362,7 @@ where
     #[ensures(self.active == output.first().copied())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
-    fn get_active_thread(&mut self, output: &mut Vec<K>) {
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         if let Some(active) = self.active {
@@ -373,7 +373,7 @@ where
     #[ensures(self.nodes.contains_key(id) || output.is_empty())]
     #[ensures(lacks_duplicates(output))]
     #[ensures(valid_path(&self.nodes, output))]
-    fn get_thread_from(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
@@ -1105,14 +1105,14 @@ where
             archived_topological_sort(&self.nodes, *id, &mut scratchpad, &mut scratchpad_2, output);
         }
     }
-    fn get_active_thread(&self, output: &mut Vec<K::Archived>) {
+    fn get_active_path(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if let ArchivedOption::Some(active) = self.active {
             archived_path_to_root(&self.nodes, active, output);
         }
     }
-    fn get_thread_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+    fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if self.nodes.contains_key(id) {

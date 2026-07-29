@@ -61,8 +61,8 @@ enum WeaveTransition {
         reversed: bool,
         id_seed: u32,
     },
-    GetActiveThread,
-    GetThreadFrom {
+    GetActivePath,
+    GetPathFrom {
         id_seed: u32,
     },
     #[proptest(weight = 8)]
@@ -266,18 +266,18 @@ impl StateMachineTest for WeaveWrapper {
                         .get_ordered_node_identifiers_from(&map_id(id_seed), &mut state.scratchpad);
                 }
             }
-            WeaveTransition::GetActiveThread => {
-                //println!("weave.get_active_thread(&mut scratchpad);");
-                state.weave.get_active_thread(&mut state.scratchpad);
+            WeaveTransition::GetActivePath => {
+                //println!("weave.get_active_path(&mut scratchpad);");
+                state.weave.get_active_path(&mut state.scratchpad);
             }
-            WeaveTransition::GetThreadFrom { id_seed } => {
+            WeaveTransition::GetPathFrom { id_seed } => {
                 /*println!(
-                    "weave.get_thread_from(&{}, &mut scratchpad);",
+                    "weave.get_path_from(&{}, &mut scratchpad);",
                     map_id(id_seed)
                 );*/
                 state
                     .weave
-                    .get_thread_from(&map_id(id_seed), &mut state.scratchpad);
+                    .get_path_from(&map_id(id_seed), &mut state.scratchpad);
             }
             WeaveTransition::AddNode {
                 from_seeds,
