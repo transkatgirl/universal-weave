@@ -74,7 +74,7 @@ pub use loro;
 
 extern crate alloc;
 
-use alloc::vec::Vec;
+use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
@@ -730,8 +730,8 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K, K>>,
-    scratchpad_list: &mut Vec<K>,
+    scratchpad: &mut VecDeque<K>,
+    scratchpad_map: &mut HashMap<K, K, S>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
@@ -743,29 +743,28 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(Step::Enter(*id));
+    scratchpad.push_front(*id);
+    scratchpad_set.insert(*id);
 
-    while let Some(step) = scratchpad.pop() {
-        match step {
-            Step::Enter(id) => {
-                if scratchpad_set.insert(id) {
-                    scratchpad_list.push(id);
-                    scratchpad.push(Step::Exit(id));
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
 
-                    let node = &nodes[&id];
+        if target(node) {
+            scratchpad.clear();
 
-                    if target(node) {
-                        if path.is_empty() || path.len() > scratchpad_list.len() {
-                            path.clone_from(scratchpad_list);
-                        }
-                    } else {
-                        scratchpad.extend(node.from().into_iter().rev().copied().map(Step::Enter));
-                    }
-                }
+            path.push(id);
+
+            while let Some(child) = scratchpad_map.remove(path.last().unwrap()) {
+                path.push(child);
             }
-            Step::Exit(id) => {
-                scratchpad_list.pop();
-                scratchpad_set.remove(&id);
+
+            return;
+        }
+
+        for parent in node.from().into_iter().copied() {
+            if scratchpad_set.insert(parent) {
+                scratchpad.push_front(parent);
+                scratchpad_map.insert(parent, id);
             }
         }
     }
@@ -775,8 +774,8 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K, K>>,
-    scratchpad_list: &mut Vec<K>,
+    scratchpad: &mut VecDeque<K>,
+    scratchpad_map: &mut HashMap<K, K, S>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
@@ -788,29 +787,28 @@ fn shortest_path_to_descendant<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(Step::Enter(*id));
+    scratchpad.push_front(*id);
+    scratchpad_set.insert(*id);
 
-    while let Some(step) = scratchpad.pop() {
-        match step {
-            Step::Enter(id) => {
-                if scratchpad_set.insert(id) {
-                    scratchpad_list.push(id);
-                    scratchpad.push(Step::Exit(id));
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
 
-                    let node = &nodes[&id];
+        if target(node) {
+            scratchpad.clear();
 
-                    if target(node) {
-                        if path.is_empty() || path.len() > scratchpad_list.len() {
-                            path.clone_from(scratchpad_list);
-                        }
-                    } else {
-                        scratchpad.extend(node.to().into_iter().rev().copied().map(Step::Enter));
-                    }
-                }
+            path.push(id);
+
+            while let Some(parent) = scratchpad_map.remove(path.last().unwrap()) {
+                path.push(parent);
             }
-            Step::Exit(id) => {
-                scratchpad_list.pop();
-                scratchpad_set.remove(&id);
+
+            return;
+        }
+
+        for child in node.to().into_iter().copied() {
+            if scratchpad_set.insert(child) {
+                scratchpad.push_front(child);
+                scratchpad_map.insert(child, id);
             }
         }
     }

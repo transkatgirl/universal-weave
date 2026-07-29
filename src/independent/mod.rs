@@ -1,6 +1,6 @@
 //! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, collections::vec_deque::VecDeque, vec::Vec};
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
@@ -251,11 +251,19 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_map_2: HashMap<K, K, S>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_stack: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_step_stack: Vec<Step<K, K>>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_queue: VecDeque<K>,
 
     /// The metadata associated with the weave.
     pub metadata: M,
@@ -317,8 +325,10 @@ where
             scratchpad_set: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_set_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_map: HashMap::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_map_2: HashMap::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_stack: Vec::with_capacity(capacity),
             scratchpad_step_stack: Vec::with_capacity(capacity),
+            scratchpad_queue: VecDeque::with_capacity(capacity),
             metadata,
         }
     }
@@ -361,6 +371,11 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_map.len()),
         );
+        self.scratchpad_map_2.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_map_2.len()),
+        );
         self.scratchpad_stack.reserve(
             self.nodes
                 .capacity()
@@ -370,6 +385,11 @@ where
             self.nodes
                 .capacity()
                 .saturating_sub(self.scratchpad_step_stack.len()),
+        );
+        self.scratchpad_queue.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_queue.len()),
         );
     }
     /// Shrinks the capacity of the weave with a lower limit.
@@ -383,8 +403,10 @@ where
         self.scratchpad_set.shrink_to(min_capacity);
         self.scratchpad_set_2.shrink_to(min_capacity);
         self.scratchpad_map.shrink_to(min_capacity);
+        self.scratchpad_map_2.shrink_to(min_capacity);
         self.scratchpad_stack.shrink_to(min_capacity);
         self.scratchpad_step_stack.shrink_to(min_capacity);
+        self.scratchpad_queue.shrink_to(min_capacity);
     }
     fn sibling_ids_from_all_parents_including_roots<'a>(
         &'a self,
@@ -487,14 +509,15 @@ where
             }
 
             self.scratchpad_set_2.clear();
+            self.scratchpad_map_2.clear();
 
             if let Some(target) = target {
                 shortest_path_to_ancestor(
                     &self.nodes,
                     id,
                     &|node| node.id == target,
-                    &mut self.scratchpad_step_stack,
-                    &mut self.scratchpad_list,
+                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_map_2,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
                 );
@@ -503,8 +526,8 @@ where
                     &self.nodes,
                     id,
                     &|node| node.from.is_empty(),
-                    &mut self.scratchpad_step_stack,
-                    &mut self.scratchpad_list,
+                    &mut self.scratchpad_queue,
+                    &mut self.scratchpad_map_2,
                     &mut self.scratchpad_set_2,
                     &mut self.scratchpad_list_2, // shortest path
                 );
@@ -517,7 +540,6 @@ where
                 self.active.insert(path_item);
             }
 
-            self.scratchpad_list.clear();
             self.scratchpad_set_2.clear();
 
             for parent in &self.nodes[id].from {
@@ -550,12 +572,14 @@ where
                 }
             }
 
+            self.scratchpad_map_2.clear();
+
             shortest_path_to_descendant(
                 &self.nodes,
                 id,
                 &|node| node.active && &node.id != id,
-                &mut self.scratchpad_step_stack,
-                &mut self.scratchpad_list,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_map_2,
                 &mut self.scratchpad_set_2,
                 &mut self.scratchpad_list_2,
             );
@@ -569,7 +593,6 @@ where
 
             self.scratchpad_set.clear();
             self.scratchpad_set_2.clear();
-            self.scratchpad_list.clear();
 
             descendant_subgraph(
                 &self.nodes,
@@ -670,8 +693,13 @@ where
                 S::default(),
             ),
             scratchpad_map: HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default()),
+            scratchpad_map_2: HashMap::with_capacity_and_hasher(
+                value.nodes.capacity(),
+                S::default(),
+            ),
             scratchpad_stack: Vec::with_capacity(value.nodes.capacity()),
             scratchpad_step_stack: Vec::with_capacity(value.nodes.capacity()),
+            scratchpad_queue: VecDeque::with_capacity(value.nodes.capacity()),
             nodes: {
                 let mut map =
                     HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default());
@@ -853,20 +881,21 @@ where
             &mut self.scratchpad_list_2,
         );
 
-        self.scratchpad_list.clear();
         self.scratchpad_set_2.clear();
+        self.scratchpad_map_2.clear();
 
         if let Some(target) = self.scratchpad_list_2.first().copied() {
             shortest_path_to_ancestor(
                 &self.nodes,
                 id,
                 &|node| node.id == target,
-                &mut self.scratchpad_step_stack,
-                &mut self.scratchpad_list,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_map_2,
                 &mut self.scratchpad_set_2,
                 output,
             );
 
+            output.reverse();
             output.pop();
             output.append(&mut self.scratchpad_list_2);
         } else {
@@ -874,11 +903,13 @@ where
                 &self.nodes,
                 id,
                 &|node| node.from.is_empty(),
-                &mut self.scratchpad_step_stack,
-                &mut self.scratchpad_list,
+                &mut self.scratchpad_queue,
+                &mut self.scratchpad_map_2,
                 &mut self.scratchpad_set_2,
                 output,
             );
+
+            output.reverse();
         }
     }
     #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
@@ -1098,6 +1129,7 @@ where
 
         self.scratchpad_stack.is_empty()
             && self.scratchpad_step_stack.is_empty()
+            && self.scratchpad_queue.is_empty()
             && self
                 .roots
                 .iter()
@@ -1838,19 +1870,14 @@ where
 
         let mut scratchpad_list = Vec::with_capacity(self.len());
         let mut scratchpad_list_2 = Vec::with_capacity(self.len());
-        let mut scratchpad_list_3 = Vec::with_capacity(self.len());
-        let mut scratchpad_list_4 = Vec::with_capacity(self.len());
         let mut scratchpad_stack = Vec::with_capacity(self.len());
+        let mut scratchpad_queue = VecDeque::with_capacity(self.len());
         let mut scratchpad_set = HashSet::with_capacity(self.len());
         let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
         let mut scratchpad_map = HashMap::with_capacity(self.len());
+        let mut scratchpad_map_2 = HashMap::with_capacity(self.len());
 
-        archived_ancestor_subgraph(
-            &self.nodes,
-            *id,
-            &mut scratchpad_list_3,
-            &mut scratchpad_set,
-        );
+        archived_ancestor_subgraph(&self.nodes, *id, &mut scratchpad_stack, &mut scratchpad_set);
 
         for active_root in self
             .roots
@@ -1862,8 +1889,8 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id) && scratchpad_set.contains(id),
                 &active_root,
-                &mut scratchpad_list_3,
-                &mut scratchpad_list_4,
+                &mut scratchpad_stack,
+                &mut scratchpad_list_2,
                 &mut scratchpad_list,
                 &mut scratchpad_set_2,
             );
@@ -1876,8 +1903,6 @@ where
             &mut scratchpad_list_2,
         );
 
-        scratchpad_list.clear();
-        scratchpad_list_3.clear();
         scratchpad_set_2.clear();
 
         if let Some(target) = scratchpad_list_2.first().copied() {
@@ -1885,13 +1910,13 @@ where
                 &self.nodes,
                 id,
                 &|node| node.id == target,
-                &mut scratchpad_stack,
-                &mut scratchpad_list,
-                &mut scratchpad_list_3,
+                &mut scratchpad_queue,
+                &mut scratchpad_map_2,
                 &mut scratchpad_set_2,
                 output,
             );
 
+            output.reverse();
             output.pop();
             output.append(&mut scratchpad_list_2);
         } else {
@@ -1899,12 +1924,13 @@ where
                 &self.nodes,
                 id,
                 &|node| node.from.is_empty(),
-                &mut scratchpad_stack,
-                &mut scratchpad_list,
-                &mut scratchpad_list_3,
+                &mut scratchpad_queue,
+                &mut scratchpad_map_2,
                 &mut scratchpad_set_2,
                 output,
             );
+
+            output.reverse();
         }
     }
 }
@@ -2201,9 +2227,8 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut Vec<Step<K, K>>,
-    scratchpad_list: &mut Vec<K>,
-    scratchpad_list_2: &mut Vec<K>,
+    scratchpad: &mut VecDeque<K>,
+    scratchpad_map: &mut HashMap<K, K, S>,
     scratchpad_set: &mut HashSet<K, S>,
     path: &mut Vec<K>,
 ) where
@@ -2211,31 +2236,28 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(Step::Enter(*id));
+    scratchpad.push_front(*id);
+    scratchpad_set.insert(*id);
 
-    while let Some(step) = scratchpad.pop() {
-        match step {
-            Step::Enter(id) => {
-                if scratchpad_set.insert(id) {
-                    scratchpad_list.push(id);
-                    scratchpad.push(Step::Exit(id));
+    while let Some(id) = scratchpad.pop_back() {
+        let node = &nodes[&id];
 
-                    let node = &nodes[&id];
+        if target(node) {
+            scratchpad.clear();
 
-                    if target(node) {
-                        if path.is_empty() || path.len() > scratchpad_list.len() {
-                            path.clone_from(scratchpad_list);
-                        }
-                    } else {
-                        scratchpad_list_2.extend(node.from().iter().copied());
-                        scratchpad_list_2.reverse();
-                        scratchpad.extend(scratchpad_list_2.drain(..).map(Step::Enter));
-                    }
-                }
+            path.push(id);
+
+            while let Some(child) = scratchpad_map.remove(path.last().unwrap()) {
+                path.push(child);
             }
-            Step::Exit(id) => {
-                scratchpad_list.pop();
-                scratchpad_set.remove(&id);
+
+            return;
+        }
+
+        for parent in node.from().iter().copied() {
+            if scratchpad_set.insert(parent) {
+                scratchpad.push_front(parent);
+                scratchpad_map.insert(parent, id);
             }
         }
     }

@@ -2,7 +2,6 @@
 
 ## Release 0.1.0
 
-- [ ] Replace shortest_path_to_ancestor and shortest_path_to_descendant with BFS or walk over topological order
 - [ ] Publish to crates.io
 
 ## Release 0.1.1
