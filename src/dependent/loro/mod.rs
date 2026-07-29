@@ -37,6 +37,14 @@ use crate::{DiscreteWeave, Node};
 ///
 /// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
 ///
+/// # Synchronization
+///
+/// This wrapper attempts to keep state synchronized between a [`DependentWeave`] and [`LoroDoc`]. If this synchronization fails, this wrapper's [`Weave`] functions may create incorrect updates to the [`LoroDoc`], possibly resulting in panics.
+///
+/// Synchronization can be checked using [`DependentLoroWeave::validate()`].
+///
+/// [`DependentLoroWeave::update()`] provides the most straightforward route for resolving desynchronization by treating the [`LoroDoc`] as the source of truth. If `update()` fails, the [`LoroDoc`] needs to be modified before it can be used to update the [`DependentWeave`]'s state.
+///
 /// # Panics
 ///
 /// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
@@ -325,7 +333,7 @@ where
     ///
     /// # Errors
     ///
-    /// Will return `Err` if creating a [`LoroDoc`] from the weave's state fails.
+    /// Returns `Err` if creating a [`LoroDoc`] from the weave's state fails.
     #[inline]
     pub fn from_weave(weave: DependentWeave<K, T, M, S>) -> Result<Self, rancor::Error> {
         Self::try_from(weave)
@@ -334,7 +342,7 @@ where
     ///
     /// # Errors
     ///
-    /// Will return `Err` if creating a [`DependentWeave`] from the document fails.
+    /// Returns `Err` if creating a [`DependentWeave`] from the document fails.
     #[inline]
     pub fn from_doc(doc: LoroDoc) -> Result<Self, rancor::Error> {
         Self::try_from(doc)
@@ -363,9 +371,9 @@ where
     ///
     /// # Errors
     ///
-    /// Will return `Err` if updating the weave's state from the corresponding [`LoroDoc`] fails.
+    /// Returns `Err` if updating the weave's state from the corresponding [`LoroDoc`] fails.
     ///
-    /// If an error occurs, all nodes will be removed from the weave.
+    /// After an error occurs, the inner [`DependentWeave`] and [`LoroDoc`] will no longer be synchronized.
     ///
     /// # Panics
     ///
@@ -749,7 +757,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    /// Validates that the internal [`LoroDoc`] is consistent with the [`DependentWeave`]'s state.
+    /// Validates that the state of the internal [`LoroDoc`] and [`DependentWeave`] are synchronized.
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 

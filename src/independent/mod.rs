@@ -1107,7 +1107,7 @@ where
         }
     }
     #[ensures(self.nodes.is_empty())]
-    #[invariant(self.validate())]
+    #[ensures(self.validate())]
     fn remove_all_nodes(&mut self) {
         self.nodes.clear();
         self.roots.clear();
