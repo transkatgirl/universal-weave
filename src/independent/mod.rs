@@ -34,6 +34,7 @@ use crate::{
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
     shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
+    topological_sort_subgraph_rev,
 };
 
 #[cfg(feature = "rkyv")]
@@ -728,33 +729,38 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            topological_sort::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort(
                 &self.nodes,
                 root,
                 &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
-            ); // Compiler limitation
+            );
         }
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
-        self.scratchpad_set.clear();
 
         if self.nodes.contains_key(id) {
-            if let Some(node) = self.nodes.get(id) {
-                for parent in &node.from {
-                    self.scratchpad_set.insert(*parent);
-                }
-            }
-            topological_sort::<K, IndependentNode<K, T, S>, T, S>(
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
+
+            descendant_subgraph(
                 &self.nodes,
+                *id,
+                &mut self.scratchpad_stack,
+                &mut self.scratchpad_set,
+            );
+
+            topological_sort_subgraph(
+                &self.nodes,
+                &|id| self.scratchpad_set.contains(id),
                 id,
                 &mut self.scratchpad_stack,
                 output,
-                &mut self.scratchpad_set,
-            ); // Compiler limitation
+                &mut self.scratchpad_set_2,
+            );
         }
     }
     #[ensures(output.len() == self.active.len())]
@@ -1183,33 +1189,38 @@ where
         self.scratchpad_set.clear();
 
         for root in &self.roots {
-            topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
+            topological_sort_rev(
                 &self.nodes,
                 root,
                 &mut self.scratchpad_stack,
                 output,
                 &mut self.scratchpad_set,
-            ); // Compiler limitation
+            );
         }
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
-        self.scratchpad_set.clear();
 
         if self.nodes.contains_key(id) {
-            if let Some(node) = self.nodes.get(id) {
-                for parent in &node.from {
-                    self.scratchpad_set.insert(*parent);
-                }
-            }
-            topological_sort_rev::<K, IndependentNode<K, T, S>, T, S>(
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
+
+            descendant_subgraph(
                 &self.nodes,
+                *id,
+                &mut self.scratchpad_stack,
+                &mut self.scratchpad_set,
+            );
+
+            topological_sort_subgraph_rev(
+                &self.nodes,
+                &|id| self.scratchpad_set.contains(id),
                 id,
                 &mut self.scratchpad_stack,
                 output,
-                &mut self.scratchpad_set,
-            ); // Compiler limitation
+                &mut self.scratchpad_set_2,
+            );
         }
     }
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
@@ -1764,15 +1775,19 @@ where
         if self.nodes.contains_key(id) {
             let mut scratchpad = Vec::with_capacity(self.len());
             let mut scratchpad_2 = Vec::with_capacity(self.len());
-            let mut identifier_set = HashSet::with_capacity(self.len());
+            let mut scratchpad_set = HashSet::with_capacity(self.len());
+            let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
 
-            archived_topological_sort(
+            archived_descendant_subgraph(&self.nodes, *id, &mut scratchpad, &mut scratchpad_set);
+
+            archived_topological_sort_subgraph(
                 &self.nodes,
+                &|id| scratchpad_set.contains(id),
                 id,
                 &mut scratchpad,
                 &mut scratchpad_2,
                 output,
-                &mut identifier_set,
+                &mut scratchpad_set_2,
             );
         }
     }
@@ -1961,14 +1976,18 @@ where
 
         if self.nodes.contains_key(id) {
             let mut scratchpad = Vec::with_capacity(self.len());
-            let mut identifier_set = HashSet::with_capacity(self.len());
+            let mut scratchpad_set = HashSet::with_capacity(self.len());
+            let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
 
-            archived_topological_sort_rev(
+            archived_descendant_subgraph(&self.nodes, *id, &mut scratchpad, &mut scratchpad_set);
+
+            archived_topological_sort_subgraph_rev(
                 &self.nodes,
+                &|id| scratchpad_set.contains(id),
                 id,
                 &mut scratchpad,
                 output,
-                &mut identifier_set,
+                &mut scratchpad_set_2,
             );
         }
     }
@@ -2056,6 +2075,38 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
             scratchpad_2.extend(nodes[&id].to().iter().copied());
             scratchpad_2.reverse();
             scratchpad.append(scratchpad_2);
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+fn archived_topological_sort_subgraph_rev<'a, K, N, T, S>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    filter: &impl Fn(&K) -> bool,
+    id: &'a K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push(*id);
+
+    while let Some(id) = scratchpad.pop() {
+        let node = &nodes[&id];
+
+        if filter(&id)
+            && !identifier_set.contains(&id)
+            && node
+                .from()
+                .iter()
+                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(nodes[&id].to().iter().copied());
         }
     }
 }
@@ -2249,6 +2300,26 @@ fn archived_ancestor_subgraph<'a, K, N, T, S>(
     while let Some(id) = scratchpad.pop() {
         if identifiers.insert(id) {
             scratchpad.extend(nodes[&id].from().iter().copied());
+        }
+    }
+}
+
+#[cfg(feature = "rkyv")]
+fn archived_descendant_subgraph<'a, K, N, T, S>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    id: K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push(id);
+
+    while let Some(id) = scratchpad.pop() {
+        if identifiers.insert(id) {
+            scratchpad.extend(nodes[&id].to().iter().copied());
         }
     }
 }

@@ -602,6 +602,41 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     }
 }
 
+fn topological_sort_subgraph_rev<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    filter: &impl Fn(&K) -> bool,
+    id: &'a K,
+    scratchpad: &mut Vec<K>,
+    identifiers: &mut Vec<K>,
+    identifier_set: &mut HashSet<K, S>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    scratchpad.push(*id);
+
+    while let Some(id) = scratchpad.pop() {
+        let node = &nodes[&id];
+
+        if filter(&id)
+            && !identifier_set.contains(&id)
+            && node
+                .from()
+                .into_iter()
+                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        {
+            identifiers.push(id);
+            identifier_set.insert(id);
+            scratchpad.extend(node.to().into_iter().copied());
+        }
+    }
+}
+
 fn topological_sort_rev<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
