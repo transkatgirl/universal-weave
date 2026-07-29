@@ -10,6 +10,7 @@
 	- [ ] Property tests for IndependentWeave::from(DependentWeave)
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
+    - [ ] Add DependentLoroWeve import fuzzing
 	- [ ] End-to-end property tests for DependentLoroWeave CRDT merging
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
 - [ ] Full (library) code review

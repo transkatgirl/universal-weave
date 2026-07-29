@@ -339,6 +339,7 @@ where
         match self.import() {
             Ok(()) => Ok(()),
             Err(error) => {
+                self.scratchpad.clear();
                 self.weave.remove_all_nodes();
                 self.mapping.clear();
                 Err(error)

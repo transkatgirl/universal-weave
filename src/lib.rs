@@ -157,6 +157,10 @@ pub trait DeduplicatableContents {
 /// # Deserialization
 ///
 /// If a Weave implementation supports deserialization, it must validate internal consistency during the deserialization process in a way which is robust to untrusted inputs.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 #[must_use]
 pub trait Weave<K, N, T>
 where
