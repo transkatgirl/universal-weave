@@ -26,7 +26,8 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 - Weaves:
 	- Serialization and deserialization (supports rkyv and serde)
 		- Zero-copy deserialization (requires rkyv)
-		- Robust to untrusted inputs (hash collision resistance is not supported for zero-copy deserialization)
+		- Robust to untrusted inputs
+			- Hash collision resistance is not supported with rkyv
 		- Format versioning (requires rkyv)
 	- Unbounded depth
 	- Convenient traversal methods
