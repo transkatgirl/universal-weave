@@ -540,27 +540,14 @@ where
                 self.active.insert(path_item);
             }
 
-            self.scratchpad_set_2.clear();
-
-            for parent in &self.nodes[id].from {
-                for sibling in self.nodes[parent].to.iter().copied() {
-                    if self.scratchpad_set.insert(sibling) {
-                        self.scratchpad_list_2.push(sibling); // siblings
-                    }
-                }
-            }
-
             self.scratchpad_set.remove(id);
+
             descendant_subgraph(
                 &self.nodes,
                 *id,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_set,
             ); // decendants
-
-            for item in self.scratchpad_list_2.drain(..) {
-                self.scratchpad_set.remove(&item);
-            }
 
             self.scratchpad_list
                 .extend(self.active.difference(&self.scratchpad_set).copied());
@@ -572,6 +559,7 @@ where
                 }
             }
 
+            self.scratchpad_set_2.clear();
             self.scratchpad_map_2.clear();
 
             shortest_path_to_descendant(
