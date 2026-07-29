@@ -364,7 +364,7 @@ where
 {
     /// Moves a node with the specified identifier to a new set of parent nodes, returning `true` if the move was successful.
     ///
-    /// This function may change the active status of nodes in the weave, including but not limited to the moved node, in order to preserve internal consistency.
+    /// This function may change the active status of other nodes if it is necessary to preserve internal consistency.
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 

@@ -163,7 +163,7 @@ where
 impl<K, T, S> From<DependentNode<K, T, S>> for IndependentNode<K, T, S>
 where
     K: Hash + Copy + Eq + Ord,
-    T: IndependentContents + Clone,
+    T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     fn from(value: DependentNode<K, T, S>) -> Self {
@@ -678,8 +678,7 @@ where
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,
-    T: IndependentContents + Clone,
-    M: Clone,
+    T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
@@ -1546,6 +1545,7 @@ where
     #[invariant(self.validate())]
     #[ensures(old(self.nodes.len()) == self.nodes.len())]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
+    #[ensures(old(self.nodes().get(id).map(|node| node.active)) == self.nodes().get(id).map(|node| node.active))]
     #[ensures(!ret || self.nodes().get(id).unwrap().from.iter().copied().collect::<HashSet<_>>() == new_parents.iter().copied().collect::<HashSet<_>>())]
     #[ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())) == self.nodes().get(id).map(|node| node.from.clone()))]
     #[ensures(ret || old(self.active.len()) == self.active.len())]
@@ -1624,7 +1624,8 @@ where
         }
 
         if node.active {
-            self.fix_orphaned_activations();
+            node.active = false;
+            self.update_node_activity_in_place(id, true);
         }
 
         true
