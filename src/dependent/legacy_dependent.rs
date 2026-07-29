@@ -77,6 +77,7 @@ where
     feature = "serde",
     serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
 )]
+#[must_use]
 pub struct DependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,

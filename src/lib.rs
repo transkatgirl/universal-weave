@@ -159,17 +159,17 @@ pub trait DiscreteContents: Sized {
     /// Splits the item at specified index.
     ///
     /// If splitting the item fails, the original contents are returned.
-    #[must_use]
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
     ///
     /// If merging the two items fails, the original contents are returned in the order they were specified in.
-    #[must_use]
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
 /// A type representing the results of an action on a [`DiscreteContents`] item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[allow(missing_docs, reason = "Enum items are self-explanatory")]
+#[must_use]
 pub enum DiscreteContentResult<T> {
     One(T),
     Two(T, T),

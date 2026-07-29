@@ -203,7 +203,8 @@ where
 }
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
-#[derive(Debug)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[must_use]
 pub struct ValidationError;
 
 #[cfg(feature = "serde")]
