@@ -6,12 +6,12 @@
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
 - [ ] Improve test coverage
-    - [ ] Property tests for DependentLoroWeave CRDT merging
-    - [ ] Property tests for IndependentWeave::from(DependentWeave)
-    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
     - [ ] Property tests for Archived structs
-    - [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
+	- [ ] Property tests for IndependentWeave::from(DependentWeave)
+	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
+	- [ ] End-to-end property tests for DependentLoroWeave CRDT merging
+    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
 - [ ] Full (library) code review
 
 ## Release 0.2.0
