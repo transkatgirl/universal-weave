@@ -259,10 +259,6 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_step_stack: Vec<Step<K, K>>,
-
-    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_queue: VecDeque<K>,
 
     /// The metadata associated with the weave.
@@ -327,7 +323,6 @@ where
             scratchpad_map: HashMap::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_map_2: HashMap::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_stack: Vec::with_capacity(capacity),
-            scratchpad_step_stack: Vec::with_capacity(capacity),
             scratchpad_queue: VecDeque::with_capacity(capacity),
             metadata,
         }
@@ -381,11 +376,6 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_stack.len()),
         );
-        self.scratchpad_step_stack.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.scratchpad_step_stack.len()),
-        );
         self.scratchpad_queue.reserve(
             self.nodes
                 .capacity()
@@ -405,7 +395,6 @@ where
         self.scratchpad_map.shrink_to(min_capacity);
         self.scratchpad_map_2.shrink_to(min_capacity);
         self.scratchpad_stack.shrink_to(min_capacity);
-        self.scratchpad_step_stack.shrink_to(min_capacity);
         self.scratchpad_queue.shrink_to(min_capacity);
     }
     fn sibling_ids_from_all_parents_including_roots<'a>(
@@ -685,7 +674,6 @@ where
                 S::default(),
             ),
             scratchpad_stack: Vec::with_capacity(value.nodes.capacity()),
-            scratchpad_step_stack: Vec::with_capacity(value.nodes.capacity()),
             scratchpad_queue: VecDeque::with_capacity(value.nodes.capacity()),
             nodes: {
                 let mut map =
@@ -1115,7 +1103,6 @@ where
         let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad_stack.is_empty()
-            && self.scratchpad_step_stack.is_empty()
             && self.scratchpad_queue.is_empty()
             && self
                 .roots
