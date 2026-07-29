@@ -292,6 +292,7 @@ impl StateMachineTest for WeaveWrapper {
                     .weave
                     .update(|doc| {
                         doc.commit();
+                        state.last_commit = Some(doc.state_frontiers());
                     })
                     .unwrap();
             }
