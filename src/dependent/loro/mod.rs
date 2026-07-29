@@ -592,10 +592,18 @@ where
             None
         };
 
-        if let Some(node) = self.weave.remove_node(id) {
+        let mut removed_node = None;
+
+        if self.weave.remove_node_tracked(id, |node| {
+            if &node.id == id {
+                removed_node = Some(node);
+            } else {
+                self.mapping.remove(&node.id).unwrap();
+            }
+        }) {
             self.doc
                 .get_tree("tree")
-                .delete(self.mapping.remove(&node.id).unwrap())
+                .delete(self.mapping.remove(id).unwrap())
                 .unwrap();
 
             self.doc
@@ -613,16 +621,14 @@ where
                     bookmarks.delete(index, 1).unwrap();
                 }
             }
-
-            Some(node)
-        } else {
-            None
         }
+
+        removed_node
     }
     fn remove_node_tracked(
         &mut self,
         id: &K,
-        on_removal: impl FnMut(DependentNode<K, T, S>),
+        mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
         let old_bookmarks: Option<Vec<K>> = if self.weave.contains(id) {
             Some(self.weave.bookmarked.iter().copied().collect())
@@ -630,7 +636,12 @@ where
             None
         };
 
-        if self.weave.remove_node_tracked(id, on_removal) {
+        if self.weave.remove_node_tracked(id, |node| {
+            if &node.id != id {
+                self.mapping.remove(&node.id).unwrap();
+            }
+            on_removal(node);
+        }) {
             self.doc
                 .get_tree("tree")
                 .delete(self.mapping.remove(id).unwrap())
