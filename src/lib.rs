@@ -502,7 +502,7 @@ where
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     ///
     /// Unlike [`ArchivedWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>);
+    fn get_ordered_node_identifiers_from_reversed_children(&self, id: &K, output: &mut Vec<K>);
 }
 
 #[cfg(feature = "rkyv")]

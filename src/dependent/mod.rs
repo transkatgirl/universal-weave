@@ -1179,7 +1179,7 @@ where
         }
     }
     fn get_ordered_node_identifiers_from_reversed_children(
-        &mut self,
+        &self,
         id: &K::Archived,
         output: &mut Vec<K::Archived>,
     ) {
