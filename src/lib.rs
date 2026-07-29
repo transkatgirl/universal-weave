@@ -7,42 +7,6 @@
 //!
 //! Efficient (de)serialization is supported using `rkyv` (recommended, supports zero-copy deserialization) and `serde`. Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
 //!
-/*
-
-# 0.1.0 Checklist:
-- [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
-- [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
-    - [ ] Naming
-    - [ ] Interoperability
-    - [x] Macros
-    - [ ] Documentation
-    - [ ] Predictability
-    - [ ] Flexibility
-    - [ ] Type safety
-    - [ ] Dependability
-    - [ ] Debuggability
-    - [ ] Future proofing
-    - [x] Necessities
-- [ ] Full documentation review (including README)
-    - [ ] Add crate examples
-- [ ] Full code review
-- [ ] Improve test coverage
-    - [ ] Property tests for DependentLoroWeave CRDT merging
-    - [ ] Property tests for IndependentWeave::from(DependentWeave)
-    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
-    - [ ] Property tests for Archived structs
-    - [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
-    - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
-- [ ] Publish to crates.io
-
-# 0.2.0 Checklist:
-- [ ] Separate bookmarking into a Weave wrapper?
-- [ ] Add node layout calculation behind a feature flag?
-
-# Ideas for future releases:
-- Formal verification using Verus once it supports enough of the language features
-
-*/
 
 #![no_std]
 #![forbid(non_ascii_idents)]
