@@ -1,9 +1,5 @@
 # TODO
 
-## Release 0.1.0
-
-- [ ] Publish to crates.io
-
 ## Release 0.1.1
 
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
