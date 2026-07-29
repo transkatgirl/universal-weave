@@ -37,13 +37,17 @@ use crate::{DiscreteWeave, Node};
 ///
 /// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
 ///
+/// # Conflict resolution
+///
+/// Conflicting [`SemiIndependentWeave::get_contents_mut`] updates and [`MetadataWeave::metadata_mut`] updates are currently handled via a Last Write Wins strategy. Additional conflict resolution strategies may be made available in the future.
+///
 /// # Synchronization
 ///
 /// This wrapper attempts to keep state synchronized between a [`DependentWeave`] and [`LoroDoc`]. If this synchronization fails, this wrapper's [`Weave`] functions may create incorrect updates to the [`LoroDoc`], possibly resulting in panics.
 ///
 /// Synchronization can be checked using [`DependentLoroWeave::validate()`].
 ///
-/// [`DependentLoroWeave::update()`] provides the most straightforward route for resolving desynchronization by treating the [`LoroDoc`] as the source of truth. If `update()` fails, the [`LoroDoc`] needs to be modified before it can be used to update the [`DependentWeave`]'s state.
+/// [`DependentLoroWeave::update()`] provides the most straightforward route for resolving desynchronization. If `update()` fails, the [`LoroDoc`] needs to be manually modified before it can be used to update the [`DependentWeave`]'s state.
 ///
 /// # Panics
 ///
