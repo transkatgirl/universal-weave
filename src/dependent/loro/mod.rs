@@ -40,7 +40,7 @@ use crate::{DiscreteWeave, Node};
 /// # Panics
 ///
 /// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 #[must_use]
 pub struct DependentLoroWeave<K, T, M, S>
 where
@@ -65,6 +65,45 @@ where
     scratchpad: Vec<(TreeID, Option<K>)>,
     buffer: AlignedVec,
     doc: LoroDoc,
+}
+
+impl<K, T, M, S> Clone for DependentLoroWeave<K, T, M, S>
+where
+    for<'a> K: Archive
+        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
+        + Hash
+        + Copy
+        + Eq
+        + Ord,
+    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<K, Strategy<Pool, rancor::Error>>,
+    for<'a> T:
+        Clone + Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<T, Strategy<Pool, rancor::Error>>,
+    for<'a> M:
+        Clone + Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
+    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
+        + Deserialize<M, Strategy<Pool, rancor::Error>>,
+    S: BuildHasher + Default + Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            weave: self.weave.clone(),
+            mapping: self.mapping.clone(),
+            scratchpad: self.scratchpad.clone(),
+            buffer: self.buffer.clone(),
+            doc: self.doc.fork(),
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.weave.clone_from(&source.weave);
+        self.mapping.clone_from(&source.mapping);
+        self.scratchpad.clone_from(&source.scratchpad);
+        self.buffer.clone_from(&source.buffer);
+        self.doc = source.doc.fork();
+    }
 }
 
 impl<K, T, M, S> AsRef<DependentWeave<K, T, M, S>> for DependentLoroWeave<K, T, M, S>
