@@ -130,11 +130,21 @@ where
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.nodes.eq(&other.nodes)
-            && self.roots.eq(&other.roots)
-            && self.active.eq(&other.active)
-            && self.bookmarked.eq(&other.bookmarked)
-            && self.metadata.eq(&other.metadata)
+        self.roots.len() == other.roots.len()
+            && self.bookmarked.len() == other.bookmarked.len()
+            && self.active == other.active
+            && self
+                .roots
+                .iter()
+                .zip(other.roots.iter())
+                .all(|(a, b)| a == b)
+            && self
+                .bookmarked
+                .iter()
+                .zip(other.bookmarked.iter())
+                .all(|(a, b)| a == b)
+            && self.nodes == other.nodes
+            && self.metadata == other.metadata
     }
 }
 

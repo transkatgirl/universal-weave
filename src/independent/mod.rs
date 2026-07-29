@@ -96,11 +96,13 @@ where
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.id.eq(&other.id)
-            && self.from.eq(&other.from)
-            && self.to.eq(&other.to)
-            && self.active.eq(&other.active)
-            && self.bookmarked.eq(&other.bookmarked)
+        self.id == other.id
+            && self.from.len() == other.from.len()
+            && self.to.len() == other.to.len()
+            && self.from.iter().zip(other.from.iter()).all(|(a, b)| a == b)
+            && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
+            && self.active == other.active
+            && self.bookmarked == other.bookmarked
             && self.contents.eq(&other.contents)
     }
 }
@@ -269,11 +271,21 @@ where
 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
-        self.nodes.eq(&other.nodes)
-            && self.roots.eq(&other.roots)
-            && self.active.eq(&other.active)
-            && self.bookmarked.eq(&other.bookmarked)
-            && self.metadata.eq(&other.metadata)
+        self.roots.len() == other.roots.len()
+            && self.bookmarked.len() == other.bookmarked.len()
+            && self.active == other.active
+            && self
+                .roots
+                .iter()
+                .zip(other.roots.iter())
+                .all(|(a, b)| a == b)
+            && self
+                .bookmarked
+                .iter()
+                .zip(other.bookmarked.iter())
+                .all(|(a, b)| a == b)
+            && self.nodes == other.nodes
+            && self.metadata == other.metadata
     }
 }
 
