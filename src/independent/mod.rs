@@ -709,8 +709,6 @@ where
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
-        // TODO
-
         output.clear();
         self.scratchpad_set.clear();
 
@@ -1166,8 +1164,6 @@ where
     }
     #[ensures(lacks_duplicates(output))]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
-        // TODO
-
         output.clear();
         self.scratchpad_set.clear();
 

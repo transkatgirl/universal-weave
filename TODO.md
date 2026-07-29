@@ -2,7 +2,13 @@
 
 ## Release 0.1.0
 
-- [ ] IMPORTANT - Review function contracts to ensure consistency with documentation & reasonable behavior
+- [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
+	- [ ] DependentWeave
+	- [ ] IndependentWeave
+- [ ] Publish to crates.io
+
+## Release 0.1.1
+
 - [ ] Improve test coverage
     - [ ] Property tests for DependentLoroWeave CRDT merging
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
@@ -11,7 +17,6 @@
     - [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
 - [ ] Full (library) code review
-- [ ] Publish to crates.io
 
 ## Release 0.2.0
 
