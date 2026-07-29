@@ -47,7 +47,7 @@ use crate::{DiscreteWeave, Node};
 ///
 /// # Panics
 ///
-/// The wrapper's [`Weave`] functions may panic if updating the underlying [`LoroDoc`] fails or if the underlying [`DependentWeave`] is internally inconsistent.
+/// The wrapper's [`Weave`] functions may panic if updating the inner [`LoroDoc`] fails or if the inner [`DependentWeave`] is internally inconsistent.
 #[derive(Debug)]
 #[must_use]
 pub struct DependentLoroWeave<K, T, M, S>
@@ -757,7 +757,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    /// Validates that the state of the internal [`LoroDoc`] and [`DependentWeave`] are synchronized.
+    /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized.
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 
