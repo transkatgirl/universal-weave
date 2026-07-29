@@ -80,3 +80,9 @@ opt-level = 3
 
 [profile.test.package.rand_chacha]
 opt-level = 3
+
+[[test]]
+name = "loro_dependent"
+required-features = [
+	"loro",
+]
