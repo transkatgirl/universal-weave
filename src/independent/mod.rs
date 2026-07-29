@@ -799,14 +799,14 @@ where
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
-
-            longest_path_to_root(
-                &self.nodes,
-                &self.scratchpad_list,
-                &mut self.scratchpad_map,
-                output,
-            );
         }
+
+        longest_path_to_root(
+            &self.nodes,
+            &self.scratchpad_list,
+            &mut self.scratchpad_map,
+            output,
+        );
     }
     #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
     #[ensures(self.nodes.contains_key(id) || output.is_empty())]
@@ -844,14 +844,14 @@ where
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
             );
-
-            longest_path_to_root(
-                &self.nodes,
-                &self.scratchpad_list,
-                &mut self.scratchpad_map,
-                &mut self.scratchpad_list_2,
-            );
         }
+
+        longest_path_to_root(
+            &self.nodes,
+            &self.scratchpad_list,
+            &mut self.scratchpad_map,
+            &mut self.scratchpad_list_2,
+        );
 
         self.scratchpad_list.clear();
         self.scratchpad_set_2.clear();
@@ -1826,14 +1826,9 @@ where
                 &mut scratchpad_list_3,
                 &mut scratchpad_set,
             );
-
-            archived_longest_path_to_root(
-                &self.nodes,
-                &scratchpad_list_3,
-                &mut scratchpad_map,
-                output,
-            );
         }
+
+        archived_longest_path_to_root(&self.nodes, &scratchpad_list_3, &mut scratchpad_map, output);
     }
     fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
@@ -1872,14 +1867,14 @@ where
                 &mut scratchpad_list,
                 &mut scratchpad_set_2,
             );
-
-            archived_longest_path_to_root(
-                &self.nodes,
-                &scratchpad_list,
-                &mut scratchpad_map,
-                &mut scratchpad_list_2,
-            );
         }
+
+        archived_longest_path_to_root(
+            &self.nodes,
+            &scratchpad_list,
+            &mut scratchpad_map,
+            &mut scratchpad_list_2,
+        );
 
         scratchpad_list.clear();
         scratchpad_list_3.clear();
