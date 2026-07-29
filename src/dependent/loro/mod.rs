@@ -393,6 +393,10 @@ where
         let metadata = self.doc.get_map("metadata");
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
+        if !tree.is_fractional_index_enabled() {
+            tree.enable_fractional_index(0);
+        }
+
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) = metadata.get("contents") {
             self.weave.metadata = from_bytes_aligned(&binary, &mut self.buffer)?;
         } else {
@@ -752,6 +756,10 @@ where
         let tree = self.doc.get_tree("tree");
         let metadata = self.doc.get_map("metadata");
         let bookmarks = self.doc.get_movable_list("bookmarks");
+
+        if !tree.is_fractional_index_enabled() {
+            return false;
+        }
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) = metadata.get("contents")
             && let Ok(metadata) = from_bytes_aligned(&binary, &mut buffer)
