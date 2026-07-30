@@ -38,7 +38,7 @@ use crate::{DiscreteWeave, Node};
 ///
 /// [`DiscreteWeave::split_node()`] and [`DiscreteWeave::merge_with_parent()`] are left intentionally unimplemented due to algorithmic limitations; Splitting/merging node contents must be done by adding a new [`Node`] with the updated contents to the [`Weave`].
 ///
-/// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) if you plan on using this wrapper.
+/// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) when using this wrapper to prevent node ID collisions.
 ///
 /// # Conflict resolution
 ///
@@ -615,7 +615,7 @@ where
     fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
         let id = node.id;
         let from = node.from;
-        let active = node.active;
+        let mut active = node.active;
         let bookmarked = node.bookmarked;
         let contents = to_bytes(&node.contents).unwrap();
 
@@ -625,6 +625,7 @@ where
             let id_bytes = to_bytes(&id).unwrap().into_vec();
 
             let tree = self.doc.get_tree("tree");
+            let metadata = self.doc.get_map("metadata");
             let bookmarks = self.doc.get_movable_list("bookmarks");
 
             let tree_id = tree
@@ -640,7 +641,7 @@ where
 
             for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
                 if let LoroValue::Binary(binary) = bookmark
-                    && *binary == id_bytes
+                    && from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap() == id
                 {
                     bookmarks.delete(index, 1).unwrap();
                     was_dangling = true;
@@ -668,9 +669,16 @@ where
                 }
             }
 
-            if active || self.weave.active.is_none() {
-                self.doc
-                    .get_map("metadata")
+            if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
+                metadata.get("active_node")
+                && from_bytes_aligned::<Option<K>, _>(&binary, &mut self.buffer).unwrap()
+                    == Some(id)
+            {
+                active = true;
+            }
+
+            if active {
+                metadata
                     .insert(
                         "active_node",
                         to_bytes(&self.weave.active).unwrap().into_vec(),
@@ -1060,16 +1068,14 @@ where
 
         if self.weave.set_node_bookmarked_status(id, value) {
             if value != was_bookmarked {
-                let id_bytes = to_bytes(id).unwrap().into_vec();
-
                 let bookmarks = self.doc.get_movable_list("bookmarks");
 
                 if value {
-                    bookmarks.push(id_bytes).unwrap();
+                    bookmarks.push(to_bytes(id).unwrap().into_vec()).unwrap();
                 } else {
                     for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
                         if let LoroValue::Binary(binary) = bookmark
-                            && *binary == id_bytes
+                            && from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap() == *id
                         {
                             bookmarks.delete(index, 1).unwrap();
                         }
