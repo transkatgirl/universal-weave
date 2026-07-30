@@ -76,6 +76,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     weave: DependentWeave<K, T, M, S>,
+    bookmark_mapping: Vec<usize>,
     tree_mapping: HashMap<K, TreeID, S>,
     scratchpad: Vec<(TreeID, Option<K>)>,
     buffer: AlignedVec,
@@ -105,6 +106,7 @@ where
     fn clone(&self) -> Self {
         Self {
             weave: self.weave.clone(),
+            bookmark_mapping: self.bookmark_mapping.clone(),
             tree_mapping: self.tree_mapping.clone(),
             scratchpad: self.scratchpad.clone(),
             buffer: self.buffer.clone(),
@@ -114,6 +116,7 @@ where
 
     fn clone_from(&mut self, source: &Self) {
         self.weave.clone_from(&source.weave);
+        self.bookmark_mapping.clone_from(&source.bookmark_mapping);
         self.tree_mapping.clone_from(&source.tree_mapping);
         self.scratchpad.clone_from(&source.scratchpad);
         self.buffer.clone_from(&source.buffer);
@@ -221,11 +224,10 @@ where
 
         tree.enable_fractional_index(0);
 
-        let mut self_nodes = Vec::with_capacity(value.len());
+        let mut self_nodes = Vec::with_capacity(value.capacity());
         value.get_ordered_node_identifiers(&mut self_nodes);
 
-        let mut tree_mapping: HashMap<K, TreeID, S> =
-            HashMap::with_capacity_and_hasher(value.len(), S::default());
+        let mut tree_mapping = HashMap::with_capacity_and_hasher(value.capacity(), S::default());
 
         for node in self_nodes {
             let node = value.get_node(&node).unwrap();
@@ -248,7 +250,10 @@ where
             .insert("contents", to_bytes(&value.metadata)?.into_vec())
             .unwrap();
 
-        for bookmark in &value.bookmarked {
+        let mut bookmark_mapping = Vec::with_capacity(value.capacity());
+
+        for (index, bookmark) in value.bookmarked.iter().enumerate() {
+            bookmark_mapping.push(index);
             bookmarks.push(to_bytes(bookmark)?.into_vec()).unwrap();
         }
 
@@ -256,8 +261,9 @@ where
 
         Ok(Self {
             doc,
-            scratchpad: Vec::with_capacity(tree_mapping.len()),
+            scratchpad: Vec::with_capacity(tree_mapping.capacity()),
             tree_mapping,
+            bookmark_mapping,
             buffer: AlignedVec::with_capacity(4096),
             weave: value,
         })
@@ -305,6 +311,7 @@ where
             DependentWeave::with_capacity(tree.nodes().len(), metadata);
 
         let mut wrapped = Self {
+            bookmark_mapping: Vec::with_capacity(weave.capacity()),
             tree_mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
             scratchpad: Vec::with_capacity(weave.capacity()),
             buffer,
@@ -420,6 +427,7 @@ where
     }
     fn import(&mut self) -> Result<(), rancor::Error> {
         self.tree_mapping.clear();
+        self.bookmark_mapping.clear();
         self.weave.remove_all_nodes();
 
         let tree = self.doc.get_tree("tree");
@@ -460,19 +468,14 @@ where
             )))?;
         }
 
-        let mut offset = 0;
-
         for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
             if let LoroValue::Binary(binary) = bookmark {
                 let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
 
-                if self.weave.contains_bookmark(&bookmark)
-                    || !self.weave.set_node_bookmarked_status(&bookmark, true)
+                if !self.weave.contains_bookmark(&bookmark)
+                    && self.weave.set_node_bookmarked_status(&bookmark, true)
                 {
-                    bookmarks
-                        .delete(index.strict_sub(offset), 1)
-                        .map_err(rancor::Error::new)?;
-                    offset = offset.strict_add(1);
+                    self.bookmark_mapping.push(index);
                 }
             } else {
                 Err(rancor::Error::new(loro::LoroError::Unknown(
@@ -627,10 +630,10 @@ where
             meta.insert("contents", contents.into_vec()).unwrap();
 
             if bookmarked {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .push(id_bytes)
-                    .unwrap();
+                let bookmarks = self.doc.get_movable_list("bookmarks");
+
+                self.bookmark_mapping.push(bookmarks.len());
+                bookmarks.push(id_bytes).unwrap();
             }
 
             if active {
@@ -695,7 +698,13 @@ where
 
             for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
                 if !self.weave.bookmarked.contains(&bookmark) {
-                    bookmarks.delete(index, 1).unwrap();
+                    bookmarks.delete(self.bookmark_mapping[index], 1).unwrap();
+                    self.bookmark_mapping.remove(index);
+                    if let Some(rem) = self.bookmark_mapping.get_mut(index..) {
+                        for i in rem.iter_mut() {
+                            *i = i.strict_sub(1);
+                        }
+                    }
                 }
             }
         }
@@ -736,7 +745,13 @@ where
 
             for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
                 if !self.weave.bookmarked.contains(&bookmark) {
-                    bookmarks.delete(index, 1).unwrap();
+                    bookmarks.delete(self.bookmark_mapping[index], 1).unwrap();
+                    self.bookmark_mapping.remove(index);
+                    if let Some(rem) = self.bookmark_mapping.get_mut(index..) {
+                        for i in rem.iter_mut() {
+                            *i = i.strict_sub(1);
+                        }
+                    }
                 }
             }
 
@@ -748,6 +763,7 @@ where
     fn remove_all_nodes(&mut self) {
         self.weave.remove_all_nodes();
         self.tree_mapping.clear();
+        self.bookmark_mapping.clear();
 
         let tree = self.doc.get_tree("tree");
         let metadata = self.doc.get_map("metadata");
@@ -821,12 +837,25 @@ where
             return false;
         }
 
-        for (index, bookmark) in bookmarks.into_iter().enumerate() {
-            if let LoroValue::Binary(binary) = bookmark
-                && let Ok(bookmark) = from_bytes_aligned(&binary, &mut buffer)
-                && self.weave.bookmarked.get_index(index) == Some(&bookmark)
+        for (weave_index, loro_index) in self.bookmark_mapping.iter().copied().enumerate() {
+            if let Some(LoroValue::Binary(binary)) = bookmarks.get(loro_index)
+                && let Ok(bookmark) = from_bytes_aligned(binary, &mut buffer)
+                && self.weave.bookmarked.get_index(weave_index) == Some(&bookmark)
             {
             } else {
+                return false;
+            }
+        }
+
+        let mut counter: usize = 0;
+
+        for (index, bookmark) in bookmarks.into_iter().enumerate() {
+            if self.bookmark_mapping[counter] == index && counter < self.bookmark_mapping.len() {
+                counter = counter.strict_add(1);
+            } else if let LoroValue::Binary(binary) = bookmark
+                && let Ok(bookmark) = from_bytes_aligned::<K, _>(&binary, &mut buffer)
+                && self.weave.bookmarked.contains(&bookmark)
+            {
                 return false;
             }
         }
@@ -956,16 +985,21 @@ where
         let bookmark_index = self.weave.bookmarked.get_index_of(id);
 
         if self.weave.set_node_bookmarked_status(id, value) {
+            let bookmarks = self.doc.get_movable_list("bookmarks");
+
             if value && bookmark_index.is_none() {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .push(to_bytes(id).unwrap().into_vec())
-                    .unwrap();
+                self.bookmark_mapping.push(bookmarks.len());
+                bookmarks.push(to_bytes(id).unwrap().into_vec()).unwrap();
             } else if !value && let Some(bookmark_index) = bookmark_index {
-                self.doc
-                    .get_movable_list("bookmarks")
-                    .delete(bookmark_index, 1)
+                bookmarks
+                    .delete(self.bookmark_mapping[bookmark_index], 1)
                     .unwrap();
+                self.bookmark_mapping.remove(bookmark_index);
+                if let Some(rem) = self.bookmark_mapping.get_mut(bookmark_index..) {
+                    for i in rem.iter_mut() {
+                        *i = i.strict_sub(1);
+                    }
+                }
             }
 
             true
@@ -1104,8 +1138,25 @@ where
             let old_index = old_bookmarks.get_index_of(bookmark).unwrap();
 
             if index != old_index {
-                bookmarks.mov(old_index, index).unwrap();
+                bookmarks
+                    .mov(
+                        self.bookmark_mapping[old_index],
+                        self.bookmark_mapping[index],
+                    )
+                    .unwrap();
                 old_bookmarks.move_index(old_index, index);
+                if old_index < index {
+                    for mid in &mut self.bookmark_mapping[old_index.strict_add(1)..index] {
+                        *mid = mid.strict_sub(1);
+                    }
+                    self.bookmark_mapping[old_index..=index].rotate_left(1);
+                } else {
+                    self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
+                    for mid in &mut self.bookmark_mapping[index..old_index] {
+                        *mid = mid.strict_add(1);
+                    }
+                    self.bookmark_mapping[index..=old_index].rotate_right(1);
+                }
             }
         }
     }
@@ -1119,8 +1170,25 @@ where
             let old_index = old_bookmarks.get_index_of(bookmark).unwrap();
 
             if index != old_index {
-                bookmarks.mov(old_index, index).unwrap();
+                bookmarks
+                    .mov(
+                        self.bookmark_mapping[old_index],
+                        self.bookmark_mapping[index],
+                    )
+                    .unwrap();
                 old_bookmarks.move_index(old_index, index);
+                if old_index < index {
+                    for mid in &mut self.bookmark_mapping[old_index.strict_add(1)..index] {
+                        *mid = mid.strict_sub(1);
+                    }
+                    self.bookmark_mapping[old_index..=index].rotate_left(1);
+                } else {
+                    self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
+                    for mid in &mut self.bookmark_mapping[index..old_index] {
+                        *mid = mid.strict_add(1);
+                    }
+                    self.bookmark_mapping[index..=old_index].rotate_right(1);
+                }
             }
         }
     }
