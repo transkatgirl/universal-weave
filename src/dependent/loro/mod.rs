@@ -224,7 +224,7 @@ where
 
         tree.enable_fractional_index(0);
 
-        let mut self_nodes = Vec::with_capacity(value.capacity());
+        let mut self_nodes = Vec::with_capacity(value.len());
         value.get_ordered_node_identifiers(&mut self_nodes);
 
         let mut tree_mapping = HashMap::with_capacity_and_hasher(value.capacity(), S::default());
@@ -401,6 +401,7 @@ where
                 self.scratchpad.clear();
                 self.weave.remove_all_nodes();
                 self.tree_mapping.clear();
+                self.bookmark_mapping.clear();
                 Err(error)
             }
         }
