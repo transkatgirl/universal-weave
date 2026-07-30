@@ -76,7 +76,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     weave: DependentWeave<K, T, M, S>,
-    mapping: HashMap<K, TreeID, S>,
+    tree_mapping: HashMap<K, TreeID, S>,
     scratchpad: Vec<(TreeID, Option<K>)>,
     buffer: AlignedVec,
     doc: LoroDoc,
@@ -105,7 +105,7 @@ where
     fn clone(&self) -> Self {
         Self {
             weave: self.weave.clone(),
-            mapping: self.mapping.clone(),
+            tree_mapping: self.tree_mapping.clone(),
             scratchpad: self.scratchpad.clone(),
             buffer: self.buffer.clone(),
             doc: self.doc.fork(),
@@ -114,7 +114,7 @@ where
 
     fn clone_from(&mut self, source: &Self) {
         self.weave.clone_from(&source.weave);
-        self.mapping.clone_from(&source.mapping);
+        self.tree_mapping.clone_from(&source.tree_mapping);
         self.scratchpad.clone_from(&source.scratchpad);
         self.buffer.clone_from(&source.buffer);
         self.doc = source.doc.fork();
@@ -224,16 +224,16 @@ where
         let mut self_nodes = Vec::with_capacity(value.len());
         value.get_ordered_node_identifiers(&mut self_nodes);
 
-        let mut mapping: HashMap<K, TreeID, S> =
+        let mut tree_mapping: HashMap<K, TreeID, S> =
             HashMap::with_capacity_and_hasher(value.len(), S::default());
 
         for node in self_nodes {
             let node = value.get_node(&node).unwrap();
 
             let tree_id = tree
-                .create(node.from.map(|id| mapping.get(&id).copied().unwrap()))
+                .create(node.from.map(|id| tree_mapping.get(&id).copied().unwrap()))
                 .unwrap();
-            mapping.insert(node.id, tree_id);
+            tree_mapping.insert(node.id, tree_id);
 
             let meta = tree.get_meta(tree_id).unwrap();
             meta.insert("id", to_bytes(&node.id)?.into_vec()).unwrap();
@@ -256,8 +256,8 @@ where
 
         Ok(Self {
             doc,
-            scratchpad: Vec::with_capacity(mapping.len()),
-            mapping,
+            scratchpad: Vec::with_capacity(tree_mapping.len()),
+            tree_mapping,
             buffer: AlignedVec::with_capacity(4096),
             weave: value,
         })
@@ -305,7 +305,7 @@ where
             DependentWeave::with_capacity(tree.nodes().len(), metadata);
 
         let mut wrapped = Self {
-            mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
+            tree_mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
             scratchpad: Vec::with_capacity(weave.capacity()),
             buffer,
             weave,
@@ -374,10 +374,6 @@ where
     ///
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
-    /// # Importing and Exporting State
-    ///
-    /// This function may update the [`LoroDoc`] after the callback to preserve internal synchronization, which can violate the CRDT's commutative and associative properties if not carefully taken into account.
-    ///
     /// # Errors
     ///
     /// Returns `Err` if updating the weave's state from the inner [`LoroDoc`] fails.
@@ -397,7 +393,7 @@ where
             Err(error) => {
                 self.scratchpad.clear();
                 self.weave.remove_all_nodes();
-                self.mapping.clear();
+                self.tree_mapping.clear();
                 Err(error)
             }
         }
@@ -423,7 +419,7 @@ where
         self.doc.export(mode)
     }
     fn import(&mut self) -> Result<(), rancor::Error> {
-        self.mapping.clear();
+        self.tree_mapping.clear();
         self.weave.remove_all_nodes();
 
         let tree = self.doc.get_tree("tree");
@@ -511,7 +507,7 @@ where
                     bookmarked: false,
                     contents: from_bytes_aligned(&binary_contents, &mut self.buffer)?,
                 }) {
-                    self.mapping.insert(id, target);
+                    self.tree_mapping.insert(id, target);
 
                     if let Some(children) = tree.children(target) {
                         self.scratchpad
@@ -622,9 +618,9 @@ where
             let tree = self.doc.get_tree("tree");
 
             let tree_id = tree
-                .create(from.map(|id| self.mapping.get(&id).copied().unwrap()))
+                .create(from.map(|id| self.tree_mapping.get(&id).copied().unwrap()))
                 .unwrap();
-            self.mapping.insert(id, tree_id);
+            self.tree_mapping.insert(id, tree_id);
 
             let meta = tree.get_meta(tree_id).unwrap();
             meta.insert("id", id_bytes.clone()).unwrap();
@@ -679,12 +675,12 @@ where
             if &node.id == id {
                 removed_node = Some(node);
             } else {
-                self.mapping.remove(&node.id).unwrap();
+                self.tree_mapping.remove(&node.id).unwrap();
             }
         }) {
             self.doc
                 .get_tree("tree")
-                .delete(self.mapping.remove(id).unwrap())
+                .delete(self.tree_mapping.remove(id).unwrap())
                 .unwrap();
 
             self.doc
@@ -719,13 +715,13 @@ where
 
         if self.weave.remove_node_tracked(id, |node| {
             if &node.id != id {
-                self.mapping.remove(&node.id).unwrap();
+                self.tree_mapping.remove(&node.id).unwrap();
             }
             on_removal(node);
         }) {
             self.doc
                 .get_tree("tree")
-                .delete(self.mapping.remove(id).unwrap())
+                .delete(self.tree_mapping.remove(id).unwrap())
                 .unwrap();
 
             self.doc
@@ -751,7 +747,7 @@ where
     }
     fn remove_all_nodes(&mut self) {
         self.weave.remove_all_nodes();
-        self.mapping.clear();
+        self.tree_mapping.clear();
 
         let tree = self.doc.get_tree("tree");
         let metadata = self.doc.get_map("metadata");
@@ -839,7 +835,7 @@ where
 
         for (index, root) in tree.roots().into_iter().enumerate() {
             if let Some(at_index) = self.weave.roots.get_index(index)
-                && self.mapping.get(at_index) == Some(&root)
+                && self.tree_mapping.get(at_index) == Some(&root)
             {
                 let mut stack = Vec::with_capacity(self.weave.len());
 
@@ -867,7 +863,7 @@ where
 
                         for (index, child) in children.iter().enumerate() {
                             if let Some(at_index) = node.to.get_index(index)
-                                && self.mapping.get(at_index) == Some(child)
+                                && self.tree_mapping.get(at_index) == Some(child)
                             {
                             } else {
                                 return false;
@@ -1015,11 +1011,11 @@ where
     ) -> bool {
         if self.weave.sort_node_children_by(id, cmp) {
             let tree = self.doc.get_tree("tree");
-            let parent = self.mapping.get(id).copied().unwrap();
+            let parent = self.tree_mapping.get(id).copied().unwrap();
 
             for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
                 tree.mov_to(
-                    self.mapping.get(child).copied().unwrap(),
+                    self.tree_mapping.get(child).copied().unwrap(),
                     Some(parent),
                     index,
                 )
@@ -1034,11 +1030,11 @@ where
     fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if self.weave.sort_node_children_by_id(id, cmp) {
             let tree = self.doc.get_tree("tree");
-            let parent = self.mapping.get(id).copied().unwrap();
+            let parent = self.tree_mapping.get(id).copied().unwrap();
 
             for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
                 tree.mov_to(
-                    self.mapping.get(child).copied().unwrap(),
+                    self.tree_mapping.get(child).copied().unwrap(),
                     Some(parent),
                     index,
                 )
@@ -1059,7 +1055,7 @@ where
         let tree = self.doc.get_tree("tree");
 
         for (index, root) in self.weave.roots.iter().enumerate() {
-            tree.mov_to(self.mapping.get(root).copied().unwrap(), None, index)
+            tree.mov_to(self.tree_mapping.get(root).copied().unwrap(), None, index)
                 .unwrap();
         }
     }
@@ -1069,7 +1065,7 @@ where
         let tree = self.doc.get_tree("tree");
 
         for (index, root) in self.weave.roots.iter().enumerate() {
-            tree.mov_to(self.mapping.get(root).copied().unwrap(), None, index)
+            tree.mov_to(self.tree_mapping.get(root).copied().unwrap(), None, index)
                 .unwrap();
         }
     }
@@ -1182,7 +1178,7 @@ where
 
             self.doc
                 .get_tree("tree")
-                .get_meta(self.mapping.get(id).copied().unwrap())
+                .get_meta(self.tree_mapping.get(id).copied().unwrap())
                 .unwrap()
                 .insert("contents", to_bytes(contents).unwrap().into_vec())
                 .unwrap();
