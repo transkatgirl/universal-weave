@@ -1,5 +1,9 @@
 # TODO
 
+# Release 0.1.0
+
+- [ ] End-to-end property tests for DependentLoroWeave CRDT merging
+
 ## Release 0.1.1
 
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
@@ -11,7 +15,6 @@
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add DependentLoroWeve import fuzzing
-	- [ ] End-to-end property tests for DependentLoroWeave CRDT merging
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
 - [ ] Full (library) code review
 
