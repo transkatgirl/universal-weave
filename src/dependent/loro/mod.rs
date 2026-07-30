@@ -522,7 +522,9 @@ where
                             .extend(children.into_iter().rev().map(|child| (child, Some(id))));
                     }
                 } else {
-                    tree.delete(target).map_err(rancor::Error::new)?;
+                    Err(rancor::Error::new(loro::LoroError::Unknown(
+                        "Invalid node".into(),
+                    )))?;
                 }
             } else {
                 Err(rancor::Error::new(loro::LoroError::Unknown(

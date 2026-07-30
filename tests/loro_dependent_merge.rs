@@ -136,6 +136,7 @@ enum WeaveTransition {
 
 #[derive(Default)]
 struct VirtualPeers {
+    counter: u32,
     a: WeaveWrapper,
     b: WeaveWrapper,
 }
@@ -148,7 +149,6 @@ struct VirtualPeerMessage {
 
 struct WeaveWrapper {
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
-    counter: u32,
     scratchpad: Vec<u32>,
     peers: HashMap<PeerID, VersionVector>,
 }
@@ -163,7 +163,6 @@ impl Default for WeaveWrapper {
         Self {
             weave: DependentLoroWeave::try_from(DependentWeave::with_capacity(MAX_TRANSITIONS, 0))
                 .unwrap(),
-            counter: 0,
             scratchpad: Vec::with_capacity(MAX_TRANSITIONS),
             peers: HashMap::new(),
         }
@@ -174,10 +173,10 @@ impl WeaveWrapper {
     fn id(&self) -> PeerID {
         self.weave.peer_id()
     }
-    fn apply(&mut self, transition: WeaveTransition) {
+    fn apply(&mut self, counter: &mut u32, transition: WeaveTransition) {
         let s = RandomState::default();
         let hash_value = |value: u64| s.hash_one(value);
-        let map_id = |seed: u32| seed % (self.counter + 2);
+        let map_id = |seed: u32| seed % (*counter + 2);
         let old_node_count = self.weave.nodes().len();
 
         match transition {
@@ -213,7 +212,7 @@ impl WeaveWrapper {
                 content_seed,
             } => {
                 self.weave.add_node(DependentNode {
-                    id: self.counter,
+                    id: *counter,
                     from: from_seed.map(map_id),
                     to: IndexSet::default(),
                     active,
@@ -301,7 +300,7 @@ impl WeaveWrapper {
         }
         assert!(self.weave.validate());
         if self.weave.nodes().len() > old_node_count {
-            self.counter += 1;
+            *counter += 1;
         }
     }
     fn import(&mut self, message: VirtualPeerMessage) {
@@ -348,10 +347,10 @@ impl StateMachineTest for VirtualPeers {
     ) -> Self::SystemUnderTest {
         match transition {
             VirtualPeerTransition::PeerA(transition) => {
-                state.a.apply(transition);
+                state.a.apply(&mut state.counter, transition);
             }
             VirtualPeerTransition::PeerB(transition) => {
-                state.b.apply(transition);
+                state.b.apply(&mut state.counter, transition);
             }
             VirtualPeerTransition::SyncAtoB => {
                 let a_export = state.a.export(state.b.id());
