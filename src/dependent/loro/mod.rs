@@ -636,17 +636,22 @@ where
             meta.insert("id", id_bytes.clone()).unwrap();
             meta.insert("contents", contents.into_vec()).unwrap();
 
+            let mut was_dangling = false;
+
             for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
                 if let LoroValue::Binary(binary) = bookmark
                     && *binary == id_bytes
                 {
                     bookmarks.delete(index, 1).unwrap();
+                    was_dangling = true;
                 }
             }
 
             if bookmarked {
                 bookmarks.push(id_bytes).unwrap();
+            }
 
+            if bookmarked || was_dangling {
                 self.bookmark_mapping.clear();
                 self.bookmark_mapping
                     .resize(self.weave.bookmarked.len(), usize::MAX);
