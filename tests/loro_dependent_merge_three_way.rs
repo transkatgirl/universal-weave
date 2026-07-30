@@ -409,7 +409,7 @@ impl StateMachineTest for VirtualPeers {
             }
             VirtualPeerTransition::SyncCA => {
                 let a_export = state.a.export(state.c.id());
-                let c_export = state.c.export(state.b.id());
+                let c_export = state.c.export(state.a.id());
 
                 state.a.import(c_export);
                 state.c.import(a_export);
