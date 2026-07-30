@@ -476,6 +476,7 @@ where
                 let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
 
                 if self.weave.contains_bookmark(&bookmark) {
+                    // Hack which technically violates the CRDT's order-independence
                     bookmarks.delete(index, 1).map_err(rancor::Error::new)?;
                 } else {
                     if self.weave.set_node_bookmarked_status(&bookmark, true) {
