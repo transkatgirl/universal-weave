@@ -839,10 +839,6 @@ where
 
         let bookmarks = bookmarks.to_vec();
 
-        if self.weave.bookmarked.len() != bookmarks.len() {
-            return false;
-        }
-
         for (weave_index, loro_index) in self.bookmark_mapping.iter().copied().enumerate() {
             if let Some(LoroValue::Binary(binary)) = bookmarks.get(loro_index)
                 && let Ok(bookmark) = from_bytes_aligned(binary, &mut buffer)
