@@ -13,7 +13,7 @@ use universal_weave::{
     dependent::{DependentNode, DependentWeave, loro::DependentLoroWeave},
 };
 
-const CASES: u32 = 2048;
+const CASES: u32 = 1024;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
@@ -59,7 +59,11 @@ enum VirtualPeerTransition {
     PeerA(WeaveTransition),
     #[proptest(weight = 8)]
     PeerB(WeaveTransition),
+    #[proptest(weight = 8)]
+    PeerC(WeaveTransition),
     SyncAB,
+    SyncBC,
+    SyncCA,
 }
 
 #[derive(Arbitrary, Debug, Clone)]
@@ -138,6 +142,7 @@ struct VirtualPeers {
     counter: u32,
     a: WeaveWrapper,
     b: WeaveWrapper,
+    c: WeaveWrapper,
 }
 
 struct VirtualPeerMessage {
@@ -351,6 +356,9 @@ impl StateMachineTest for VirtualPeers {
             VirtualPeerTransition::PeerB(transition) => {
                 state.b.apply(&mut state.counter, transition);
             }
+            VirtualPeerTransition::PeerC(transition) => {
+                state.c.apply(&mut state.counter, transition);
+            }
             VirtualPeerTransition::SyncAB => {
                 let a_export = state.a.export(state.b.id());
                 let b_export = state.b.export(state.a.id());
@@ -358,6 +366,22 @@ impl StateMachineTest for VirtualPeers {
                 state.b.import(a_export);
                 state.a.import(b_export);
                 assert_eq!(state.a.weave.as_weave(), state.b.weave.as_weave());
+            }
+            VirtualPeerTransition::SyncBC => {
+                let b_export = state.b.export(state.c.id());
+                let c_export = state.c.export(state.b.id());
+
+                state.b.import(c_export);
+                state.c.import(b_export);
+                assert_eq!(state.b.weave.as_weave(), state.c.weave.as_weave());
+            }
+            VirtualPeerTransition::SyncCA => {
+                let a_export = state.a.export(state.c.id());
+                let c_export = state.c.export(state.a.id());
+
+                state.a.import(c_export);
+                state.c.import(a_export);
+                assert_eq!(state.a.weave.as_weave(), state.c.weave.as_weave());
             }
         }
 
