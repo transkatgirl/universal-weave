@@ -436,9 +436,9 @@ where
                 self.weave.active = None;
             }
         } else {
-            metadata
-                .insert("active_node", to_bytes(&None::<K>)?.into_vec())
-                .map_err(rancor::Error::new)?;
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Malformed active status".into(),
+            )))?;
         }
 
         let mut offset = 0;
@@ -456,10 +456,9 @@ where
                     offset = offset.strict_add(1);
                 }
             } else {
-                bookmarks
-                    .delete(index.strict_sub(offset), 1)
-                    .map_err(rancor::Error::new)?;
-                offset = offset.strict_add(1);
+                Err(rancor::Error::new(loro::LoroError::Unknown(
+                    "Malformed bookmark".into(),
+                )))?;
             }
         }
 
@@ -499,7 +498,9 @@ where
                     tree.delete(target).map_err(rancor::Error::new)?;
                 }
             } else {
-                tree.delete(target).map_err(rancor::Error::new)?;
+                Err(rancor::Error::new(loro::LoroError::Unknown(
+                    "Malformed node".into(),
+                )))?;
             }
         }
 
