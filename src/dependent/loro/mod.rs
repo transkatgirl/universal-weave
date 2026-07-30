@@ -852,7 +852,7 @@ where
         let mut counter: usize = 0;
 
         for (index, bookmark) in bookmarks.into_iter().enumerate() {
-            if self.bookmark_mapping[counter] == index && counter < self.bookmark_mapping.len() {
+            if counter < self.bookmark_mapping.len() && self.bookmark_mapping[counter] == index {
                 counter = counter.strict_add(1);
             } else if let LoroValue::Binary(binary) = bookmark
                 && let Ok(bookmark) = from_bytes_aligned::<K, _>(&binary, &mut buffer)
