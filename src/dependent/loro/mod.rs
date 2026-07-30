@@ -6,7 +6,7 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 use loro::{
     ExportMode, Frontiers, LoroDoc, LoroEncodeError, LoroTree, LoroValue, PeerID, TreeID,
@@ -426,6 +426,7 @@ where
     pub fn export(&mut self, mode: ExportMode) -> Result<Vec<u8>, LoroEncodeError> {
         self.doc.export(mode)
     }
+    #[allow(clippy::panic_in_result_fn, reason = "Upholding internal invariant")]
     fn import(&mut self) -> Result<(), rancor::Error> {
         self.tree_mapping.clear();
         self.bookmark_mapping.clear();
@@ -453,6 +454,8 @@ where
             self.import_subtree(&tree, root, None)?;
         }
 
+        assert!(self.weave.nodes.len() < usize::MAX - 1, "Too many nodes");
+
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
         {
@@ -469,20 +472,14 @@ where
             )))?;
         }
 
-        let mut index = 0;
-
-        for bookmark in bookmarks.to_vec() {
+        for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
             if let LoroValue::Binary(binary) = bookmark {
                 let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
 
-                if self.weave.contains_bookmark(&bookmark) {
-                    // Hack which technically violates the CRDT's order-independence
-                    bookmarks.delete(index, 1).map_err(rancor::Error::new)?;
-                } else {
-                    if self.weave.set_node_bookmarked_status(&bookmark, true) {
-                        self.bookmark_mapping.push(index);
-                    }
-                    index = index.strict_add(1);
+                if !self.weave.contains_bookmark(&bookmark)
+                    && self.weave.set_node_bookmarked_status(&bookmark, true)
+                {
+                    self.bookmark_mapping.push(index);
                 }
             } else {
                 Err(rancor::Error::new(loro::LoroError::Unknown(
@@ -623,9 +620,12 @@ where
         let contents = to_bytes(&node.contents).unwrap();
 
         if self.weave.add_node(node) {
+            assert!(self.weave.nodes.len() < usize::MAX - 1, "Too many nodes");
+
             let id_bytes = to_bytes(&id).unwrap().into_vec();
 
             let tree = self.doc.get_tree("tree");
+            let bookmarks = self.doc.get_movable_list("bookmarks");
 
             let tree_id = tree
                 .create(from.map(|id| self.tree_mapping.get(&id).copied().unwrap()))
@@ -636,14 +636,34 @@ where
             meta.insert("id", id_bytes.clone()).unwrap();
             meta.insert("contents", contents.into_vec()).unwrap();
 
-            if bookmarked {
-                let bookmarks = self.doc.get_movable_list("bookmarks");
-
-                self.bookmark_mapping.push(bookmarks.len());
-                bookmarks.push(id_bytes).unwrap();
+            for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
+                if let LoroValue::Binary(binary) = bookmark
+                    && *binary == id_bytes
+                {
+                    bookmarks.delete(index, 1).unwrap();
+                }
             }
 
-            if active {
+            if bookmarked {
+                bookmarks.push(id_bytes).unwrap();
+
+                self.bookmark_mapping.clear();
+                self.bookmark_mapping
+                    .resize(self.weave.bookmarked.len(), usize::MAX);
+
+                for (index, value) in bookmarks.to_vec().into_iter().enumerate() {
+                    if let LoroValue::Binary(binary) = value
+                        && let Some(pos) = self.weave.bookmarked.get_index_of(
+                            &from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap(),
+                        )
+                        && self.bookmark_mapping[pos] == usize::MAX
+                    {
+                        self.bookmark_mapping[pos] = index;
+                    }
+                }
+            }
+
+            if active || self.weave.active.is_none() {
                 self.doc
                     .get_map("metadata")
                     .insert(
@@ -673,7 +693,7 @@ where
         }
     }
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        let old_bookmarks: Option<Vec<K>> = if self.weave.contains(id) {
+        let old_bookmarks: Option<HashSet<K>> = if self.weave.contains(id) {
             Some(self.weave.bookmarked.iter().copied().collect())
         } else {
             None
@@ -703,15 +723,30 @@ where
 
             let bookmarks = self.doc.get_movable_list("bookmarks");
 
-            for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
-                if !self.weave.bookmarked.contains(&bookmark) {
-                    bookmarks.delete(self.bookmark_mapping[index], 1).unwrap();
-                    self.bookmark_mapping.remove(index);
-                    if let Some(rem) = self.bookmark_mapping.get_mut(index..) {
-                        for i in rem.iter_mut() {
-                            *i = i.strict_sub(1);
-                        }
-                    }
+            let mut removed_bookmarks = old_bookmarks.unwrap();
+            removed_bookmarks.retain(|id| !self.weave.bookmarked.contains(id));
+
+            for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
+                if let LoroValue::Binary(binary) = bookmark
+                    && removed_bookmarks
+                        .contains(&from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap())
+                {
+                    bookmarks.delete(index, 1).unwrap();
+                }
+            }
+
+            self.bookmark_mapping.clear();
+            self.bookmark_mapping
+                .resize(self.weave.bookmarked.len(), usize::MAX);
+
+            for (index, value) in bookmarks.to_vec().into_iter().enumerate() {
+                if let LoroValue::Binary(binary) = value
+                    && let Some(pos) = self.weave.bookmarked.get_index_of(
+                        &from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap(),
+                    )
+                    && self.bookmark_mapping[pos] == usize::MAX
+                {
+                    self.bookmark_mapping[pos] = index;
                 }
             }
         }
@@ -723,7 +758,7 @@ where
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
-        let old_bookmarks: Option<Vec<K>> = if self.weave.contains(id) {
+        let old_bookmarks: Option<HashSet<K>> = if self.weave.contains(id) {
             Some(self.weave.bookmarked.iter().copied().collect())
         } else {
             None
@@ -750,15 +785,30 @@ where
 
             let bookmarks = self.doc.get_movable_list("bookmarks");
 
-            for (index, bookmark) in old_bookmarks.unwrap().into_iter().enumerate().rev() {
-                if !self.weave.bookmarked.contains(&bookmark) {
-                    bookmarks.delete(self.bookmark_mapping[index], 1).unwrap();
-                    self.bookmark_mapping.remove(index);
-                    if let Some(rem) = self.bookmark_mapping.get_mut(index..) {
-                        for i in rem.iter_mut() {
-                            *i = i.strict_sub(1);
-                        }
-                    }
+            let mut removed_bookmarks = old_bookmarks.unwrap();
+            removed_bookmarks.retain(|id| !self.weave.bookmarked.contains(id));
+
+            for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
+                if let LoroValue::Binary(binary) = bookmark
+                    && removed_bookmarks
+                        .contains(&from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap())
+                {
+                    bookmarks.delete(index, 1).unwrap();
+                }
+            }
+
+            self.bookmark_mapping.clear();
+            self.bookmark_mapping
+                .resize(self.weave.bookmarked.len(), usize::MAX);
+
+            for (index, value) in bookmarks.to_vec().into_iter().enumerate() {
+                if let LoroValue::Binary(binary) = value
+                    && let Some(pos) = self.weave.bookmarked.get_index_of(
+                        &from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap(),
+                    )
+                    && self.bookmark_mapping[pos] == usize::MAX
+                {
+                    self.bookmark_mapping[pos] = index;
                 }
             }
 
@@ -857,8 +907,16 @@ where
                 counter = counter.strict_add(1);
             } else if let LoroValue::Binary(binary) = bookmark
                 && let Ok(bookmark) = from_bytes_aligned::<K, _>(&binary, &mut buffer)
-                && self.weave.bookmarked.contains(&bookmark)
             {
+                if let Some(pos) = self.weave.bookmarked.get_index_of(&bookmark)
+                    && self
+                        .bookmark_mapping
+                        .get(pos)
+                        .is_some_and(|canonical| canonical > &index)
+                {
+                    return false;
+                }
+            } else {
                 return false;
             }
         }
@@ -985,22 +1043,38 @@ where
         self.weave.contains_bookmark(id)
     }
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        let bookmark_index = self.weave.bookmarked.get_index_of(id);
+        let was_bookmarked = self.weave.contains_bookmark(id);
 
         if self.weave.set_node_bookmarked_status(id, value) {
-            let bookmarks = self.doc.get_movable_list("bookmarks");
+            if value != was_bookmarked {
+                let id_bytes = to_bytes(id).unwrap().into_vec();
 
-            if value && bookmark_index.is_none() {
-                self.bookmark_mapping.push(bookmarks.len());
-                bookmarks.push(to_bytes(id).unwrap().into_vec()).unwrap();
-            } else if !value && let Some(bookmark_index) = bookmark_index {
-                bookmarks
-                    .delete(self.bookmark_mapping[bookmark_index], 1)
-                    .unwrap();
-                self.bookmark_mapping.remove(bookmark_index);
-                if let Some(rem) = self.bookmark_mapping.get_mut(bookmark_index..) {
-                    for i in rem.iter_mut() {
-                        *i = i.strict_sub(1);
+                let bookmarks = self.doc.get_movable_list("bookmarks");
+
+                if value {
+                    bookmarks.push(id_bytes).unwrap();
+                } else {
+                    for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate().rev() {
+                        if let LoroValue::Binary(binary) = bookmark
+                            && *binary == id_bytes
+                        {
+                            bookmarks.delete(index, 1).unwrap();
+                        }
+                    }
+                }
+
+                self.bookmark_mapping.clear();
+                self.bookmark_mapping
+                    .resize(self.weave.bookmarked.len(), usize::MAX);
+
+                for (index, value) in bookmarks.to_vec().into_iter().enumerate() {
+                    if let LoroValue::Binary(binary) = value
+                        && let Some(pos) = self.weave.bookmarked.get_index_of(
+                            &from_bytes_aligned::<K, _>(&binary, &mut self.buffer).unwrap(),
+                        )
+                        && self.bookmark_mapping[pos] == usize::MAX
+                    {
+                        self.bookmark_mapping[pos] = index;
                     }
                 }
             }
