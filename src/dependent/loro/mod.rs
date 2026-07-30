@@ -862,6 +862,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized enough for [`Weave`] operations to function properly.
+    #[allow(clippy::too_many_lines, reason = "Marginally exceeds threshold")]
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 
@@ -895,6 +896,10 @@ where
 
         let bookmarks = bookmarks.to_vec();
 
+        if self.bookmark_mapping.len() != self.weave.bookmarked.len() {
+            return false;
+        }
+
         for (weave_index, loro_index) in self.bookmark_mapping.iter().copied().enumerate() {
             if let Some(LoroValue::Binary(binary)) = bookmarks.get(loro_index)
                 && let Ok(bookmark) = from_bytes_aligned(binary, &mut buffer)
@@ -913,17 +918,20 @@ where
             } else if let LoroValue::Binary(binary) = bookmark
                 && let Ok(bookmark) = from_bytes_aligned::<K, _>(&binary, &mut buffer)
             {
-                if let Some(pos) = self.weave.bookmarked.get_index_of(&bookmark)
-                    && self
-                        .bookmark_mapping
-                        .get(pos)
-                        .is_some_and(|canonical| canonical > &index)
-                {
+                if let Some(pos) = self.weave.bookmarked.get_index_of(&bookmark) {
+                    if self.bookmark_mapping[pos] > index {
+                        return false;
+                    }
+                } else if self.weave.nodes.contains_key(&bookmark) {
                     return false;
                 }
             } else {
                 return false;
             }
+        }
+
+        if counter != self.bookmark_mapping.len() {
+            return false;
         }
 
         let mut counter: usize = 0;
