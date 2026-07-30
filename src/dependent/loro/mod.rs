@@ -382,13 +382,13 @@ where
     /// # Panics
     ///
     /// May panic if `callback` panics.
-    pub fn update<F>(&mut self, callback: F) -> Result<(), rancor::Error>
+    pub fn update<F, O>(&mut self, callback: F) -> Result<O, rancor::Error>
     where
-        F: FnOnce(&mut LoroDoc),
+        F: FnOnce(&mut LoroDoc) -> O,
     {
-        callback(&mut self.doc);
+        let output = callback(&mut self.doc);
         match self.import() {
-            Ok(()) => Ok(()),
+            Ok(()) => Ok(output),
             Err(error) => {
                 self.scratchpad.clear();
                 self.weave.remove_all_nodes();
