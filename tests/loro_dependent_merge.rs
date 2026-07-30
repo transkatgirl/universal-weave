@@ -59,7 +59,9 @@ enum VirtualPeerTransition {
     PeerA(WeaveTransition),
     #[proptest(weight = 8)]
     PeerB(WeaveTransition),
-    SyncAB,
+    SyncAtoB,
+    SyncBtoA,
+    SyncAandB,
 }
 
 #[derive(Arbitrary, Debug, Clone)]
@@ -351,7 +353,13 @@ impl StateMachineTest for VirtualPeers {
             VirtualPeerTransition::PeerB(transition) => {
                 state.b.apply(&mut state.counter, transition);
             }
-            VirtualPeerTransition::SyncAB => {
+            VirtualPeerTransition::SyncAtoB => {
+                state.b.import(state.a.export(state.b.id()));
+            }
+            VirtualPeerTransition::SyncBtoA => {
+                state.a.import(state.b.export(state.a.id()));
+            }
+            VirtualPeerTransition::SyncAandB => {
                 let a_export = state.a.export(state.b.id());
                 let b_export = state.b.export(state.a.id());
 
