@@ -861,7 +861,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized.
+    /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized enough for [`Weave`] operations to function properly.
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 
