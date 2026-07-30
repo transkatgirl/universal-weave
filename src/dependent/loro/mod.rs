@@ -878,7 +878,7 @@ where
         let metadata = self.doc.get_map("metadata");
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
-        if !tree.is_fractional_index_enabled() {
+        if self.doc.is_detached() || !tree.is_fractional_index_enabled() {
             return false;
         }
 
