@@ -354,13 +354,19 @@ impl StateMachineTest for VirtualPeers {
                 state.b.apply(transition);
             }
             VirtualPeerTransition::SyncAtoB => {
-                state.b.import(state.a.export(state.b.id()));
-                state.a.import(state.b.export(state.a.id()));
+                let a_export = state.a.export(state.b.id());
+                let b_export = state.b.export(state.a.id());
+
+                state.b.import(a_export);
+                state.a.import(b_export);
                 assert_eq!(state.a.weave.as_weave(), state.b.weave.as_weave());
             }
             VirtualPeerTransition::SyncBtoA => {
-                state.a.import(state.b.export(state.a.id()));
-                state.b.import(state.a.export(state.b.id()));
+                let a_export = state.a.export(state.b.id());
+                let b_export = state.b.export(state.a.id());
+
+                state.a.import(b_export);
+                state.b.import(a_export);
                 assert_eq!(state.a.weave.as_weave(), state.b.weave.as_weave());
             }
         }
