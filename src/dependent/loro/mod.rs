@@ -454,11 +454,7 @@ where
             let active = from_bytes_aligned(&binary, &mut self.buffer)?;
 
             if let Some(active) = active {
-                if !self.weave.set_node_active_status(&active, true) {
-                    metadata
-                        .insert("active_node", to_bytes(&None::<K>)?.into_vec())
-                        .map_err(rancor::Error::new)?;
-                }
+                self.weave.set_node_active_status(&active, true);
             } else {
                 self.weave.active = None;
             }
@@ -814,7 +810,10 @@ where
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) =
             metadata.get("active_node")
             && let Ok(active) = from_bytes_aligned(&binary, &mut buffer)
-            && self.weave.active == active
+            && (self.weave.active == active
+                || active.is_some_and(|active| {
+                    !self.weave.nodes.contains_key(&active) && self.weave.active.is_none()
+                }))
         {
         } else {
             return false;
@@ -1076,6 +1075,7 @@ where
     }
 }
 
+// TODO: Find a way to swap Loro items so that reordering will no longer be O(N^2)
 impl<K, T, M, S> SortableBookmarkableWeave<K, DependentNode<K, T, S>, T>
     for DependentLoroWeave<K, T, M, S>
 where
