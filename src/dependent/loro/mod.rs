@@ -8,7 +8,10 @@ use core::{
 
 use hashbrown::HashMap;
 use indexmap::IndexSet;
-use loro::{LoroDoc, LoroTree, LoroValue, TreeID, ValueOrContainer};
+use loro::{
+    ExportMode, LoroDoc, LoroEncodeError, LoroTree, LoroValue, PeerID, TreeID, ValueOrContainer,
+    VersionVector,
+};
 use rkyv::{
     Archive, Deserialize, Serialize,
     api::high::{HighSerializer, HighValidator},
@@ -367,15 +370,17 @@ where
     pub fn into_doc(self) -> LoroDoc {
         self.doc
     }
-    /// Update the weave's state by modifying the corresponding [`LoroDoc`].
+    /// Update the weave's state by modifying the inner [`LoroDoc`].
     ///
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
-    /// This function does not squash generated [`LoroDoc`] operations that cancel out.
+    /// # Importing and Exporting State
+    ///
+    /// This function may update the [`LoroDoc`] after the callback to preserve internal synchronization. To avoid potential diverging edits, [`Self::export()`] should always be used instead of calling [`LoroDoc::export()`] inside this function.
     ///
     /// # Errors
     ///
-    /// Returns `Err` if updating the weave's state from the corresponding [`LoroDoc`] fails.
+    /// Returns `Err` if updating the weave's state from the inner [`LoroDoc`] fails.
     ///
     /// After an error occurs, the inner [`DependentWeave`] and [`LoroDoc`] will no longer be synchronized.
     ///
@@ -396,6 +401,22 @@ where
                 Err(error)
             }
         }
+    }
+    /// Returns the inner [`LoroDoc`]'s [`PeerID`].
+    pub fn peer_id(&self) -> PeerID {
+        self.doc.peer_id()
+    }
+    /// Returns the inner [`LoroDoc`]'s operation log [`VersionVector`].
+    pub fn oplog_vv(&self) -> VersionVector {
+        self.doc.oplog_vv()
+    }
+    /// Exports the inner [`LoroDoc`]'s state.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the inner [`LoroDoc::export()`] fails.
+    pub fn export(&mut self, mode: ExportMode) -> Result<Vec<u8>, LoroEncodeError> {
+        self.doc.export(mode)
     }
     fn import(&mut self) -> Result<(), rancor::Error> {
         self.mapping.clear();

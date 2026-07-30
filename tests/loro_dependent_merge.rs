@@ -147,7 +147,6 @@ struct VirtualPeerMessage {
 }
 
 struct WeaveWrapper {
-    id: PeerID,
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
     scratchpad: Vec<u32>,
@@ -161,13 +160,9 @@ struct WeaveContent {
 
 impl Default for WeaveWrapper {
     fn default() -> Self {
-        let mut weave =
-            DependentLoroWeave::try_from(DependentWeave::with_capacity(MAX_TRANSITIONS, 0))
-                .unwrap();
-
         Self {
-            id: weave.update(|doc| doc.peer_id()).unwrap(),
-            weave,
+            weave: DependentLoroWeave::try_from(DependentWeave::with_capacity(MAX_TRANSITIONS, 0))
+                .unwrap(),
             counter: 0,
             scratchpad: Vec::with_capacity(MAX_TRANSITIONS),
             peers: HashMap::new(),
@@ -176,6 +171,9 @@ impl Default for WeaveWrapper {
 }
 
 impl WeaveWrapper {
+    fn id(&self) -> PeerID {
+        self.weave.peer_id()
+    }
     fn apply(&mut self, transition: WeaveTransition) {
         let s = RandomState::default();
         let hash_value = |value: u64| s.hash_one(value);
@@ -318,18 +316,16 @@ impl WeaveWrapper {
         assert!(self.weave.validate());
     }
     fn export(&mut self, peer: PeerID) -> VirtualPeerMessage {
-        self.weave
-            .update(|doc| VirtualPeerMessage {
-                id: self.id,
-                data: if let Some(version) = self.peers.get(&peer) {
-                    doc.export(ExportMode::updates(version))
-                } else {
-                    doc.export(ExportMode::all_updates())
-                }
-                .unwrap(),
-                version: doc.oplog_vv(),
-            })
-            .unwrap()
+        VirtualPeerMessage {
+            id: self.weave.peer_id(),
+            data: if let Some(version) = self.peers.get(&peer) {
+                self.weave.export(ExportMode::updates(version))
+            } else {
+                self.weave.export(ExportMode::all_updates())
+            }
+            .unwrap(),
+            version: self.weave.oplog_vv(),
+        }
     }
 }
 
@@ -358,13 +354,13 @@ impl StateMachineTest for VirtualPeers {
                 state.b.apply(transition);
             }
             VirtualPeerTransition::SyncAtoB => {
-                state.b.import(state.a.export(state.b.id));
-                state.a.import(state.b.export(state.a.id));
+                state.b.import(state.a.export(state.b.id()));
+                state.a.import(state.b.export(state.a.id()));
                 assert_eq!(state.a.weave.as_weave(), state.b.weave.as_weave());
             }
             VirtualPeerTransition::SyncBtoA => {
-                state.a.import(state.b.export(state.a.id));
-                state.b.import(state.a.export(state.b.id));
+                state.a.import(state.b.export(state.a.id()));
+                state.b.import(state.a.export(state.b.id()));
                 assert_eq!(state.a.weave.as_weave(), state.b.weave.as_weave());
             }
         }
