@@ -469,14 +469,19 @@ where
             )))?;
         }
 
-        for (index, bookmark) in bookmarks.to_vec().into_iter().enumerate() {
+        let mut index = 0;
+
+        for bookmark in bookmarks.to_vec() {
             if let LoroValue::Binary(binary) = bookmark {
                 let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
 
-                if !self.weave.contains_bookmark(&bookmark)
-                    && self.weave.set_node_bookmarked_status(&bookmark, true)
-                {
-                    self.bookmark_mapping.push(index);
+                if self.weave.contains_bookmark(&bookmark) {
+                    bookmarks.delete(index, 1).map_err(rancor::Error::new)?;
+                } else {
+                    if self.weave.set_node_bookmarked_status(&bookmark, true) {
+                        self.bookmark_mapping.push(index);
+                    }
+                    index = index.strict_add(1);
                 }
             } else {
                 Err(rancor::Error::new(loro::LoroError::Unknown(
