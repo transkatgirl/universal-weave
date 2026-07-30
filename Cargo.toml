@@ -86,3 +86,9 @@ name = "loro_dependent"
 required-features = [
 	"loro",
 ]
+
+[[test]]
+name = "loro_dependent_merge"
+required-features = [
+	"loro",
+]
