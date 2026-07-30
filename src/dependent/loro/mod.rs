@@ -9,8 +9,8 @@ use core::{
 use hashbrown::HashMap;
 use indexmap::IndexSet;
 use loro::{
-    ExportMode, LoroDoc, LoroEncodeError, LoroTree, LoroValue, PeerID, TreeID, ValueOrContainer,
-    VersionVector,
+    ExportMode, Frontiers, LoroDoc, LoroEncodeError, LoroTree, LoroValue, PeerID, TreeID,
+    ValueOrContainer, VersionVector,
 };
 use rkyv::{
     Archive, Deserialize, Serialize,
@@ -376,7 +376,7 @@ where
     ///
     /// # Importing and Exporting State
     ///
-    /// This function may update the [`LoroDoc`] after the callback to preserve internal synchronization. To avoid potential diverging edits, [`Self::export()`] should always be used instead of calling [`LoroDoc::export()`] inside this function.
+    /// This function may update the [`LoroDoc`] after the callback to preserve internal synchronization, which can violate the CRDT's commutative and associative properties if not carefully taken into account.
     ///
     /// # Errors
     ///
@@ -410,6 +410,10 @@ where
     pub fn oplog_vv(&self) -> VersionVector {
         self.doc.oplog_vv()
     }
+    /// Returns the inner [`LoroDoc`]'s operation log [`Frontiers`].
+    pub fn oplog_frontiers(&self) -> Frontiers {
+        self.doc.oplog_frontiers()
+    }
     /// Exports the inner [`LoroDoc`]'s state.
     ///
     /// # Errors
@@ -427,7 +431,9 @@ where
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
         if !tree.is_fractional_index_enabled() {
-            tree.enable_fractional_index(0);
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Fractional index must be enabled".into(),
+            )))?;
         }
 
         if let Some(ValueOrContainer::Value(LoroValue::Binary(binary))) = metadata.get("contents") {
