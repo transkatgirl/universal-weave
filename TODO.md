@@ -1,9 +1,5 @@
 # TODO
 
-# Release 0.1.0
-
-- [ ] End-to-end property tests for DependentLoroWeave CRDT merging
-
 ## Release 0.1.1
 
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
