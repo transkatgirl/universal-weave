@@ -1306,6 +1306,7 @@ where
         }
     }
     #[ensures(ret == self.nodes.contains_key(id))]
+    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
     #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active.clone()) == self.active)]
@@ -1326,6 +1327,7 @@ where
         }
     }
     #[ensures(ret == self.nodes.contains_key(id))]
+    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
     #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active.clone()) == self.active)]
@@ -1341,7 +1343,7 @@ where
         }
     }
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active.clone()) == self.active)]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
@@ -1353,7 +1355,7 @@ where
             .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active.clone()) == self.active)]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]

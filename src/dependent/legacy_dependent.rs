@@ -58,7 +58,6 @@ where
 
         Self {
             scratchpad: value.thread,
-            scratchpad_step_stack: value.scratchpad_step_stack,
             nodes: value.nodes,
             roots: value.roots,
             active: value.active,

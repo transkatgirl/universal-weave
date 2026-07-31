@@ -2,7 +2,7 @@ use std::hash::{BuildHasher, RandomState};
 
 use hashbrown::HashMap;
 use indexmap::IndexSet;
-use loro::{ExportMode, Frontiers, PeerID, VersionVector};
+use loro::{ExportMode, PeerID, VersionVector};
 use proptest::{prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};

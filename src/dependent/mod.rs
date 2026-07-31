@@ -28,7 +28,7 @@ use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, Weave,
+    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     contract::{
         lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
         valid_topological_sort,
@@ -200,10 +200,6 @@ where
     #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad: Vec<K>,
 
-    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
-    #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_step_stack: Vec<Step<K, K>>,
-
     /// The metadata associated with the weave.
     pub metadata: M,
 }
@@ -261,7 +257,6 @@ where
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad: Vec::with_capacity(capacity),
-            scratchpad_step_stack: Vec::with_capacity(capacity),
             metadata,
         }
     }
@@ -284,11 +279,6 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
         self.scratchpad
             .reserve(self.nodes.capacity().saturating_sub(self.scratchpad.len()));
-        self.scratchpad_step_stack.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.scratchpad_step_stack.len()),
-        );
     }
     /// Shrinks the capacity of the weave with a lower limit.
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
@@ -301,7 +291,6 @@ where
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad.shrink_to(min_capacity);
-        self.scratchpad_step_stack.shrink_to(min_capacity);
     }
     fn siblings<'a>(
         &'a self,
@@ -509,45 +498,47 @@ where
     #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
     fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        self.scratchpad_step_stack.push(Step::Enter(*id));
+        let mut removed_node = None;
+        let mut removed_active = false;
 
-        while let Some(step) = self.scratchpad_step_stack.pop() {
-            match step {
-                Step::Enter(id) => {
-                    if let Some(node) = self.nodes.get(&id) {
-                        if node.from.is_none() {
-                            self.roots.shift_remove(&id);
-                        }
-                        if node.bookmarked {
-                            self.bookmarked.shift_remove(&id);
-                        }
+        self.scratchpad.push(*id);
 
-                        self.scratchpad_step_stack.push(Step::Exit(id));
-                        self.scratchpad_step_stack
-                            .extend(node.to.iter().rev().copied().map(Step::Enter));
-                    }
+        while let Some(id) = self.scratchpad.pop() {
+            if let Some(node) = self.nodes.remove(&id) {
+                if node.from.is_none() {
+                    self.roots.shift_remove(&id);
                 }
-                Step::Exit(id) => {
-                    if let Some(node) = self.nodes.remove(&id) {
-                        if node.active {
-                            self.active = node.from;
-                            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                                parent.active = true;
-                            }
-                        }
-                        if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                            parent.to.shift_remove(&id);
-                        }
+                if node.bookmarked {
+                    self.bookmarked.shift_remove(&id);
+                }
+                if node.active {
+                    self.active = None;
+                    removed_active = true;
+                }
 
-                        if self.scratchpad_step_stack.is_empty() {
-                            return Some(node);
-                        }
-                    }
+                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                    parent.to.shift_remove(&id);
+                }
+                self.scratchpad.extend(node.to.iter().rev().copied());
+
+                if removed_node.is_none() {
+                    removed_node = Some(node);
                 }
             }
         }
 
-        None
+        if let Some(removed) = removed_node {
+            if removed_active {
+                self.active = removed.from;
+
+                if let Some(node) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                    node.active = true;
+                }
+            }
+            Some(removed)
+        } else {
+            None
+        }
     }
     #[ensures(!self.nodes.contains_key(id))]
     #[ensures(ret == old(self.nodes.contains_key(id)))]
@@ -563,46 +554,45 @@ where
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
-        self.scratchpad_step_stack.push(Step::Enter(*id));
+        let removed_node_parent = self.nodes.get(id).map(|node| node.from);
+        let mut removed_active = false;
 
-        while let Some(step) = self.scratchpad_step_stack.pop() {
-            match step {
-                Step::Enter(id) => {
-                    if let Some(node) = self.nodes.get(&id) {
-                        if node.from.is_none() {
-                            self.roots.shift_remove(&id);
-                        }
-                        if node.bookmarked {
-                            self.bookmarked.shift_remove(&id);
-                        }
+        self.scratchpad.push(*id);
 
-                        self.scratchpad_step_stack.push(Step::Exit(id));
-                        self.scratchpad_step_stack
-                            .extend(node.to.iter().rev().copied().map(Step::Enter));
-                    }
+        while let Some(id) = self.scratchpad.pop() {
+            if let Some(node) = self.nodes.remove(&id) {
+                if node.from.is_none() {
+                    self.roots.shift_remove(&id);
                 }
-                Step::Exit(id) => {
-                    if let Some(node) = self.nodes.remove(&id) {
-                        if node.active {
-                            self.active = node.from;
-                            if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                                parent.active = true;
-                            }
-                        }
-                        if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                            parent.to.shift_remove(&id);
-                        }
-
-                        on_removal(node);
-                        if self.scratchpad_step_stack.is_empty() {
-                            return true;
-                        }
-                    }
+                if node.bookmarked {
+                    self.bookmarked.shift_remove(&id);
                 }
+                if node.active {
+                    self.active = None;
+                    removed_active = true;
+                }
+
+                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
+                    parent.to.shift_remove(&id);
+                }
+                self.scratchpad.extend(node.to.iter().rev().copied());
+
+                on_removal(node);
             }
         }
 
-        false
+        if let Some(parent) = removed_node_parent {
+            if removed_active {
+                self.active = parent;
+
+                if let Some(node) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                    node.active = true;
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
     #[ensures(self.nodes.is_empty())]
     #[ensures(self.validate())]
@@ -625,7 +615,6 @@ where
         let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad.is_empty()
-            && self.scratchpad_step_stack.is_empty()
             && self
                 .roots
                 .iter()
@@ -754,6 +743,7 @@ where
         }
     }
     #[ensures(ret == self.nodes.contains_key(id))]
+    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
     #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active) == self.active)]
@@ -774,6 +764,7 @@ where
         }
     }
     #[ensures(ret == self.nodes.contains_key(id))]
+    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
     #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active) == self.active)]
@@ -789,7 +780,7 @@ where
         }
     }
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active) == self.active)]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
@@ -801,7 +792,7 @@ where
             .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
     #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.len()) == self.roots.len())]
+    #[ensures(old(self.roots.clone()) == self.roots)]
     #[ensures(old(self.active) == self.active)]
     #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
     #[invariant(self.validate())]
