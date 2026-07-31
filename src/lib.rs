@@ -770,50 +770,6 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     }
 }
 
-fn shortest_path_to_descendant<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: &'a K,
-    target: &impl Fn(&'a N) -> bool,
-    scratchpad: &mut VecDeque<K>,
-    scratchpad_map: &mut HashMap<K, K, S>,
-    scratchpad_set: &mut HashSet<K, S>,
-    path: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    scratchpad.push_front(*id);
-    scratchpad_set.insert(*id);
-
-    while let Some(id) = scratchpad.pop_back() {
-        let node = &nodes[&id];
-
-        if target(node) {
-            scratchpad.clear();
-
-            path.push(id);
-
-            while let Some(parent) = scratchpad_map.remove(path.last().unwrap()) {
-                path.push(parent);
-            }
-
-            return;
-        }
-
-        for child in node.to().into_iter().copied() {
-            if scratchpad_set.insert(child) {
-                scratchpad.push_front(child);
-                scratchpad_map.insert(child, id);
-            }
-        }
-    }
-}
-
 fn longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     topological_order: &[K],

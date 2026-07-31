@@ -34,7 +34,7 @@ use crate::{
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_candidate_path_to_root, shortest_path_to_ancestor,
-    shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
+    topological_sort, topological_sort_rev, topological_sort_subgraph,
     topological_sort_subgraph_rev,
 };
 
@@ -256,6 +256,10 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
+    scratchpad_map_3: HashMap<K, (usize, usize), S>,
+
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
     scratchpad_stack: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
@@ -325,6 +329,7 @@ where
             scratchpad_set_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_map: HashMap::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_map_2: HashMap::with_capacity_and_hasher(capacity, S::default()),
+            scratchpad_map_3: HashMap::with_capacity_and_hasher(capacity, S::default()),
             scratchpad_stack: Vec::with_capacity(capacity),
             scratchpad_queue: VecDeque::with_capacity(capacity),
             metadata,
@@ -379,6 +384,11 @@ where
                 .capacity()
                 .saturating_sub(self.scratchpad_map_2.len()),
         );
+        self.scratchpad_map_3.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_map_3.len()),
+        );
         self.scratchpad_stack.reserve(
             self.nodes
                 .capacity()
@@ -407,6 +417,7 @@ where
         self.scratchpad_set_2.shrink_to(min_capacity);
         self.scratchpad_map.shrink_to(min_capacity);
         self.scratchpad_map_2.shrink_to(min_capacity);
+        self.scratchpad_map_3.shrink_to(min_capacity);
         self.scratchpad_stack.shrink_to(min_capacity);
         self.scratchpad_queue.shrink_to(min_capacity);
     }
@@ -458,162 +469,118 @@ where
 
         if value {
             self.scratchpad_list.clear();
-            self.scratchpad_list_2.clear();
             self.scratchpad_set.clear();
-            self.scratchpad_set_2.clear();
-            self.scratchpad_map.clear();
-
-            ancestor_subgraph(
-                &self.nodes,
-                *id,
-                &mut self.scratchpad_stack,
-                &mut self.scratchpad_set,
-            ); // ancestors
+            self.scratchpad_map_2.clear();
+            self.scratchpad_map_3.clear();
 
             for root in &self.roots {
                 topological_sort(
                     &self.nodes,
                     root,
                     &mut self.scratchpad_stack,
-                    &mut self.scratchpad_list,
-                    &mut self.scratchpad_set_2,
+                    &mut self.scratchpad_list, // topological order
+                    &mut self.scratchpad_set,
                 );
             }
 
-            longest_candidate_path_to_root(
-                &self.nodes,
-                &self.scratchpad_list,
-                &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
-                &mut self.scratchpad_map,
-                &mut self.scratchpad_list_2,
-            );
+            self.scratchpad_set.clear();
 
-            let target = self.scratchpad_list_2.first().copied();
+            for id in self.scratchpad_list.iter().copied() {
+                let node = &self.nodes[&id];
 
-            self.scratchpad_list.clear();
-            self.scratchpad_set_2.clear();
+                let best_parent = node
+                    .from
+                    .iter()
+                    .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
+                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
 
-            self.scratchpad_set_2
-                .extend(self.scratchpad_list_2.drain(..));
-
-            self.scratchpad_list
-                .extend(self.active.intersection(&self.scratchpad_set));
-
-            for active_ancestor in self.scratchpad_list.drain(..) {
-                if !self.scratchpad_set_2.contains(&active_ancestor) && &active_ancestor != id {
-                    self.active.remove(&active_ancestor);
-                    if let Some(node) = self.nodes.get_mut(&active_ancestor) {
-                        node.active = false;
+                let (parent, score) = if let Some((parent, mut score)) = best_parent {
+                    if node.active {
+                        score.1 = score.1.strict_add(1);
+                    } else {
+                        score.0 = score.0.strict_add(1);
                     }
+
+                    (Some(parent), score)
+                } else {
+                    (None, if node.active { (0, 1) } else { (1, 0) })
+                };
+
+                if let Some(parent) = parent {
+                    self.scratchpad_map_2.insert(id, *parent); // predecessors
                 }
+
+                self.scratchpad_map_3.insert(id, score);
             }
 
-            self.scratchpad_set_2.clear();
+            let mut current = Some(id);
+
+            while let Some(id) = current {
+                self.scratchpad_set.insert(*id);
+                current = self.scratchpad_map_2.get(id);
+            }
+
             self.scratchpad_map_2.clear();
+            self.scratchpad_map_3.clear();
 
-            if let Some(target) = target {
-                shortest_path_to_ancestor(
-                    &self.nodes,
-                    id,
-                    &|node| node.id == target,
-                    &mut self.scratchpad_queue,
-                    &mut self.scratchpad_map_2,
-                    &mut self.scratchpad_set_2,
-                    &mut self.scratchpad_list_2, // shortest path
-                );
-            } else {
-                shortest_path_to_ancestor(
-                    &self.nodes,
-                    id,
-                    &|node| node.from.is_empty(),
-                    &mut self.scratchpad_queue,
-                    &mut self.scratchpad_map_2,
-                    &mut self.scratchpad_set_2,
-                    &mut self.scratchpad_list_2, // shortest path
-                );
-            }
+            for id in self.scratchpad_list.drain(..).rev() {
+                let node = &self.nodes[&id];
 
-            for path_item in self.scratchpad_list_2.drain(..) {
-                if let Some(node) = self.nodes.get_mut(&path_item) {
-                    node.active = true;
+                let best_child = node
+                    .to
+                    .iter()
+                    .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
+                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+
+                let (child, score) = if let Some((child, mut score)) = best_child {
+                    if node.active {
+                        score.1 = score.1.strict_add(1);
+                    } else {
+                        score.0 = score.0.strict_add(1);
+                    }
+
+                    (Some(child), score)
+                } else {
+                    (None, if node.active { (0, 1) } else { (1, 0) })
+                };
+
+                if let Some(child) = child {
+                    self.scratchpad_map_2.insert(id, *child); // successors
                 }
-                self.active.insert(path_item);
+
+                self.scratchpad_map_3.insert(id, score);
             }
 
-            self.scratchpad_set.remove(id);
+            let mut current = Some(id);
 
-            descendant_subgraph(
-                &self.nodes,
-                *id,
-                &mut self.scratchpad_stack,
-                &mut self.scratchpad_set,
-            ); // decendants
+            while let Some(id) = current {
+                self.scratchpad_set.insert(*id);
+
+                current = if self.scratchpad_map_3[id].1 > usize::from(self.nodes[id].active) {
+                    self.scratchpad_map_2.get(id)
+                } else {
+                    None
+                };
+            }
 
             self.scratchpad_list
                 .extend(self.active.difference(&self.scratchpad_set).copied());
 
-            for orphan in self.scratchpad_list.drain(..) {
-                self.active.remove(&orphan);
-                if let Some(node) = self.nodes.get_mut(&orphan) {
-                    node.active = false;
-                }
+            for id in self.scratchpad_list.drain(..) {
+                self.nodes.get_mut(&id).unwrap().active = false;
+                self.active.remove(&id);
             }
-
-            self.scratchpad_set_2.clear();
-            self.scratchpad_map_2.clear();
-
-            shortest_path_to_descendant(
-                &self.nodes,
-                id,
-                &|node| node.active && &node.id != id,
-                &mut self.scratchpad_queue,
-                &mut self.scratchpad_map_2,
-                &mut self.scratchpad_set_2,
-                &mut self.scratchpad_list_2,
-            );
-
-            for path_item in self.scratchpad_list_2.drain(..) {
-                if let Some(node) = self.nodes.get_mut(&path_item) {
-                    node.active = true;
-                }
-                self.active.insert(path_item);
-            }
-
-            self.scratchpad_set.clear();
-            self.scratchpad_set_2.clear();
-
-            descendant_subgraph(
-                &self.nodes,
-                *id,
-                &mut self.scratchpad_stack,
-                &mut self.scratchpad_set,
-            ); // decendants
-
-            self.scratchpad_set_2
-                .extend(self.active.intersection(&self.scratchpad_set));
-            self.scratchpad_set.clear();
-
-            topological_sort_subgraph(
-                &self.nodes,
-                &|id| self.scratchpad_set_2.contains(id),
-                id,
-                &mut self.scratchpad_stack,
-                &mut self.scratchpad_list_2,
-                &mut self.scratchpad_set,
-            );
 
             self.scratchpad_list
-                .extend(self.scratchpad_set_2.difference(&self.scratchpad_set));
+                .extend(self.scratchpad_set.difference(&self.active).copied());
 
-            for orphan in self.scratchpad_list.drain(..) {
-                self.active.remove(&orphan);
-                if let Some(node) = self.nodes.get_mut(&orphan) {
-                    node.active = false;
-                }
+            for id in self.scratchpad_list.drain(..) {
+                self.nodes.get_mut(&id).unwrap().active = true;
+                self.active.insert(id);
             }
+        } else {
+            self.fix_orphaned_activations();
         }
-
-        self.fix_orphaned_activations();
 
         true
     }
@@ -677,6 +644,10 @@ where
             ),
             scratchpad_map: HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default()),
             scratchpad_map_2: HashMap::with_capacity_and_hasher(
+                value.nodes.capacity(),
+                S::default(),
+            ),
+            scratchpad_map_3: HashMap::with_capacity_and_hasher(
                 value.nodes.capacity(),
                 S::default(),
             ),
