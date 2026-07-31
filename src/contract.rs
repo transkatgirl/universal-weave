@@ -11,9 +11,7 @@ use core::{error::Error, fmt};
 
 use hashbrown::{HashMap, HashSet};
 
-use crate::{
-    Node, longest_path_to_root, topological_sort, topological_sort_rev, topological_sort_subgraph,
-};
+use crate::{Node, longest_candidate_path_to_root, topological_sort, topological_sort_rev};
 
 pub fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
 where
@@ -176,11 +174,10 @@ where
     let mut scratchpad_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
     let mut scratchpad_map = HashMap::with_capacity_and_hasher(nodes.len(), S::default());
 
-    for active_root in roots.filter(|root| active.contains(*root)) {
-        topological_sort_subgraph(
+    for root in roots {
+        topological_sort(
             nodes,
-            &|id| active.contains(id),
-            active_root,
+            root,
             &mut scratchpad,
             &mut scratchpad_list,
             &mut scratchpad_set,
@@ -189,9 +186,10 @@ where
 
     scratchpad_set.clear();
 
-    longest_path_to_root(
+    longest_candidate_path_to_root(
         nodes,
         &scratchpad_list,
+        &|id| active.contains(id),
         &mut scratchpad_map,
         &mut scratchpad_list_2,
     );

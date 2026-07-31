@@ -828,42 +828,89 @@ fn longest_path_to_root<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    let mut longest_global_distance = None;
+    let mut longest_distance = None;
 
     for id in topological_order {
-        let longest_distance = nodes[id]
+        let distance = nodes[id]
             .from()
             .into_iter()
-            .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
+            .filter_map(|parent| scratchpad_map.get(parent).copied())
             .max()
             .map(|l| l.strict_add(1))
             .unwrap_or_default();
 
-        scratchpad_map.insert(*id, longest_distance);
+        scratchpad_map.insert(*id, distance);
 
-        match longest_global_distance {
-            Some((value, _)) => {
-                if longest_distance > value {
-                    longest_global_distance = Some((longest_distance, id));
-                }
-            }
-            None => {
-                longest_global_distance = Some((longest_distance, id));
+        if longest_distance.is_none_or(|(value, _)| distance > value) {
+            longest_distance = Some((distance, id));
+        }
+    }
+
+    let mut current = longest_distance.map(|(_, id)| id);
+
+    while let Some(id) = current {
+        reversed_path.push(*id);
+
+        current = nodes[id]
+            .from()
+            .into_iter()
+            .filter(|id| scratchpad_map.contains_key(*id))
+            .max_by_key(|id| scratchpad_map[*id]);
+    }
+}
+
+fn longest_candidate_path_to_root<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    topological_order: &[K],
+    is_candidate: &impl Fn(&K) -> bool,
+    scratchpad_map: &mut HashMap<K, usize, S>,
+    reversed_path: &mut Vec<K>,
+) where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T> + 'a,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    let mut longest_distance = None;
+
+    for id in topological_order {
+        if !is_candidate(id) {
+            continue;
+        }
+
+        let node = &nodes[id];
+        let distance = if node.from().into_iter().next().is_none() {
+            Some(0)
+        } else {
+            node.from()
+                .into_iter()
+                .filter_map(|parent| scratchpad_map.get(parent).copied())
+                .max()
+                .map(|l| l.strict_add(1))
+        };
+
+        if let Some(distance) = distance {
+            scratchpad_map.insert(*id, distance);
+
+            if longest_distance.is_none_or(|(value, _)| distance > value) {
+                longest_distance = Some((distance, id));
             }
         }
     }
 
-    if let Some((_, id)) = longest_global_distance {
-        let mut current_id = Some(id);
+    let mut current = longest_distance.map(|(_, id)| id);
 
-        while let Some(id) = current_id {
-            reversed_path.push(*id);
+    while let Some(id) = current {
+        reversed_path.push(*id);
 
-            current_id = nodes[id]
-                .from()
-                .into_iter()
-                .max_by_key(|id| scratchpad_map.get(*id).copied());
-        }
+        current = nodes[id]
+            .from()
+            .into_iter()
+            .filter(|id| scratchpad_map.contains_key(*id))
+            .max_by_key(|id| scratchpad_map[*id]);
     }
 }
 

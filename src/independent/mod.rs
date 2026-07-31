@@ -33,9 +33,9 @@ use crate::{
     Node, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::{DependentNode, DependentWeave},
-    descendant_subgraph, detect_cycles, longest_path_to_root, shortest_path_to_ancestor,
-    shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
-    topological_sort_subgraph_rev,
+    descendant_subgraph, detect_cycles, longest_candidate_path_to_root, longest_path_to_root,
+    shortest_path_to_ancestor, shortest_path_to_descendant, topological_sort, topological_sort_rev,
+    topological_sort_subgraph, topological_sort_subgraph_rev,
 };
 
 #[cfg(feature = "rkyv")]
@@ -822,25 +822,20 @@ where
         self.scratchpad_set.clear();
         self.scratchpad_map.clear();
 
-        for active_root in self
-            .roots
-            .iter()
-            .copied()
-            .filter(|root| self.active.contains(root))
-        {
-            topological_sort_subgraph(
+        for root in &self.roots {
+            topological_sort(
                 &self.nodes,
-                &|id| self.active.contains(id),
-                &active_root,
+                root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
         }
 
-        longest_path_to_root(
+        longest_candidate_path_to_root(
             &self.nodes,
             &self.scratchpad_list,
+            &|id| self.active.contains(id),
             &mut self.scratchpad_map,
             output,
         );
@@ -872,25 +867,20 @@ where
             &mut self.scratchpad_set,
         );
 
-        for active_root in self
-            .roots
-            .iter()
-            .copied()
-            .filter(|root| self.active.contains(root) && self.scratchpad_set.contains(root))
-        {
-            topological_sort_subgraph(
+        for root in &self.roots {
+            topological_sort(
                 &self.nodes,
-                &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
-                &active_root,
+                root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set_2,
             );
         }
 
-        longest_path_to_root(
+        longest_candidate_path_to_root(
             &self.nodes,
             &self.scratchpad_list,
+            &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
             &mut self.scratchpad_map,
             &mut self.scratchpad_list_2,
         );
@@ -1921,16 +1911,11 @@ where
         let mut scratchpad_set = HashSet::with_capacity(self.len());
         let mut scratchpad_map = HashMap::with_capacity(self.len());
 
-        for active_root in self
-            .roots
-            .iter()
-            .copied()
-            .filter(|root| self.active.contains(root))
-        {
+        for root in self.roots.iter() {
             archived_topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
-                &active_root,
+                root,
                 &mut scratchpad_list,
                 &mut scratchpad_list_2,
                 &mut scratchpad_list_3,
@@ -1938,7 +1923,13 @@ where
             );
         }
 
-        archived_longest_path_to_root(&self.nodes, &scratchpad_list_3, &mut scratchpad_map, output);
+        archived_longest_candidate_path_to_root(
+            &self.nodes,
+            &scratchpad_list_3,
+            &|id| self.active.contains(id),
+            &mut scratchpad_map,
+            output,
+        );
     }
     fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
@@ -1957,16 +1948,10 @@ where
 
         archived_ancestor_subgraph(&self.nodes, *id, &mut scratchpad_stack, &mut scratchpad_set);
 
-        for active_root in self
-            .roots
-            .iter()
-            .copied()
-            .filter(|root| self.active.contains(root) && scratchpad_set.contains(root))
-        {
-            archived_topological_sort_subgraph(
+        for root in self.roots.iter() {
+            archived_topological_sort(
                 &self.nodes,
-                &|id| self.active.contains(id) && scratchpad_set.contains(id),
-                &active_root,
+                root,
                 &mut scratchpad_stack,
                 &mut scratchpad_list_2,
                 &mut scratchpad_list,
@@ -1974,9 +1959,10 @@ where
             );
         }
 
-        archived_longest_path_to_root(
+        archived_longest_candidate_path_to_root(
             &self.nodes,
             &scratchpad_list,
+            &|id| self.active.contains(id) && scratchpad_set.contains(id),
             &mut scratchpad_map,
             &mut scratchpad_list_2,
         );
@@ -2342,9 +2328,10 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_longest_path_to_root<'a, K, N, T, S>(
+fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
+    is_candidate: &impl Fn(&K) -> bool,
     scratchpad_map: &mut HashMap<K, usize, S>,
     reversed_path: &mut Vec<K>,
 ) where
@@ -2352,42 +2339,43 @@ fn archived_longest_path_to_root<'a, K, N, T, S>(
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    let mut longest_global_distance = None;
+    let mut longest_distance = None;
 
     for id in topological_order {
-        let longest_distance = nodes[id]
-            .from()
-            .iter()
-            .map(|parent| scratchpad_map.get(parent).copied().unwrap_or_default())
-            .max()
-            .map(|l| l.strict_add(1))
-            .unwrap_or_default();
+        if !is_candidate(id) {
+            continue;
+        }
 
-        scratchpad_map.insert(*id, longest_distance);
+        let node = &nodes[id];
+        let distance = if node.from().is_empty() {
+            Some(0)
+        } else {
+            node.from()
+                .iter()
+                .filter_map(|parent| scratchpad_map.get(parent).copied())
+                .max()
+                .map(|l| l.strict_add(1))
+        };
 
-        match longest_global_distance {
-            Some((value, _)) => {
-                if longest_distance > value {
-                    longest_global_distance = Some((longest_distance, id));
-                }
-            }
-            None => {
-                longest_global_distance = Some((longest_distance, id));
+        if let Some(distance) = distance {
+            scratchpad_map.insert(*id, distance);
+
+            if longest_distance.is_none_or(|(value, _)| distance > value) {
+                longest_distance = Some((distance, id));
             }
         }
     }
 
-    if let Some((_, id)) = longest_global_distance {
-        let mut current_id = Some(id);
+    let mut current = longest_distance.map(|(_, id)| id);
 
-        while let Some(id) = current_id {
-            reversed_path.push(*id);
+    while let Some(id) = current {
+        reversed_path.push(*id);
 
-            current_id = nodes[id]
-                .from()
-                .iter()
-                .max_by_key(|id| scratchpad_map.get(*id).copied());
-        }
+        current = nodes[id]
+            .from()
+            .iter()
+            .filter(|id| scratchpad_map.contains_key(*id))
+            .max_by_key(|id| scratchpad_map[*id]);
     }
 }
 
@@ -2447,11 +2435,10 @@ where
     let mut scratchpad_set = HashSet::with_capacity(nodes.len());
     let mut scratchpad_map = HashMap::with_capacity(nodes.len());
 
-    for active_root in roots.filter(|root| active.contains(*root)) {
-        archived_topological_sort_subgraph(
+    for root in roots {
+        archived_topological_sort(
             nodes,
-            &|id| active.contains(id),
-            active_root,
+            root,
             &mut scratchpad,
             &mut scratchpad_list_2,
             &mut scratchpad_list,
@@ -2462,9 +2449,10 @@ where
     scratchpad_set.clear();
     scratchpad_list_2.clear();
 
-    archived_longest_path_to_root(
+    archived_longest_candidate_path_to_root(
         nodes,
         &scratchpad_list,
+        &|id| active.contains(id),
         &mut scratchpad_map,
         &mut scratchpad_list_2,
     );
