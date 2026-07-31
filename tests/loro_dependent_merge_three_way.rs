@@ -9,11 +9,11 @@ use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state
 use rkyv::{Archive, Deserialize, Serialize};
 use universal_weave::{
     BookmarkableWeave, IndependentContents, MetadataWeave, SemiIndependentWeave,
-    /*SortableBookmarkableWeave,*/ SortableWeave, Weave,
+    SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave, loro::DependentLoroWeave},
 };
 
-const CASES: u32 = 384;
+const CASES: u32 = 1024;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
@@ -55,11 +55,11 @@ impl ReferenceStateMachine for WeaveStateMachine {
 
 #[derive(Arbitrary, Debug, Clone)]
 enum VirtualPeerTransition {
-    #[proptest(weight = 8)]
+    #[proptest(weight = 10)]
     PeerA(WeaveTransition),
-    #[proptest(weight = 8)]
+    #[proptest(weight = 10)]
     PeerB(WeaveTransition),
-    #[proptest(weight = 8)]
+    #[proptest(weight = 10)]
     PeerC(WeaveTransition),
     SyncAtoB,
     SyncAtoC,
@@ -130,13 +130,12 @@ enum WeaveTransition {
     SortRootsById {
         sort_seed: u32,
     },
-    // Untested due to Loro bug
-    /*SortBookmarksBy {
+    SortBookmarksBy {
         sort_seed: u32,
     },
     SortBookmarksById {
         sort_seed: u32,
-    },*/
+    },
     GetContentsMut {
         id_seed: u32,
         content_seed: u32,
@@ -280,8 +279,7 @@ impl WeaveWrapper {
                     hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
                 });
             }
-            // Untested due to Loro bug
-            /*WeaveTransition::SortBookmarksBy { sort_seed } => {
+            WeaveTransition::SortBookmarksBy { sort_seed } => {
                 let sort_seed = sort_seed as u64;
                 self.weave.sort_bookmarks_by(|a, b| {
                     hash_value(a.id as u64 + sort_seed).cmp(&hash_value(b.id as u64 + sort_seed))
@@ -292,7 +290,7 @@ impl WeaveWrapper {
                 self.weave.sort_bookmarks_by_id(|a, b| {
                     hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
                 });
-            }*/
+            }
             WeaveTransition::GetContentsMut {
                 id_seed,
                 content_seed,
@@ -320,11 +318,6 @@ impl WeaveWrapper {
         self.weave
             .update(|doc| {
                 doc.import(&message.data).unwrap();
-
-                // Workaround for Loro bug
-                doc.commit();
-                doc.checkout(&Frontiers::default()).unwrap();
-                doc.attach();
             })
             .unwrap();
 

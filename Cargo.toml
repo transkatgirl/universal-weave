@@ -27,6 +27,7 @@ rkyv = [
 loro = [
 	"rkyv",
 	"dep:loro",
+	"dep:loro-internal",
 ]
 serde = [
 	"dep:serde",
@@ -40,7 +41,7 @@ legacy = [  ]
 
 
 [dependencies]
-contracts = { version = "0.6.8", features = [
+contracts = { version = "0.6.10", features = [
 	"override_debug",
 ] }
 hashbrown = { version = "0.17.1", features = [
@@ -60,7 +61,8 @@ rkyv = { version = "0.8.17", features = [
 	"hashbrown-0_17",
 	"indexmap-2",
 ], default-features = false, optional = true }
-loro = { version = "1.13.7", optional = true }
+loro = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046
+loro-internal = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046; No loro-internal functions are called directly
 serde = { version = "1.0.229", features = [
 	"alloc",
 	"derive",
