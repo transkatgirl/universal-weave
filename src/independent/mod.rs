@@ -33,9 +33,9 @@ use crate::{
     Node, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::{DependentNode, DependentWeave},
-    descendant_subgraph, detect_cycles, longest_candidate_path_to_root, longest_path_to_root,
-    shortest_path_to_ancestor, shortest_path_to_descendant, topological_sort, topological_sort_rev,
-    topological_sort_subgraph, topological_sort_subgraph_rev,
+    descendant_subgraph, detect_cycles, longest_candidate_path_to_root, shortest_path_to_ancestor,
+    shortest_path_to_descendant, topological_sort, topological_sort_rev, topological_sort_subgraph,
+    topological_sort_subgraph_rev,
 };
 
 #[cfg(feature = "rkyv")]
@@ -470,25 +470,20 @@ where
                 &mut self.scratchpad_set,
             ); // ancestors
 
-            for active_root in self
-                .roots
-                .iter()
-                .copied()
-                .filter(|root| self.active.contains(root) && self.scratchpad_set.contains(root))
-            {
-                topological_sort_subgraph(
+            for root in &self.roots {
+                topological_sort(
                     &self.nodes,
-                    &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
-                    &active_root,
+                    root,
                     &mut self.scratchpad_stack,
                     &mut self.scratchpad_list,
                     &mut self.scratchpad_set_2,
                 );
             }
 
-            longest_path_to_root(
+            longest_candidate_path_to_root(
                 &self.nodes,
                 &self.scratchpad_list,
+                &|id| self.active.contains(id) && self.scratchpad_set.contains(id),
                 &mut self.scratchpad_map,
                 &mut self.scratchpad_list_2,
             );
