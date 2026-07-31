@@ -629,25 +629,20 @@ where
         self.scratchpad_set.clear();
         self.scratchpad_map.clear();
 
-        for active_root in self
-            .roots
-            .iter()
-            .copied()
-            .filter(|root| self.active.contains(root))
-        {
-            topological_sort_subgraph(
+        for root in &self.roots {
+            topological_sort(
                 &self.nodes,
-                &|id| self.active.contains(id),
-                &active_root,
+                root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
                 &mut self.scratchpad_set,
             );
         }
 
-        longest_path_to_root(
+        longest_candidate_path_to_root(
             &self.nodes,
             &self.scratchpad_list,
+            &|id| self.active.contains(id),
             &mut self.scratchpad_map,
             &mut self.scratchpad_list_2,
         );
