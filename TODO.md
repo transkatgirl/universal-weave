@@ -2,7 +2,6 @@
 
 ## Release 0.1.0
 
-- [ ] Update all function contracts to use the new contracts macro
 - [ ] Require all DependentWeave and IndependentWeave functions to clear scratchpads on end
     - [ ] Update validate()
     - [ ] Update property tests to check get_ordered_node_identifiers*, get_active_path() and get_path_from() after every transition
@@ -12,6 +11,7 @@
 - [ ] Improve test coverage
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
         - [ ] Add IndependentWeave function which extends the semantics of DependentWeave::set_node_active_status() to a DAG
+        - [ ] Remove matches_* contracts from DependentWeave
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] DependentWeave unit tests
     - [ ] IndependentWeave unit tests
@@ -20,6 +20,8 @@
 
 ## Release 0.1.1
 
+- [ ] Add DependentWeave::try_from(IndependentWeave)
+    - [ ] Add property tests for this conversion
 - [ ] Improve test coverage
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)

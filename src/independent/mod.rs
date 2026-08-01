@@ -7,8 +7,7 @@ use core::{
     mem,
 };
 
-#[allow(unused_imports, reason = "False positive")]
-use contracts::{ensures, invariant};
+use contracts::contract;
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
 
@@ -315,8 +314,10 @@ where
     S: BuildHasher + Default + Clone,
 {
     /// Creates a new, empty [`IndependentWeave`] with at least the specified capacity.
-    #[ensures(ret.nodes.is_empty())]
-    #[ensures(ret.validate())]
+    #[contract(
+        ensures(ret.nodes.is_empty()),
+        ensures(ret.validate())
+    )]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         Self {
             nodes: HashMap::with_capacity_and_hasher(capacity, S::default()),
@@ -341,11 +342,13 @@ where
         self.nodes.capacity()
     }
     /// Reserves capacity for at least `additional` more nodes.
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
@@ -401,11 +404,13 @@ where
         );
     }
     /// Shrinks the capacity of the weave with a lower limit.
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
@@ -448,9 +453,11 @@ where
         clippy::too_many_lines,
         reason = "Cannot be split into smaller functions"
     )]
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[ensures(!ret || value == self.active.contains(id))]
-    #[ensures(self.validate())]
+    #[contract(
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(!ret || value == self.active.contains(id)),
+        ensures(self.validate())
+    )]
     pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             if node.active == value {
@@ -584,7 +591,9 @@ where
 
         true
     }
-    #[ensures(self.validate())]
+    #[contract(
+        ensures(self.validate())
+    )]
     pub(super) fn fix_orphaned_activations(&mut self) {
         self.scratchpad_list.clear();
         self.scratchpad_list_2.clear();
@@ -715,13 +724,15 @@ where
     fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
-    #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_topological_sort(&self.nodes, output))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(output.len() == self.nodes.len()),
+        ensures(valid_topological_sort(&self.nodes, output)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -736,14 +747,16 @@ where
             );
         }
     }
-    #[ensures(lacks_duplicates(output))]
-    #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
-    #[ensures(self.nodes.contains_key(id) || output.is_empty())]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(lacks_duplicates(output)),
+        ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
+        ensures(self.nodes.contains_key(id) || output.is_empty()),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
@@ -768,15 +781,17 @@ where
             );
         }
     }
-    #[ensures(output.len() == self.active.len())]
-    #[ensures(output.iter().all(|i| self.active.contains(i)))]
-    #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_path(&self.nodes, output))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(output.len() == self.active.len()),
+        ensures(output.iter().all(|i| self.active.contains(i))),
+        ensures(lacks_duplicates(output)),
+        ensures(valid_path(&self.nodes, output)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_list.clear();
@@ -801,15 +816,17 @@ where
             output,
         );
     }
-    #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
-    #[ensures(self.nodes.contains_key(id) || output.is_empty())]
-    #[ensures(lacks_duplicates(output))]
-    #[ensures(valid_path(&self.nodes, output))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
+        ensures(self.nodes.contains_key(id) || output.is_empty()),
+        ensures(lacks_duplicates(output)),
+        ensures(valid_path(&self.nodes, output)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
         if !self.nodes.contains_key(id) {
@@ -877,17 +894,19 @@ where
             output.reverse();
         }
     }
-    #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
-    #[ensures(!ret || old(!self.nodes.contains_key(&node.id)))]
-    #[ensures(!ret || self.nodes.contains_key(&old(node.id)))]
-    #[ensures(!ret || old(node.active) == self.active.contains(&old(node.id)) || (!old(node.active) && self.active.contains(&old(node.id)) && old(node.to.iter().any(|c| self.active.contains(c)))))]
-    #[ensures(!ret || old(node.bookmarked) == self.bookmarked.contains(&old(node.id)))]
-    #[ensures(!ret || old(!node.from.is_empty()) || self.roots.contains(&old(node.id)))]
-    #[ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(ret || old(self.roots.clone()) == self.roots)]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len()),
+        ensures(!ret || old(!self.nodes.contains_key(&node.id))),
+        ensures(!ret || self.nodes.contains_key(&old(node.id))),
+        ensures(!ret || old(node.active) == self.active.contains(&old(node.id)) || (!old(node.active) && self.active.contains(&old(node.id)) && old(node.to.iter().any(|c| self.active.contains(c))))),
+        ensures(!ret || old(node.bookmarked) == self.bookmarked.contains(&old(node.id))),
+        ensures(!ret || old(!node.from.is_empty()) || self.roots.contains(&old(node.id))),
+        ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(ret || old(self.roots.clone()) == self.roots),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn add_node(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
             || !node.validate()
@@ -958,27 +977,31 @@ where
 
         true
     }
-    #[ensures(!ret || value == self.contains_active(id))]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!ret || value == self.contains_active(id)),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[ensures(ret.is_some() == old(self.nodes.contains_key(id)))]
-    #[ensures(ret.as_ref().is_none_or(|node| &node.id == id))]
-    #[ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len())]
-    #[ensures(ret.is_none() || old(self.active.len()) >= self.active.len())]
-    #[ensures(ret.is_none() || old(self.bookmarked.len()) >= self.bookmarked.len())]
-    #[ensures(ret.is_some() || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(ret.is_some() || old(self.roots.clone()) == self.roots)]
-    #[ensures(ret.is_some() || old(self.active.clone()) == self.active)]
-    #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!self.nodes.contains_key(id)),
+        ensures(ret.is_some() == old(self.nodes.contains_key(id))),
+        ensures(ret.as_ref().is_none_or(|node| &node.id == id)),
+        ensures(ret.is_none() || old(self.nodes.len()) > self.nodes.len()),
+        ensures(ret.is_none() || old(self.active.len()) >= self.active.len()),
+        ensures(ret.is_none() || old(self.bookmarked.len()) >= self.bookmarked.len()),
+        ensures(ret.is_some() || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(ret.is_some() || old(self.roots.clone()) == self.roots),
+        ensures(ret.is_some() || old(self.active.clone()) == self.active),
+        ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         let mut removed_node = None;
 
@@ -1024,16 +1047,18 @@ where
             None
         }
     }
-    #[ensures(!self.nodes.contains_key(id))]
-    #[ensures(ret == old(self.nodes.contains_key(id)))]
-    #[ensures(!ret || old(self.nodes.len()) > self.nodes.len())]
-    #[ensures(!ret || old(self.active.len()) >= self.active.len())]
-    #[ensures(!ret || old(self.bookmarked.len()) >= self.bookmarked.len())]
-    #[ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(ret || old(self.roots.clone()) == self.roots)]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!self.nodes.contains_key(id)),
+        ensures(ret == old(self.nodes.contains_key(id))),
+        ensures(!ret || old(self.nodes.len()) > self.nodes.len()),
+        ensures(!ret || old(self.active.len()) >= self.active.len()),
+        ensures(!ret || old(self.bookmarked.len()) >= self.bookmarked.len()),
+        ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(ret || old(self.roots.clone()) == self.roots),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn remove_node_tracked(
         &mut self,
         id: &K,
@@ -1081,8 +1106,10 @@ where
             false
         }
     }
-    #[ensures(self.nodes.is_empty())]
-    #[ensures(self.validate())]
+    #[contract(
+        ensures(self.nodes.is_empty()),
+        ensures(self.validate())
+    )]
     fn remove_all_nodes(&mut self) {
         self.nodes.clear();
         self.roots.clear();
@@ -1173,13 +1200,15 @@ where
     fn contains_bookmark(&self, id: &K) -> bool {
         self.bookmarked.contains(id)
     }
-    #[ensures(!ret || value == self.bookmarked.contains(id))]
-    #[ensures(ret || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!ret || value == self.bookmarked.contains(id)),
+        ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        invariant(self.validate())
+    )]
     fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -1203,13 +1232,15 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(output.len() == self.nodes.len())]
-    #[ensures(valid_topological_sort(&self.nodes, output))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(output.len() == self.nodes.len()),
+        ensures(valid_topological_sort(&self.nodes, output)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.scratchpad_set.clear();
@@ -1224,14 +1255,16 @@ where
             );
         }
     }
-    #[ensures(lacks_duplicates(output))]
-    #[ensures(!self.nodes.contains_key(id) || output.first() == Some(id))]
-    #[ensures(self.nodes.contains_key(id) || output.is_empty())]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(lacks_duplicates(output)),
+        ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
+        ensures(self.nodes.contains_key(id) || output.is_empty()),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
@@ -1256,13 +1289,15 @@ where
             );
         }
     }
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone())),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_node_children_by(
         &mut self,
         id: &K,
@@ -1277,13 +1312,15 @@ where
             false
         }
     }
-    #[ensures(ret == self.nodes.contains_key(id))]
-    #[ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone()))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone())),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             node.to.sort_by(cmp);
@@ -1293,11 +1330,13 @@ where
             false
         }
     }
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_roots_by(
         &mut self,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -1305,11 +1344,13 @@ where
         self.roots
             .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(cmp);
     }
@@ -1322,11 +1363,13 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_bookmarks_by(
         &mut self,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -1334,11 +1377,13 @@ where
         self.bookmarked
             .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
     }
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(cmp);
     }
@@ -1356,10 +1401,12 @@ where
     fn active(&self) -> &Self::Active {
         &self.active
     }
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
         self.active.iter().for_each(|active| {
             self.nodes.get_mut(active).unwrap().active = false;
@@ -1380,18 +1427,20 @@ where
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len())]
-    #[ensures(!ret || self.nodes.contains_key(id))]
-    #[ensures(!ret || self.nodes.contains_key(&new_id))]
-    #[ensures(!ret || old(!self.nodes.contains_key(&new_id)))]
-    #[ensures(!ret || self.nodes[id].to.contains(&new_id) && self.nodes[id].to.len() == 1)]
-    #[ensures(!ret || self.nodes[&new_id].from.contains(id) && self.nodes[&new_id].from.len() == 1)]
-    #[ensures(!ret || old(self.nodes.get(id).map(|n| n.to.clone())).unwrap() == self.nodes[&new_id].to)]
-    #[ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len()),
+        ensures(!ret || self.nodes.contains_key(id)),
+        ensures(!ret || self.nodes.contains_key(&new_id)),
+        ensures(!ret || old(!self.nodes.contains_key(&new_id))),
+        ensures(!ret || self.nodes[id].to.contains(&new_id) && self.nodes[id].to.len() == 1),
+        ensures(!ret || self.nodes[&new_id].from.contains(id) && self.nodes[&new_id].from.len() == 1),
+        ensures(!ret || old(self.nodes.get(id).map(|n| n.to.clone())).unwrap() == self.nodes[&new_id].to),
+        ensures(ret || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
@@ -1446,20 +1495,22 @@ where
             false
         }
     }
-    #[ensures(ret.is_none() || old(self.nodes.len()) - 1 == self.nodes.len())]
-    #[ensures(ret.is_none() || !self.nodes.contains_key(id))]
-    #[ensures(ret.is_none() || old(self.nodes.contains_key(id)))]
-    #[ensures(ret.is_none() || !old(self.contains_active(id)) || old(self.contains_active(id)) && self.contains_active(&ret.unwrap()))]
-    #[ensures(ret.is_none() || old(self.nodes.get(id).and_then(|n| n.from.first()).and_then(|p| self.nodes.get(p)).map(|p| p.active)).unwrap() == self.nodes[&ret.unwrap()].active)]
-    #[ensures(ret.is_none() || old(self.nodes.get(id).and_then(|n| n.from.first()).and_then(|p| self.nodes.get(p)).map(|p| p.from.clone())).unwrap() == self.nodes[&ret.unwrap()].from)]
-    #[ensures(ret.is_none() || old(self.nodes.get(id).map(|node| node.to.clone())).unwrap() == self.nodes[&ret.unwrap()].to)]
-    #[ensures(ret.is_none() || old(self.nodes.get(id).map(|node| node.from.len() == 1)).unwrap())]
-    #[ensures(ret.is_none() || ret.unwrap() == old(self.nodes.get(id).and_then(|node| node.from.first().copied())).unwrap())]
-    #[ensures(ret.is_some() || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(ret.is_some() || old(self.active.clone()) == self.active)]
-    #[ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(ret.is_none() || old(self.nodes.len()) - 1 == self.nodes.len()),
+        ensures(ret.is_none() || !self.nodes.contains_key(id)),
+        ensures(ret.is_none() || old(self.nodes.contains_key(id))),
+        ensures(ret.is_none() || !old(self.contains_active(id)) || old(self.contains_active(id)) && self.contains_active(&ret.unwrap())),
+        ensures(ret.is_none() || old(self.nodes.get(id).and_then(|n| n.from.first()).and_then(|p| self.nodes.get(p)).map(|p| p.active)).unwrap() == self.nodes[&ret.unwrap()].active),
+        ensures(ret.is_none() || old(self.nodes.get(id).and_then(|n| n.from.first()).and_then(|p| self.nodes.get(p)).map(|p| p.from.clone())).unwrap() == self.nodes[&ret.unwrap()].from),
+        ensures(ret.is_none() || old(self.nodes.get(id).map(|node| node.to.clone())).unwrap() == self.nodes[&ret.unwrap()].to),
+        ensures(ret.is_none() || old(self.nodes.get(id).map(|node| node.from.len() == 1)).unwrap()),
+        ensures(ret.is_none() || ret.unwrap() == old(self.nodes.get(id).and_then(|node| node.from.first().copied())).unwrap()),
+        ensures(ret.is_some() || old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(ret.is_some() || old(self.active.clone()) == self.active),
+        ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked),
+        ensures(old(self.roots.clone()) == self.roots),
+        invariant(self.validate())
+    )]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
             if node.from.len() != 1 {
@@ -1525,12 +1576,14 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(ret.is_some() == old(self.nodes.contains_key(id)))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.roots.clone()) == self.roots)]
-    #[ensures(old(self.active.clone()) == self.active)]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(ret.is_some() == old(self.nodes.contains_key(id))),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         self.nodes
@@ -1568,15 +1621,17 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
-    #[ensures(!ret || self.nodes[id].from.iter().copied().collect::<HashSet<_>>() == new_parents.iter().copied().collect::<HashSet<_>>())]
-    #[ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())).as_ref() == self.nodes().get(id).map(|node| &node.from))]
-    #[ensures(ret || old(self.roots.clone()) == self.roots)]
-    #[ensures(ret || old(self.active.clone()) == self.active)]
-    #[ensures(old(self.nodes().get(id).map(|node| node.to.clone())).as_ref() == self.nodes().get(id).map(|node| &node.to))]
-    #[ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>())]
-    #[ensures(old(self.bookmarked.clone()) == self.bookmarked)]
-    #[ensures(old(self.active.contains(id)) == self.active.contains(id))]
-    #[invariant(self.validate())]
+    #[contract(
+        ensures(!ret || self.nodes[id].from.iter().copied().collect::<HashSet<_>>() == new_parents.iter().copied().collect::<HashSet<_>>()),
+        ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())).as_ref() == self.nodes().get(id).map(|node| &node.from)),
+        ensures(ret || old(self.roots.clone()) == self.roots),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(old(self.nodes().get(id).map(|node| node.to.clone())).as_ref() == self.nodes().get(id).map(|node| &node.to)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        ensures(old(self.active.contains(id)) == self.active.contains(id)),
+        invariant(self.validate())
+    )]
     fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
         if new_parents
             .iter()
