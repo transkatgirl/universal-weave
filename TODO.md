@@ -2,6 +2,7 @@
 
 ## Release 0.1.0
 
+- [ ] Update all function contracts to use the new contracts macro
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
