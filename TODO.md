@@ -15,6 +15,7 @@
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] DependentWeave unit tests
     - [ ] IndependentWeave unit tests
+- [ ] Rename _rev and _reversed_children functions to _mirrored whenever appropriate
 - [ ] Publish to crates.io
 
 ## Release 0.1.1
