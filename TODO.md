@@ -1,21 +1,17 @@
 # TODO
 
-## Release 0.1.0
-
-- [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
-	- [ ] DependentWeave
-	- [ ] IndependentWeave
-- [ ] Improve test coverage
-    - [ ] DependentWeave unit tests
-    - [ ] IndependentWeave unit tests
-- [ ] Publish to crates.io
-
 ## Release 0.1.1
 
 - [ ] Improve test coverage
-	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
-    - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
-    - [ ] Add DependentLoroWeve import fuzzing
+    - [ ] **DependentWeave unit tests**
+    - [ ] **IndependentWeave unit tests**
+- [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
+	- [ ] DependentWeave
+	- [ ] IndependentWeave
+- [ ] Setup fuzzing w/ `cargo-fuzz`
+	- [ ] DependentWeave (test validation of random weave + random weave action on success)
+    - [ ] IndependentWeave (test validation of random weave + random weave action on success)
+    - [ ] DependentLoroWeve import
 - [ ] Full (library) code review
 
 ## Release 0.2.0
