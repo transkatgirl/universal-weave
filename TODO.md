@@ -1,16 +1,23 @@
 # TODO
 
-## Release 0.1.1
+## Release 0.1.0
 
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
 - [ ] Improve test coverage
-	- [ ] Property tests for IndependentWeave::from(DependentWeave)
+    - [ ] Property tests for IndependentWeave::from(DependentWeave)
+    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
+    - [ ] DependentWeave unit tests
+    - [ ] IndependentWeave unit tests
+- [ ] Publish to crates.io
+
+## Release 0.1.1
+
+- [ ] Improve test coverage
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add DependentLoroWeve import fuzzing
-    - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
 - [ ] Full (library) code review
 
 ## Release 0.2.0
