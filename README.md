@@ -2,6 +2,8 @@
 
 General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 
+[![crates.io](https://img.shields.io/crates/v/universal-weave.svg)](https://crates.io/crates/universal-weave) [![docs.rs](https://img.shields.io/docsrs/universal-weave.svg)](https://docs.rs/universal-weave) [![Unlicense license](https://img.shields.io/crates/l/universal-weave)](https://github.com/transkatgirl/universal-weave/blob/main/LICENSE)
+
 ## Rationale
 
 Loom implementations are deceptively simple to prototype, to the point where it feels silly to use a library for the underlying data structure.
