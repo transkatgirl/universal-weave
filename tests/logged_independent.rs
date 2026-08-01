@@ -525,7 +525,7 @@ impl StateMachineTest for WeaveWrapper {
             state.counter += 1;
         }
 
-        if transition.2 % 4 == 0 {
+        if transition.2.is_multiple_of(4) {
             state
                 .weave
                 .get_ordered_node_identifiers(&mut state.ordered_node_identifiers);

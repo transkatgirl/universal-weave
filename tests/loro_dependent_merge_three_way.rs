@@ -56,11 +56,11 @@ impl ReferenceStateMachine for WeaveStateMachine {
 #[derive(Arbitrary, Debug, Clone)]
 enum VirtualPeerTransition {
     #[proptest(weight = 10)]
-    PeerA(WeaveTransition),
+    PeerA((WeaveTransition, u32, u8)),
     #[proptest(weight = 10)]
-    PeerB(WeaveTransition),
+    PeerB((WeaveTransition, u32, u8)),
     #[proptest(weight = 10)]
-    PeerC(WeaveTransition),
+    PeerC((WeaveTransition, u32, u8)),
     SyncAtoB,
     SyncAtoC,
     SyncBtoA,
@@ -75,17 +75,6 @@ enum VirtualPeerTransition {
 
 #[derive(Arbitrary, Debug, Clone)]
 enum WeaveTransition {
-    GetOrderedNodeIdentifiers {
-        reversed: bool,
-    },
-    GetOrderedNodeIdentifiersFrom {
-        reversed: bool,
-        id_seed: u32,
-    },
-    GetActivePath,
-    GetPathFrom {
-        id_seed: u32,
-    },
     #[proptest(weight = 8)]
     AddNode {
         from_seed: Option<u32>,
@@ -160,22 +149,30 @@ struct VirtualPeerMessage {
 
 struct WeaveWrapper {
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
-    scratchpad: Vec<u32>,
     peers: HashMap<PeerID, VersionVector>,
+    ordered_node_identifiers: Vec<u32>,
+    ordered_node_identifiers_rev: Vec<u32>,
+    ordered_node_identifiers_from: Vec<u32>,
+    ordered_node_identifiers_rev_from: Vec<u32>,
+    active_path: Vec<u32>,
+    path_from: Vec<u32>,
 }
 
 #[derive(Archive, Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
-struct WeaveContent {
-    length: u32,
-}
+struct WeaveContent(u32);
 
 impl Default for WeaveWrapper {
     fn default() -> Self {
         Self {
             weave: DependentLoroWeave::try_from(DependentWeave::with_capacity(MAX_TRANSITIONS, 0))
                 .unwrap(),
-            scratchpad: Vec::with_capacity(MAX_TRANSITIONS),
             peers: HashMap::new(),
+            ordered_node_identifiers: Vec::with_capacity(MAX_TRANSITIONS),
+            ordered_node_identifiers_rev: Vec::with_capacity(MAX_TRANSITIONS),
+            ordered_node_identifiers_from: Vec::with_capacity(MAX_TRANSITIONS),
+            ordered_node_identifiers_rev_from: Vec::with_capacity(MAX_TRANSITIONS),
+            active_path: Vec::with_capacity(MAX_TRANSITIONS),
+            path_from: Vec::with_capacity(MAX_TRANSITIONS),
         }
     }
 }
@@ -184,38 +181,14 @@ impl WeaveWrapper {
     fn id(&self) -> PeerID {
         self.weave.peer_id()
     }
-    fn apply(&mut self, counter: &mut u32, transition: WeaveTransition) {
+    fn apply(&mut self, counter: &mut u32, transition: (WeaveTransition, u32, u8)) {
         let s = RandomState::default();
         let hash_value = |value: u64| s.hash_one(value);
         let map_id = |seed: u32| seed % (*counter + 2);
         let old_node_count = self.weave.nodes().len();
+        let target = map_id(transition.1);
 
-        match transition {
-            WeaveTransition::GetOrderedNodeIdentifiers { reversed } => {
-                if reversed {
-                    self.weave
-                        .get_ordered_node_identifiers_reversed_children(&mut self.scratchpad);
-                } else {
-                    self.weave
-                        .get_ordered_node_identifiers(&mut self.scratchpad);
-                }
-            }
-            WeaveTransition::GetOrderedNodeIdentifiersFrom { id_seed, reversed } => {
-                if reversed {
-                    self.weave
-                        .get_ordered_node_identifiers_from_reversed_children(
-                            &map_id(id_seed),
-                            &mut self.scratchpad,
-                        );
-                } else {
-                    self.weave
-                        .get_ordered_node_identifiers_from(&map_id(id_seed), &mut self.scratchpad);
-                }
-            }
-            WeaveTransition::GetActivePath => self.weave.get_active_path(&mut self.scratchpad),
-            WeaveTransition::GetPathFrom { id_seed } => self
-                .weave
-                .get_path_from(&map_id(id_seed), &mut self.scratchpad),
+        match transition.0 {
             WeaveTransition::AddNode {
                 from_seed,
                 active,
@@ -228,9 +201,7 @@ impl WeaveWrapper {
                     to: IndexSet::default(),
                     active,
                     bookmarked,
-                    contents: WeaveContent {
-                        length: content_seed % 64,
-                    },
+                    contents: WeaveContent(content_seed),
                 });
             }
             WeaveTransition::SetNodeActiveStatus { id_seed, value } => {
@@ -296,7 +267,7 @@ impl WeaveWrapper {
                 content_seed,
             } => {
                 self.weave
-                    .get_contents_mut(&map_id(id_seed), |c| c.length = content_seed % 64);
+                    .get_contents_mut(&map_id(id_seed), |c| c.0 = content_seed);
             }
             WeaveTransition::Update => {
                 self.weave.update(|_doc| {}).unwrap();
@@ -312,6 +283,25 @@ impl WeaveWrapper {
         assert!(self.weave.validate());
         if self.weave.nodes().len() > old_node_count {
             *counter += 1;
+        }
+
+        if transition.2.is_multiple_of(4) {
+            self.weave
+                .get_ordered_node_identifiers(&mut self.ordered_node_identifiers);
+            self.weave.get_ordered_node_identifiers_reversed_children(
+                &mut self.ordered_node_identifiers_rev,
+            );
+            self.weave.get_ordered_node_identifiers_from(
+                &target,
+                &mut self.ordered_node_identifiers_from,
+            );
+            self.weave
+                .get_ordered_node_identifiers_from_reversed_children(
+                    &target,
+                    &mut self.ordered_node_identifiers_rev_from,
+                );
+            self.weave.get_active_path(&mut self.active_path);
+            self.weave.get_path_from(&target, &mut self.path_from);
         }
     }
     fn import(&mut self, message: VirtualPeerMessage) {

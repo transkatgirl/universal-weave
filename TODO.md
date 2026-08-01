@@ -2,9 +2,6 @@
 
 ## Release 0.1.0
 
-- [x] Require all IndependentWeave functions to clear scratchpads on end
-    - [x] Update validate()
-    - [ ] Update property tests to check get_ordered_node_identifiers*, get_active_path() and get_path_from() after every transition
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
