@@ -684,6 +684,13 @@ where
     fn metadata(&self) -> &M {
         &self.metadata
     }
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         callback(&mut self.metadata)
@@ -1111,7 +1118,6 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    #[inline]
     fn validate(&self) -> bool {
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_set = HashSet::with_capacity(self.nodes.len());

@@ -454,6 +454,7 @@ where
         reason = "Cannot be split into smaller functions"
     )]
     #[contract(
+        requires(self.validate_scratchpads()),
         ensures(ret == self.nodes.contains_key(id)),
         ensures(!ret || value == self.active.contains(id)),
         ensures(self.validate())
@@ -475,11 +476,6 @@ where
         }
 
         if value {
-            self.scratchpad_list.clear();
-            self.scratchpad_set.clear();
-            self.scratchpad_map_2.clear();
-            self.scratchpad_map_3.clear();
-
             for root in &self.roots {
                 topological_sort(
                     &self.nodes,
@@ -570,6 +566,9 @@ where
                 };
             }
 
+            self.scratchpad_map_2.clear();
+            self.scratchpad_map_3.clear();
+
             self.scratchpad_list
                 .extend(self.active.difference(&self.scratchpad_set).copied());
 
@@ -580,6 +579,8 @@ where
 
             self.scratchpad_list
                 .extend(self.scratchpad_set.difference(&self.active).copied());
+
+            self.scratchpad_set.clear();
 
             for id in self.scratchpad_list.drain(..) {
                 self.nodes.get_mut(&id).unwrap().active = true;
@@ -592,14 +593,10 @@ where
         true
     }
     #[contract(
+        requires(self.validate_scratchpads()),
         ensures(self.validate())
     )]
     pub(super) fn fix_orphaned_activations(&mut self) {
-        self.scratchpad_list.clear();
-        self.scratchpad_list_2.clear();
-        self.scratchpad_set.clear();
-        self.scratchpad_map.clear();
-
         for root in &self.roots {
             topological_sort(
                 &self.nodes,
@@ -620,10 +617,13 @@ where
 
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
+        self.scratchpad_map.clear();
 
         self.scratchpad_set.extend(self.scratchpad_list_2.drain(..));
         self.scratchpad_list
             .extend(self.active.difference(&self.scratchpad_set).copied());
+
+        self.scratchpad_set.clear();
 
         for orphan in self.scratchpad_list.drain(..) {
             self.active.remove(&orphan);
@@ -735,7 +735,6 @@ where
     )]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
-        self.scratchpad_set.clear();
 
         for root in &self.roots {
             topological_sort(
@@ -746,6 +745,8 @@ where
                 &mut self.scratchpad_set,
             );
         }
+
+        self.scratchpad_set.clear();
     }
     #[contract(
         ensures(lacks_duplicates(output)),
@@ -761,9 +762,6 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
-            self.scratchpad_set.clear();
-            self.scratchpad_set_2.clear();
-
             descendant_subgraph(
                 &self.nodes,
                 *id,
@@ -779,6 +777,9 @@ where
                 output,
                 &mut self.scratchpad_set_2,
             );
+
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
         }
     }
     #[contract(
@@ -794,9 +795,6 @@ where
     )]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
-        self.scratchpad_list.clear();
-        self.scratchpad_set.clear();
-        self.scratchpad_map.clear();
 
         for root in &self.roots {
             topological_sort(
@@ -808,6 +806,8 @@ where
             );
         }
 
+        self.scratchpad_set.clear();
+
         longest_candidate_path_to_root(
             &self.nodes,
             &self.scratchpad_list,
@@ -815,6 +815,9 @@ where
             &mut self.scratchpad_map,
             output,
         );
+
+        self.scratchpad_list.clear();
+        self.scratchpad_map.clear();
     }
     #[contract(
         ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
@@ -832,11 +835,6 @@ where
         if !self.nodes.contains_key(id) {
             return;
         }
-
-        self.scratchpad_list.clear();
-        self.scratchpad_set.clear();
-        self.scratchpad_set_2.clear();
-        self.scratchpad_map.clear();
 
         ancestor_subgraph(
             &self.nodes,
@@ -863,7 +861,10 @@ where
             &mut self.scratchpad_list_2,
         );
 
+        self.scratchpad_list.clear();
+        self.scratchpad_set.clear();
         self.scratchpad_set_2.clear();
+        self.scratchpad_map.clear();
         self.scratchpad_map_2.clear();
 
         if let Some(target) = self.scratchpad_list_2.first().copied() {
@@ -893,6 +894,9 @@ where
 
             output.reverse();
         }
+
+        self.scratchpad_set_2.clear();
+        self.scratchpad_map_2.clear();
     }
     #[contract(
         ensures(!ret || old(self.nodes.len()) + 1 == self.nodes.len()),
@@ -917,8 +921,6 @@ where
         }
 
         if !node.to.is_empty() && !node.from.is_empty() {
-            self.scratchpad_set.clear();
-
             for parent in node.from.iter().copied() {
                 ancestor_subgraph(
                     &self.nodes,
@@ -933,8 +935,11 @@ where
                 .iter()
                 .any(|child| self.scratchpad_set.contains(child))
             {
+                self.scratchpad_set.clear();
                 return false;
             }
+
+            self.scratchpad_set.clear();
         }
 
         for child in &node.to {
@@ -1129,8 +1134,7 @@ where
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
 
-        self.scratchpad_stack.is_empty()
-            && self.scratchpad_queue.is_empty()
+        self.validate_scratchpads()
             && self
                 .roots
                 .iter()
@@ -1166,6 +1170,17 @@ where
             )
             && active_path_is_valid(&self.nodes, self.roots.iter(), &self.active)
     }
+    fn validate_scratchpads(&self) -> bool {
+        self.scratchpad_list.is_empty()
+            && self.scratchpad_list_2.is_empty()
+            && self.scratchpad_set.is_empty()
+            && self.scratchpad_set_2.is_empty()
+            && self.scratchpad_map.is_empty()
+            && self.scratchpad_map_2.is_empty()
+            && self.scratchpad_map_3.is_empty()
+            && self.scratchpad_stack.is_empty()
+            && self.scratchpad_queue.is_empty()
+    }
 }
 
 impl<K, T, M, S> MetadataWeave<K, IndependentNode<K, T, S>, T, M> for IndependentWeave<K, T, M, S>
@@ -1178,6 +1193,13 @@ where
     fn metadata(&self) -> &M {
         &self.metadata
     }
+    #[contract(
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.active.clone()) == self.active),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
     #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         callback(&mut self.metadata)
@@ -1243,7 +1265,6 @@ where
     )]
     fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
         output.clear();
-        self.scratchpad_set.clear();
 
         for root in &self.roots {
             topological_sort_rev(
@@ -1254,6 +1275,8 @@ where
                 &mut self.scratchpad_set,
             );
         }
+
+        self.scratchpad_set.clear();
     }
     #[contract(
         ensures(lacks_duplicates(output)),
@@ -1269,9 +1292,6 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
-            self.scratchpad_set.clear();
-            self.scratchpad_set_2.clear();
-
             descendant_subgraph(
                 &self.nodes,
                 *id,
@@ -1287,6 +1307,9 @@ where
                 output,
                 &mut self.scratchpad_set_2,
             );
+
+            self.scratchpad_set.clear();
+            self.scratchpad_set_2.clear();
         }
     }
     #[contract(
@@ -1644,8 +1667,6 @@ where
             && !node.to.is_empty()
             && !new_parents.is_empty()
         {
-            self.scratchpad_set.clear();
-
             for child in node.to.iter().copied() {
                 descendant_subgraph(
                     &self.nodes,
@@ -1659,8 +1680,11 @@ where
                 .iter()
                 .any(|new_parent| self.scratchpad_set.contains(new_parent))
             {
+                self.scratchpad_set.clear();
                 return false;
             }
+
+            self.scratchpad_set.clear();
         }
 
         let new_parents: IndexSet<K, S> = new_parents.iter().copied().collect();
@@ -1776,7 +1800,6 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    #[inline]
     fn validate(&self) -> bool {
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
         let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
