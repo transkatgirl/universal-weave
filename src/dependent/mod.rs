@@ -21,7 +21,10 @@ use rkyv::{
 };
 
 #[cfg(feature = "serde")]
-use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+use serde::{
+    Deserialize as SerdeDeserialize, Deserializer as SerdeDeserializer,
+    Serialize as SerdeSerialize, de::Error as _,
+};
 
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
@@ -153,12 +156,8 @@ where
 /// A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize))]
 #[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
-#[cfg_attr(
-    feature = "serde",
-    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
-)]
 #[must_use]
 pub struct DependentWeave<K, T, M, S>
 where
@@ -197,6 +196,64 @@ where
 
     /// The metadata associated with the weave.
     pub metadata: M,
+}
+
+#[cfg(feature = "serde")]
+#[derive(SerdeDeserialize)]
+#[serde(rename = "DependentWeave")]
+struct ProxyDependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
+{
+    #[serde(bound(
+        serialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeSerialize",
+        deserialize = "HashMap<K, DependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
+    ))]
+    nodes: HashMap<K, DependentNode<K, T, S>, S>,
+    #[serde(bound(
+        serialize = "IndexSet<K, S>: SerdeSerialize",
+        deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+    ))]
+    roots: IndexSet<K, S>,
+    active: Option<K>,
+    #[serde(bound(
+        serialize = "IndexSet<K, S>: SerdeSerialize",
+        deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+    ))]
+    bookmarked: IndexSet<K, S>,
+    metadata: M,
+}
+
+#[cfg(feature = "serde")]
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<'de, K, T, M, S> SerdeDeserialize<'de> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord + SerdeDeserialize<'de>,
+    T: SerdeDeserialize<'de>,
+    M: SerdeDeserialize<'de>,
+    S: BuildHasher + Default + Clone,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: SerdeDeserializer<'de>,
+    {
+        let proxy = ProxyDependentWeave::deserialize(deserializer)?;
+        let weave = Self {
+            scratchpad: Vec::with_capacity(proxy.nodes.capacity()),
+            nodes: proxy.nodes,
+            roots: proxy.roots,
+            active: proxy.active,
+            bookmarked: proxy.bookmarked,
+            metadata: proxy.metadata,
+        };
+
+        if weave.validate() {
+            Ok(weave)
+        } else {
+            Err(D::Error::custom(ValidationError))
+        }
+    }
 }
 
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]

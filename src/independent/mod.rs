@@ -27,7 +27,10 @@ use rkyv::{
 };
 
 #[cfg(feature = "serde")]
-use serdev::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+use serde::{
+    Deserialize as SerdeDeserialize, Deserializer as SerdeDeserializer,
+    Serialize as SerdeSerialize, de::Error as _,
+};
 
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
@@ -212,12 +215,8 @@ where
 /// However, this additional flexibility results in worse performance and memory usage characteristics overall.
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize))]
 #[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
-#[cfg_attr(
-    feature = "serde",
-    serde(validate = r#"|p| ValidationError::from_bool(p.validate())"#)
-)]
 #[must_use]
 pub struct IndependentWeave<K, T, M, S>
 where
@@ -296,6 +295,86 @@ where
 
     /// The metadata associated with the weave.
     pub metadata: M,
+}
+
+#[cfg(feature = "serde")]
+#[derive(SerdeDeserialize)]
+#[serde(rename = "IndependentWeave")]
+struct ProxyIndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    #[serde(bound(
+        serialize = "HashMap<K, IndependentNode<K, T, S>, S>: SerdeSerialize",
+        deserialize = "HashMap<K, IndependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
+    ))]
+    nodes: HashMap<K, IndependentNode<K, T, S>, S>,
+    #[serde(bound(
+        serialize = "IndexSet<K, S>: SerdeSerialize",
+        deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+    ))]
+    roots: IndexSet<K, S>,
+    #[serde(bound(
+        serialize = "HashSet<K, S>: SerdeSerialize",
+        deserialize = "HashSet<K, S>: SerdeDeserialize<'de>"
+    ))]
+    active: HashSet<K, S>,
+    #[serde(bound(
+        serialize = "IndexSet<K, S>: SerdeSerialize",
+        deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
+    ))]
+    bookmarked: IndexSet<K, S>,
+    metadata: M,
+}
+
+#[cfg(feature = "serde")]
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<'de, K, T, M, S> SerdeDeserialize<'de> for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord + SerdeDeserialize<'de>,
+    T: IndependentContents + SerdeDeserialize<'de>,
+    M: SerdeDeserialize<'de>,
+    S: BuildHasher + Default + Clone,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: SerdeDeserializer<'de>,
+    {
+        let proxy = ProxyIndependentWeave::deserialize(deserializer)?;
+        let weave = Self {
+            scratchpad_list: Vec::with_capacity(proxy.nodes.capacity()),
+            scratchpad_list_2: Vec::with_capacity(proxy.nodes.capacity()),
+            scratchpad_set: HashSet::with_capacity_and_hasher(proxy.nodes.capacity(), S::default()),
+            scratchpad_set_2: HashSet::with_capacity_and_hasher(
+                proxy.nodes.capacity(),
+                S::default(),
+            ),
+            scratchpad_map: HashMap::with_capacity_and_hasher(proxy.nodes.capacity(), S::default()),
+            scratchpad_map_2: HashMap::with_capacity_and_hasher(
+                proxy.nodes.capacity(),
+                S::default(),
+            ),
+            scratchpad_map_3: HashMap::with_capacity_and_hasher(
+                proxy.nodes.capacity(),
+                S::default(),
+            ),
+            scratchpad_stack: Vec::with_capacity(proxy.nodes.capacity()),
+            scratchpad_queue: VecDeque::with_capacity(proxy.nodes.capacity()),
+            nodes: proxy.nodes,
+            roots: proxy.roots,
+            active: proxy.active,
+            bookmarked: proxy.bookmarked,
+            metadata: proxy.metadata,
+        };
+
+        if weave.validate() {
+            Ok(weave)
+        } else {
+            Err(D::Error::custom(ValidationError))
+        }
+    }
 }
 
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]

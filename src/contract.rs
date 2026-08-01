@@ -135,13 +135,6 @@ where
 #[must_use]
 pub struct ValidationError;
 
-#[cfg(feature = "serde")]
-impl ValidationError {
-    pub const fn from_bool(value: bool) -> Result<(), Self> {
-        if value { Ok(()) } else { Err(Self) }
-    }
-}
-
 #[cfg(any(feature = "serde", feature = "rkyv"))]
 impl fmt::Display for ValidationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
