@@ -436,6 +436,12 @@ where
         let metadata = self.doc.get_map("metadata");
         let bookmarks = self.doc.get_movable_list("bookmarks");
 
+        if self.doc.is_detached() {
+            Err(rancor::Error::new(loro::LoroError::Unknown(
+                "Document must not be detached".into(),
+            )))?;
+        }
+
         if !tree.is_fractional_index_enabled() {
             Err(rancor::Error::new(loro::LoroError::Unknown(
                 "Fractional index must be enabled".into(),
