@@ -1240,18 +1240,11 @@ where
                     )
                     .unwrap();
                 old_bookmarks.move_index(old_index, index);
-                if old_index < index {
-                    for mid in &mut self.bookmark_mapping[old_index.strict_add(1)..index] {
-                        *mid = mid.strict_sub(1);
-                    }
-                    self.bookmark_mapping[old_index..=index].rotate_left(1);
-                } else {
-                    self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
-                    for mid in &mut self.bookmark_mapping[index..old_index] {
-                        *mid = mid.strict_add(1);
-                    }
-                    self.bookmark_mapping[index..=old_index].rotate_right(1);
+                self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
+                for mid in &mut self.bookmark_mapping[index..old_index] {
+                    *mid = mid.strict_add(1);
                 }
+                self.bookmark_mapping[index..=old_index].rotate_right(1);
             }
         }
     }
@@ -1272,18 +1265,11 @@ where
                     )
                     .unwrap();
                 old_bookmarks.move_index(old_index, index);
-                if old_index < index {
-                    for mid in &mut self.bookmark_mapping[old_index.strict_add(1)..index] {
-                        *mid = mid.strict_sub(1);
-                    }
-                    self.bookmark_mapping[old_index..=index].rotate_left(1);
-                } else {
-                    self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
-                    for mid in &mut self.bookmark_mapping[index..old_index] {
-                        *mid = mid.strict_add(1);
-                    }
-                    self.bookmark_mapping[index..=old_index].rotate_right(1);
+                self.bookmark_mapping[old_index] = self.bookmark_mapping[index];
+                for mid in &mut self.bookmark_mapping[index..old_index] {
+                    *mid = mid.strict_add(1);
                 }
+                self.bookmark_mapping[index..=old_index].rotate_right(1);
             }
         }
     }
