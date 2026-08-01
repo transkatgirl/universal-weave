@@ -793,8 +793,8 @@ where
         }
     }
     fn remove_all_nodes(&mut self) {
-        self.actions.push_back(WeaveAction::RemoveAllNodes);
         self.weave.remove_all_nodes();
+        self.actions.push_back(WeaveAction::RemoveAllNodes);
     }
 }
 
@@ -1148,8 +1148,8 @@ where
     }
     #[inline]
     fn remove_all_nodes(&mut self) {
-        self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
         self.weave.remove_all_nodes();
+        self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
     }
 }
 
@@ -1235,13 +1235,13 @@ where
     }
     #[inline]
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
-        self.count.sort_roots = self.count.sort_roots.saturating_add(1);
         self.weave.sort_roots_by(cmp);
+        self.count.sort_roots = self.count.sort_roots.saturating_add(1);
     }
     #[inline]
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
-        self.count.sort_roots = self.count.sort_roots.saturating_add(1);
         self.weave.sort_roots_by_id(cmp);
+        self.count.sort_roots = self.count.sort_roots.saturating_add(1);
     }
 }
 
@@ -1253,13 +1253,13 @@ where
 {
     #[inline]
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
-        self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
         self.weave.sort_bookmarks_by(cmp);
+        self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
     }
     #[inline]
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
-        self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
         self.weave.sort_bookmarks_by_id(cmp);
+        self.count.sort_bookmarks = self.count.sort_bookmarks.saturating_add(1);
     }
 }
 

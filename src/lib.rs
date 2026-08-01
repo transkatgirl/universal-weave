@@ -141,8 +141,7 @@ pub trait IndependentContents {}
 
 /// [`Node`] contents which can be meaningfully deduplicated.
 ///
-/// Deduplication must be symmetric:
-/// For all `a` and `b`, `a == b` implies `b == a` and `a != b` implies `!(a == b)`.
+/// Deduplication must be symmetric: `a.is_duplicate_of(b)` implies `b.is_duplicate_of(a)`.
 pub trait DeduplicatableContents {
     /// Tests if `self` and `other` should be considered duplicates of each other.
     #[must_use]
