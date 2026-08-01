@@ -82,9 +82,6 @@ use core::{
 
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 
-#[cfg(feature = "rkyv")]
-use rkyv::option::ArchivedOption;
-
 #[cfg(feature = "serde")]
 pub use serde;
 
@@ -412,10 +409,9 @@ where
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }
 
-#[cfg(feature = "rkyv")]
-/// A read-only [`Weave`] which has been decoded using zero-copy deserialization.
+/// A read-only [`Weave`].
 #[must_use]
-pub trait ArchivedWeave<K, N, T>
+pub trait ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
@@ -458,9 +454,8 @@ where
     fn get_path_from(&self, id: &K, output: &mut Vec<K>);
 }
 
-#[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] containing document-wide metadata.
-pub trait ArchivedMetadataWeave<K, N, T, M>: ArchivedWeave<K, N, T>
+/// An [`ImmutableWeave`] containing document-wide metadata.
+pub trait ImmutableMetadataWeave<K, N, T, M>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
@@ -470,9 +465,8 @@ where
     fn metadata(&self) -> &M;
 }
 
-#[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where nodes can be bookmarked.
-pub trait ArchivedBookmarkableWeave<K, N, T>: ArchivedWeave<K, N, T>
+/// An [`ImmutableWeave`] where nodes can be bookmarked.
+pub trait ImmutableBookmarkableWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
@@ -488,38 +482,35 @@ where
     fn contains_bookmark(&self, id: &K) -> bool;
 }
 
-#[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where the ordering of nodes is stable and can be user-defined.
-pub trait ArchivedSortableWeave<K, N, T>: ArchivedWeave<K, N, T>
+/// An [`ImmutableWeave`] where the ordering of nodes is stable and can be user-defined.
+pub trait ImmutableSortableWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
-    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
+    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     ///
-    /// Unlike [`ArchivedWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
+    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
     fn get_ordered_node_identifiers_from_reversed_children(&self, id: &K, output: &mut Vec<K>);
 }
 
-#[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where only one [`Node`] can be considered "active" at a time.
-pub trait ArchivedActiveSingularWeave<K, N, T>: ArchivedWeave<K, N, T>
+/// An [`ImmutableWeave`] where only one [`Node`] can be considered "active" at a time.
+pub trait ImmutableActiveSingularWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
     /// Returns the active node's identifier, if any.
     #[must_use]
-    fn active(&self) -> ArchivedOption<K>;
+    fn active(&self) -> Option<K>;
 }
 
-#[cfg(feature = "rkyv")]
-/// An [`ArchivedWeave`] where every [`Node`] in the active path is always considered "active".
-pub trait ArchivedActivePathWeave<K, N, T>: ArchivedWeave<K, N, T>
+/// An [`ImmutableWeave`] where every [`Node`] in the active path is always considered "active".
+pub trait ImmutableActivePathWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,

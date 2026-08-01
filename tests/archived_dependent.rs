@@ -8,9 +8,9 @@ use rkyv::{
     Archive, Deserialize, Serialize, access, api::high::to_bytes_in, rend::u32_le, util::AlignedVec,
 };
 use universal_weave::{
-    ArchivedBookmarkableWeave, ArchivedSortableWeave, ArchivedWeave, BookmarkableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    ImmutableBookmarkableWeave, ImmutableSortableWeave, ImmutableWeave, IndependentContents,
+    MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 

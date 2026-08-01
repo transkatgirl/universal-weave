@@ -34,8 +34,8 @@ use crate::{
 
 #[cfg(feature = "rkyv")]
 use crate::{
-    ArchivedActiveSingularWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave,
+    ImmutableActiveSingularWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave,
+    ImmutableSortableWeave, ImmutableWeave,
     dependent::{
         ArchivedDependentNode, archived_detect_cycles, archived_path_to_root,
         archived_topological_sort, archived_topological_sort_rev,
@@ -826,7 +826,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ImmutableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -910,7 +910,7 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, T, M, S>
-    ArchivedMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
+    ImmutableMetadataWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -926,7 +926,8 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S>
+    ImmutableBookmarkableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -948,7 +949,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ImmutableSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -982,7 +983,7 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, T, M, S>
-    ArchivedActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
+    ImmutableActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -992,7 +993,10 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[inline]
-    fn active(&self) -> ArchivedOption<K::Archived> {
-        self.active
+    fn active(&self) -> Option<K::Archived> {
+        match self.active {
+            ArchivedOption::Some(active) => Some(active),
+            ArchivedOption::None => None,
+        }
     }
 }

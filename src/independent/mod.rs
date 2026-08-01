@@ -40,8 +40,8 @@ use crate::{
 
 #[cfg(feature = "rkyv")]
 use crate::{
-    ArchivedActivePathWeave, ArchivedBookmarkableWeave, ArchivedMetadataWeave,
-    ArchivedSortableWeave, ArchivedWeave, Step,
+    ImmutableActivePathWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave,
+    ImmutableSortableWeave, ImmutableWeave, Step,
 };
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
@@ -1785,7 +1785,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ImmutableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -1962,7 +1962,7 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, T, M, S>
-    ArchivedMetadataWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived, M::Archived>
+    ImmutableMetadataWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived, M::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -1979,7 +1979,7 @@ where
 
 #[cfg(feature = "rkyv")]
 impl<K, T, M, S>
-    ArchivedBookmarkableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+    ImmutableBookmarkableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -2001,7 +2001,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S> ImmutableSortableWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
@@ -2052,7 +2052,8 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ArchivedActivePathWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
+impl<K, T, M, S>
+    ImmutableActivePathWeave<K::Archived, ArchivedIndependentNode<K, T, S>, T::Archived>
     for ArchivedIndependentWeave<K, T, M, S>
 where
     K: Archive + Hash + Copy + Eq + Ord,
