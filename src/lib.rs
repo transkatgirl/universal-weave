@@ -198,6 +198,8 @@ where
     /// Builds the longest contiguous path of active nodes which ends at a root node.
     fn get_active_path(&mut self, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the specified node and ending at a root node.
+    ///
+    /// In an [`ActivePathWeave`], this path will preferentially route through the active path.
     fn get_path_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Inserts a node into the Weave, returning `true` if the insertion was successful.
     ///
@@ -209,13 +211,13 @@ where
     fn set_node_active_status(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
-    /// This function may update other nodes if it is necessary to preserve internal consistency.
+    /// This function may remove or update other nodes if it is necessary to preserve internal consistency.
     ///
     /// This function uses the same removal logic as [`Weave::remove_node_tracked`].
     fn remove_node(&mut self, id: &K) -> Option<N>;
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
-    /// This function may update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
+    /// This function may remove or update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
     ///
     /// # Panics
     ///
@@ -386,7 +388,7 @@ where
     N: Node<K, T>,
     T: DiscreteContents,
 {
-    /// Splits a node with the specified identifier at the given index, creating a new node with the identifier `new_id`.
+    /// Splits a node with the specified identifier at the given index, creating a new child node with the identifier `new_id`.
     ///
     /// Returns `false` if splitting the node failed or the node could not be found.
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
@@ -450,6 +452,8 @@ where
     /// Builds the longest contiguous path of active nodes which ends at a root node.
     fn get_active_path(&self, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the specified node and ending at a root node.
+    ///
+    /// In an [`ImmutableActivePathWeave`], this path will preferentially route through the active path.
     fn get_path_from(&self, id: &K, output: &mut Vec<K>);
 }
 
