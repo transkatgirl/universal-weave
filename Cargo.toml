@@ -84,6 +84,18 @@ opt-level = 3
 opt-level = 3
 
 [[test]]
+name = "archived_dependent"
+required-features = [
+	"rkyv",
+]
+
+[[test]]
+name = "archived_independent"
+required-features = [
+	"rkyv",
+]
+
+[[test]]
 name = "loro_dependent"
 required-features = [
 	"loro",

@@ -6,7 +6,6 @@
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
 - [ ] Improve test coverage
-    - [ ] Property tests for Archived structs
 	- [ ] Property tests for IndependentWeave::from(DependentWeave)
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)
