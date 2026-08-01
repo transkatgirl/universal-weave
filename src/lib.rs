@@ -76,7 +76,7 @@ extern crate alloc;
 
 use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use core::{
-    cmp::Ordering,
+    cmp::{Ordering, Reverse},
     hash::{BuildHasher, Hash},
 };
 
@@ -811,7 +811,7 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
             .from()
             .into_iter()
             .filter(|id| scratchpad_map.contains_key(*id))
-            .max_by_key(|id| scratchpad_map[*id]);
+            .min_by_key(|id| Reverse(scratchpad_map[*id]));
     }
 }
 
