@@ -11,6 +11,7 @@
 	- [ ] IndependentWeave
 - [ ] Improve test coverage
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
+        - [ ] Add IndependentWeave function which extends the semantics of DependentWeave::set_node_active_status() to a DAG
     - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] DependentWeave unit tests
     - [ ] IndependentWeave unit tests
