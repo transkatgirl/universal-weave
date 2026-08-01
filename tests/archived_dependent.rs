@@ -64,7 +64,7 @@ enum WeaveTransition {
         content_seed: u32,
         length: u32,
     },
-    #[proptest(weight = 4)]
+    #[proptest(weight = 6)]
     SetNodeActiveStatus {
         value: bool,
         id_seed: u32,

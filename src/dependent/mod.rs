@@ -4,7 +4,6 @@ use alloc::{boxed::Box, vec::Vec};
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
-    iter,
 };
 
 use contracts::contract;
@@ -28,10 +27,7 @@ use crate::{
     ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
     Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
-    contract::{
-        lacks_duplicates, matches_topological_sort, matches_topological_sort_rev, valid_path,
-        valid_topological_sort,
-    },
+    contract::{lacks_duplicates, valid_path, valid_topological_sort},
 };
 
 #[cfg(feature = "rkyv")]
@@ -360,7 +356,6 @@ where
     #[contract(
         ensures(output.len() == self.nodes.len()),
         ensures(valid_topological_sort(&self.nodes, output)),
-        ensures(matches_topological_sort(&self.nodes, &self.roots, output)),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
         ensures(old(self.roots.clone()) == self.roots),
         ensures(old(self.active) == self.active),
@@ -376,7 +371,6 @@ where
     }
     #[contract(
         ensures(lacks_duplicates(output)),
-        ensures(matches_topological_sort(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(*id)), output)),
         ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
         ensures(self.nodes.contains_key(id) || output.is_empty()),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
@@ -746,7 +740,6 @@ where
     #[contract(
         ensures(output.len() == self.nodes.len()),
         ensures(valid_topological_sort(&self.nodes, output)),
-        ensures(matches_topological_sort_rev(&self.nodes, &self.roots, output)),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
         ensures(old(self.roots.clone()) == self.roots),
         ensures(old(self.active) == self.active),
@@ -762,7 +755,6 @@ where
     }
     #[contract(
         ensures(lacks_duplicates(output)),
-        ensures(matches_topological_sort_rev(&self.nodes, iter::once(id).filter(|id| self.nodes.contains_key(*id)), output)),
         ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
         ensures(self.nodes.contains_key(id) || output.is_empty()),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),

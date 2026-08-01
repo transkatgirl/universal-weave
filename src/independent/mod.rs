@@ -632,6 +632,118 @@ where
             }
         }
     }
+    #[contract(
+        ensures(!ret || value || self.active.is_empty() || (old(self.active.clone()) == self.active && (!self.active.contains(id) || self.nodes[id].to.iter().any(|id| self.contains_active(id))))),
+        ensures(!ret || !value || self.contains_active(id) && !self.nodes[id].to.iter().any(|id| self.active.contains(id))),
+        ensures(ret || old(self.active.clone()) == self.active),
+        ensures(ret == self.nodes.contains_key(id)),
+        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
+        ensures(old(self.roots.clone()) == self.roots),
+        ensures(old(self.bookmarked.clone()) == self.bookmarked),
+        invariant(self.validate())
+    )]
+    /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
+    pub fn set_node_active_status_dependent_semantics(&mut self, id: &K, value: bool) -> bool {
+        if value {
+            if let Some(node) = self.nodes.get_mut(id) {
+                if node.active && !node.to.iter().any(|id| self.active.contains(id)) {
+                    return true;
+                }
+
+                node.active = value;
+                if value {
+                    self.active.insert(node.id);
+                } else {
+                    self.active.remove(id);
+                }
+            } else {
+                return false;
+            }
+
+            for root in &self.roots {
+                topological_sort(
+                    &self.nodes,
+                    root,
+                    &mut self.scratchpad_stack,
+                    &mut self.scratchpad_list, // topological order
+                    &mut self.scratchpad_set,
+                );
+            }
+
+            self.scratchpad_set.clear();
+
+            for id in self.scratchpad_list.drain(..) {
+                let node = &self.nodes[&id];
+
+                let best_parent = node
+                    .from
+                    .iter()
+                    .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
+                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+
+                let (parent, score) = if let Some((parent, mut score)) = best_parent {
+                    if node.active {
+                        score.1 = score.1.strict_add(1);
+                    } else {
+                        score.0 = score.0.strict_add(1);
+                    }
+
+                    (Some(parent), score)
+                } else {
+                    (None, if node.active { (0, 1) } else { (1, 0) })
+                };
+
+                if let Some(parent) = parent {
+                    self.scratchpad_map_2.insert(id, *parent); // predecessors
+                }
+
+                self.scratchpad_map_3.insert(id, score);
+            }
+
+            let mut current = Some(id);
+
+            while let Some(id) = current {
+                self.scratchpad_set.insert(*id);
+                current = self.scratchpad_map_2.get(id);
+            }
+
+            self.scratchpad_map_2.clear();
+            self.scratchpad_map_3.clear();
+
+            self.scratchpad_list
+                .extend(self.active.difference(&self.scratchpad_set).copied());
+
+            for id in self.scratchpad_list.drain(..) {
+                self.nodes.get_mut(&id).unwrap().active = false;
+                self.active.remove(&id);
+            }
+
+            self.scratchpad_list
+                .extend(self.scratchpad_set.difference(&self.active).copied());
+
+            self.scratchpad_set.clear();
+
+            for id in self.scratchpad_list.drain(..) {
+                self.nodes.get_mut(&id).unwrap().active = true;
+                self.active.insert(id);
+            }
+        } else {
+            if let Some(node) = self.nodes.get(id) {
+                if !node.active || node.to.iter().any(|id| self.active.contains(id)) {
+                    return true;
+                }
+            } else {
+                return false;
+            }
+
+            self.active.iter().for_each(|active| {
+                self.nodes.get_mut(active).unwrap().active = false;
+            });
+            self.active.clear();
+        }
+
+        true
+    }
 }
 
 #[allow(clippy::fallible_impl_from, reason = "Should never fail")]

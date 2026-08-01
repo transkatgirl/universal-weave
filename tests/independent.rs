@@ -75,8 +75,12 @@ enum WeaveTransition {
         content_seed: u32,
         length: u32,
     },
-    #[proptest(weight = 4)]
+    #[proptest(weight = 7)]
     SetNodeActiveStatus {
+        value: bool,
+        id_seed: u32,
+    },
+    SetNodeActiveStatusDependentSemantics {
         value: bool,
         id_seed: u32,
     },
@@ -321,6 +325,16 @@ impl StateMachineTest for WeaveWrapper {
                     value,
                 );*/
                 state.weave.set_node_active_status(&map_id(id_seed), value);
+            }
+            WeaveTransition::SetNodeActiveStatusDependentSemantics { id_seed, value } => {
+                /*println!(
+                    "weave.set_node_active_status_dependent_semantics(&{}, {});",
+                    map_id(id_seed),
+                    value,
+                );*/
+                state
+                    .weave
+                    .set_node_active_status_dependent_semantics(&map_id(id_seed), value);
             }
             WeaveTransition::SetNodeBookmarkedStatus { id_seed, value } => {
                 /*println!(
