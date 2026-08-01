@@ -38,7 +38,7 @@ prop_state_machine! {
 struct WeaveStateMachine;
 
 impl ReferenceStateMachine for WeaveStateMachine {
-    type State = Vec<VirtualPeerTransition>;
+    type State = Vec<Self::Transition>;
     type Transition = VirtualPeerTransition;
 
     fn init_state() -> BoxedStrategy<Self::State> {

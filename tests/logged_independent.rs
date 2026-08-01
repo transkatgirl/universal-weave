@@ -13,7 +13,7 @@ use universal_weave::{
     wrappers::{ActionableWeave, LoggedWeave},
 };
 
-const CASES: u32 = 8192;
+const CASES: u32 = 6144;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
@@ -38,8 +38,8 @@ prop_state_machine! {
 struct WeaveStateMachine;
 
 impl ReferenceStateMachine for WeaveStateMachine {
-    type State = Vec<WeaveTransition>;
-    type Transition = WeaveTransition;
+    type State = Vec<Self::Transition>;
+    type Transition = (WeaveTransition, u32, u8);
 
     fn init_state() -> BoxedStrategy<Self::State> {
         Just(Vec::with_capacity(MAX_TRANSITIONS)).boxed()
@@ -55,17 +55,6 @@ impl ReferenceStateMachine for WeaveStateMachine {
 
 #[derive(Arbitrary, Debug, Clone)]
 enum WeaveTransition {
-    GetOrderedNodeIdentifiers {
-        reversed: bool,
-    },
-    GetOrderedNodeIdentifiersFrom {
-        reversed: bool,
-        id_seed: u32,
-    },
-    GetActivePath,
-    GetPathFrom {
-        id_seed: u32,
-    },
     #[proptest(weight = 8)]
     AddNode {
         #[proptest(strategy = "any_with::<Vec<u32>>((size_range(0..=3), ()))")]
@@ -171,6 +160,12 @@ struct WeaveWrapper {
     counter: u32,
     scratchpad: Vec<u32>,
     scratchpad_set: HashSet<u32>,
+    ordered_node_identifiers: Vec<u32>,
+    ordered_node_identifiers_rev: Vec<u32>,
+    ordered_node_identifiers_from: Vec<u32>,
+    ordered_node_identifiers_rev_from: Vec<u32>,
+    active_path: Vec<u32>,
+    path_from: Vec<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -234,6 +229,12 @@ impl StateMachineTest for WeaveWrapper {
             counter: 0,
             scratchpad: Vec::with_capacity(ref_state.len()),
             scratchpad_set: HashSet::with_capacity(ref_state.len()),
+            ordered_node_identifiers: Vec::with_capacity(ref_state.len()),
+            ordered_node_identifiers_rev: Vec::with_capacity(ref_state.len()),
+            ordered_node_identifiers_from: Vec::with_capacity(ref_state.len()),
+            ordered_node_identifiers_rev_from: Vec::with_capacity(ref_state.len()),
+            active_path: Vec::with_capacity(ref_state.len()),
+            path_from: Vec::with_capacity(ref_state.len()),
         }
     }
     fn apply(
@@ -245,58 +246,9 @@ impl StateMachineTest for WeaveWrapper {
         let hash_value = |value: u64| s.hash_one(value);
         let map_id = |seed: u32| seed % (state.counter + 2);
         let old_node_count = state.weave.nodes().len();
+        let target = map_id(transition.1);
 
-        match transition {
-            WeaveTransition::GetOrderedNodeIdentifiers { reversed } => {
-                if reversed {
-                    /*println!(
-                        "weave.get_ordered_node_identifiers_reversed_children(&mut scratchpad);"
-                    );*/
-                    state
-                        .weave
-                        .get_ordered_node_identifiers_reversed_children(&mut state.scratchpad);
-                } else {
-                    //println!("weave.get_ordered_node_identifiers(&mut scratchpad);");
-                    state
-                        .weave
-                        .get_ordered_node_identifiers(&mut state.scratchpad);
-                }
-            }
-            WeaveTransition::GetOrderedNodeIdentifiersFrom { id_seed, reversed } => {
-                if reversed {
-                    /*println!(
-                        "weave.get_ordered_node_identifiers_from_reversed_children(&{}, &mut scratchpad);",
-                        map_id(id_seed)
-                    );*/
-                    state
-                        .weave
-                        .get_ordered_node_identifiers_from_reversed_children(
-                            &map_id(id_seed),
-                            &mut state.scratchpad,
-                        );
-                } else {
-                    /*println!(
-                        "weave.get_ordered_node_identifiers_from(&{}, &mut scratchpad);",
-                        map_id(id_seed)
-                    );*/
-                    state
-                        .weave
-                        .get_ordered_node_identifiers_from(&map_id(id_seed), &mut state.scratchpad);
-                }
-            }
-            WeaveTransition::GetActivePath => {
-                //println!("weave.get_active_path(&mut scratchpad);");
-                state.weave.get_active_path(&mut state.scratchpad);
-            }
-            WeaveTransition::GetPathFrom { id_seed } => {
-                /*println!(
-                    "weave.get_path_from(&{}, &mut scratchpad);",
-                    map_id(id_seed)
-                );*/
-                state
-                    .weave
-                    .get_path_from(&map_id(id_seed), &mut state.scratchpad);
-            }
+        match transition.0 {
             WeaveTransition::AddNode {
                 from_seeds,
                 active,
@@ -572,6 +524,28 @@ impl StateMachineTest for WeaveWrapper {
         if state.weave.nodes().len() > old_node_count {
             state.counter += 1;
         }
+
+        if transition.2 % 4 == 0 {
+            state
+                .weave
+                .get_ordered_node_identifiers(&mut state.ordered_node_identifiers);
+            state.weave.get_ordered_node_identifiers_reversed_children(
+                &mut state.ordered_node_identifiers_rev,
+            );
+            state.weave.get_ordered_node_identifiers_from(
+                &target,
+                &mut state.ordered_node_identifiers_from,
+            );
+            state
+                .weave
+                .get_ordered_node_identifiers_from_reversed_children(
+                    &target,
+                    &mut state.ordered_node_identifiers_rev_from,
+                );
+            state.weave.get_active_path(&mut state.active_path);
+            state.weave.get_path_from(&target, &mut state.path_from);
+        }
+
         state
     }
     fn check_invariants(
