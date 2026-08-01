@@ -105,7 +105,7 @@ where
     /// Returns a reference to the identifiers corresponding to the node's children.
     #[must_use]
     fn to(&self) -> &Self::To;
-    /// Returns `true` if the node is considered "active".
+    /// Returns `true` if the node is considered active.
     ///
     /// The meaning of this value can depend on the underlying [`Weave`] implementation.
     #[must_use]
@@ -165,7 +165,7 @@ where
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
-    /// Identifiers of "root" nodes (nodes which do not have any parents).
+    /// Identifiers of root nodes (nodes which do not have any parents).
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
@@ -177,13 +177,13 @@ where
     /// Returns a reference to the identifier:node mapping.
     #[must_use]
     fn nodes(&self) -> &Self::Nodes;
-    /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    /// Returns a reference to the identifiers of root nodes (nodes which do not have any parents).
     #[must_use]
     fn roots(&self) -> &Self::Roots;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     #[must_use]
     fn contains(&self, id: &K) -> bool;
-    /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
+    /// Returns `true` if the Weave contains an active node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     #[must_use]
@@ -287,13 +287,13 @@ where
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
-    /// Sorts "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
+    /// Sorts root nodes (nodes which do not have any parents) using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
-    /// Sorts the identifiers of "root" nodes (nodes which do not have any parents) using the comparison function `cmp`.
+    /// Sorts the identifiers of root nodes (nodes which do not have any parents) using the comparison function `cmp`.
     ///
     /// # Panics
     ///
@@ -322,7 +322,7 @@ where
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
-/// A [`Weave`] where only one [`Node`] can be considered "active" at a time.
+/// A [`Weave`] where only one [`Node`] can be considered active at a time.
 pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -333,7 +333,7 @@ where
     fn active(&self) -> Option<K>;
 }
 
-/// A [`Weave`] where every [`Node`] in the active path is always considered "active".
+/// A [`Weave`] where every [`Node`] in the active path is always considered active.
 pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -417,7 +417,7 @@ where
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
-    /// Identifiers of "root" nodes (nodes which do not have any parents).
+    /// Identifiers of root nodes (nodes which do not have any parents).
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
@@ -429,13 +429,13 @@ where
     /// Returns a reference to the identifier:node mapping.
     #[must_use]
     fn nodes(&self) -> &Self::Nodes;
-    /// Returns a reference to the identifiers of "root" nodes (nodes which do not have any parents).
+    /// Returns a reference to the identifiers of root nodes (nodes which do not have any parents).
     #[must_use]
     fn roots(&self) -> &Self::Roots;
     /// Returns `true` if the Weave contains a node with the specified identifier.
     #[must_use]
     fn contains(&self, id: &K) -> bool;
-    /// Returns `true` if the Weave contains an "active" node (`node.is_active() == true`) with the specified identifier.
+    /// Returns `true` if the Weave contains an active node (`node.is_active() == true`) with the specified identifier.
     ///
     /// The meaning of this value can depend on the underlying Weave implementation.
     #[must_use]
@@ -497,7 +497,7 @@ where
     fn get_ordered_node_identifiers_mirrored_from(&self, id: &K, output: &mut Vec<K>);
 }
 
-/// An [`ImmutableWeave`] where only one [`Node`] can be considered "active" at a time.
+/// An [`ImmutableWeave`] where only one [`Node`] can be considered active at a time.
 pub trait ImmutableActiveSingularWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -508,7 +508,7 @@ where
     fn active(&self) -> Option<K>;
 }
 
-/// An [`ImmutableWeave`] where every [`Node`] in the active path is always considered "active".
+/// An [`ImmutableWeave`] where every [`Node`] in the active path is always considered active.
 pub trait ImmutableActivePathWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,

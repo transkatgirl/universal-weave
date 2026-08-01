@@ -69,9 +69,9 @@ where
         ))
     )]
     pub to: IndexSet<K, S>,
-    /// If the node should be considered "active".
+    /// If the node should be considered active.
     ///
-    /// [`DependentWeave`] only considers the node at the start of an active path to be "active".
+    /// [`DependentWeave`] only considers the node at the start of an active path to be active.
     pub active: bool,
     /// If the node is bookmarked.
     pub bookmarked: bool,
