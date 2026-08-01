@@ -1126,6 +1126,12 @@ where
             self.scratchpad_set.clear();
         }
 
+        let root_index = node
+            .to
+            .iter()
+            .filter_map(|child| self.roots.get_index_of(child))
+            .min();
+
         for child in &node.to {
             let child = &self.nodes[child];
             if child.from.is_empty() {
@@ -1137,7 +1143,11 @@ where
         }
 
         if node.from.is_empty() {
-            self.roots.insert(node.id);
+            if let Some(index) = root_index {
+                self.roots.shift_insert(index, node.id);
+            } else {
+                self.roots.insert(node.id);
+            }
         } else {
             for parent in &node.from {
                 let parent = self.nodes.get_mut(parent).unwrap();
