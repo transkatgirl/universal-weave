@@ -3,12 +3,15 @@
 ## Release 0.1.0
 
 - [ ] Update all function contracts to use the new contracts macro
+- [ ] Require all DependentWeave and IndependentWeave functions to clear scratchpads on end
+    - [ ] Update validate()
+    - [ ] Update property tests to check get_ordered_node_identifiers*, get_active_path() and get_path_from() after every transition
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
 - [ ] Improve test coverage
-    - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] Property tests for IndependentWeave behavior parity with DependentWeave?
+    - [ ] Property tests for IndependentWeave::from(DependentWeave)
     - [ ] DependentWeave unit tests
     - [ ] IndependentWeave unit tests
 - [ ] Publish to crates.io
