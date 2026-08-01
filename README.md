@@ -6,11 +6,13 @@ General-purpose building blocks for [Loom](https://generative.ink/posts/loom-int
 
 ## Rationale
 
-Loom implementations are deceptively simple to prototype, to the point where it feels silly to use a library for the underlying data structure.
+Loom implementations are deceptively simple to prototype.
 
-However, it's incredibly easy to create subtle bugs and oversights in your implementation, especially if you're dealing with untrusted user data or if you're interested in more advanced features such as CRDT-based collaboration or DAG-based documents.
+However, as the feature set grows, they become incredibly difficult to get right. Features like CRDT-based collaboration or DAG-based documents open up whole new classes of subtle bugs that can slowly erode user trust.
 
-This library is the culmination of everything I've learned over the past 1 1/2 years of attempting to build a worthy successor to the original Loom. It's highly flexible, empowering users to more easily build branching interfaces for literally anything.
+You *really* shouldn't reinvent the wheel if you don't have to.
+
+This library is the culmination of everything I've learned over the past 1 1/2 years of attempting to build a worthy successor to [the original Loom](https://github.com/socketteer/loom). It's highly flexible, empowering users to more easily build branching interfaces for literally anything.
 
 Please [consider donating](https://github.com/sponsors/transkatgirl) if you consider this crate useful.
 
