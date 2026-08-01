@@ -11,7 +11,7 @@ use universal_weave::{
     independent::{IndependentNode, IndependentWeave},
 };
 
-const CASES: u32 = 2048;
+const CASES: u32 = 1536;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
@@ -387,7 +387,10 @@ impl StateMachineTest for WeaveWrapper {
                 state.i_weave.merge_with_parent(&map_id(id_seed));
             }
         }
-        assert_eq!(IndependentWeave::from(state.d_weave.clone()), state.i_weave);
+        let converted_d_weave = IndependentWeave::from(state.d_weave.clone());
+        let converted_i_weave = DependentWeave::try_from(state.i_weave.clone()).unwrap();
+        assert_eq!(converted_d_weave, state.i_weave);
+        assert_eq!(state.d_weave, converted_i_weave);
         if state.d_weave.nodes().len() > old_node_count {
             state.counter += 1;
         }

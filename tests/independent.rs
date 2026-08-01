@@ -9,6 +9,7 @@ use universal_weave::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node,
     SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    dependent::DependentWeave,
     independent::{IndependentNode, IndependentWeave},
 };
 
@@ -515,6 +516,10 @@ impl StateMachineTest for WeaveWrapper {
         }
 
         if transition.2.is_multiple_of(4) {
+            if let Ok(converted) = DependentWeave::try_from(state.weave.clone()) {
+                assert_eq!(state.weave, IndependentWeave::from(converted));
+            }
+
             state
                 .weave
                 .get_ordered_node_identifiers(&mut state.ordered_node_identifiers);

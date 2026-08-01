@@ -8,6 +8,7 @@ use universal_weave::{
     BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
     MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
+    independent::IndependentWeave,
 };
 
 const CASES: u32 = 6144;
@@ -308,6 +309,13 @@ impl StateMachineTest for WeaveWrapper {
         }
         if state.weave.nodes().len() > old_node_count {
             state.counter += 1;
+        }
+
+        if transition.2.is_multiple_of(16) {
+            assert_eq!(
+                state.weave,
+                DependentWeave::try_from(IndependentWeave::from(state.weave.clone())).unwrap()
+            );
         }
 
         if transition.2.is_multiple_of(4) {

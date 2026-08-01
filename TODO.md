@@ -13,8 +13,6 @@
 
 ## Release 0.1.1
 
-- [ ] Add DependentWeave::try_from(IndependentWeave)
-    - [ ] Add property tests for this conversion
 - [ ] Improve test coverage
 	- [ ] Add DependentWeave fuzzing (test validation of random weave + random weave action on success)
     - [ ] Add IndependentWeave fuzzing (test validation of random weave + random weave action on success)

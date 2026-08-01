@@ -166,6 +166,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn from(value: DependentNode<K, T, S>) -> Self {
         Self {
             id: value.id,
@@ -174,6 +175,31 @@ where
             active: value.active,
             bookmarked: value.bookmarked,
             contents: value.contents,
+        }
+    }
+}
+
+impl<K, T, S> TryFrom<IndependentNode<K, T, S>> for DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    type Error = IndependentNode<K, T, S>;
+
+    #[inline]
+    fn try_from(value: IndependentNode<K, T, S>) -> Result<Self, Self::Error> {
+        if value.from.len() < 2 {
+            Ok(Self {
+                id: value.id,
+                from: value.from.into_iter().next(),
+                to: value.to,
+                active: value.active,
+                bookmarked: value.bookmarked,
+                contents: value.contents,
+            })
+        } else {
+            Err(value)
         }
     }
 }
@@ -746,7 +772,6 @@ where
     }
 }
 
-#[allow(clippy::fallible_impl_from, reason = "Should never fail")]
 impl<K, T, M, S> From<DependentWeave<K, T, M, S>> for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,
@@ -796,6 +821,53 @@ where
         debug_assert!(output.validate(), "Converted weave is malformed");
 
         output
+    }
+}
+
+#[allow(clippy::panic_in_result_fn, reason = "Should never panic")]
+#[allow(clippy::unreachable, reason = "Should never panic")]
+impl<K, T, M, S> TryFrom<IndependentWeave<K, T, M, S>> for DependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    type Error = IndependentWeave<K, T, M, S>;
+
+    fn try_from(value: IndependentWeave<K, T, M, S>) -> Result<Self, Self::Error> {
+        if value.nodes.iter().all(|(_, node)| node.from.len() < 2) {
+            let mut active = None;
+
+            let output = Self {
+                nodes: {
+                    let mut map =
+                        HashMap::with_capacity_and_hasher(value.nodes.capacity(), S::default());
+                    map.extend(value.nodes.into_iter().map(|(id, mut node)| {
+                        node.active =
+                            node.active && !node.to.iter().any(|id| value.active.contains(id));
+                        if node.active {
+                            active = Some(id);
+                        }
+
+                        node.try_into()
+                            .map_or_else(|_| unreachable!(), |node| (id, node))
+                    }));
+
+                    map
+                },
+                roots: value.roots,
+                active,
+                bookmarked: value.bookmarked,
+                scratchpad: value.scratchpad_stack,
+                metadata: value.metadata,
+            };
+
+            debug_assert!(output.validate(), "Converted weave is malformed");
+
+            Ok(output)
+        } else {
+            Err(value)
+        }
     }
 }
 
