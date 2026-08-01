@@ -2,7 +2,6 @@
 
 ## Release 0.1.0
 
-- [ ] Rename _rev and _reversed_children functions to _mirrored whenever appropriate
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave

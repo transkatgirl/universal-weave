@@ -28,7 +28,7 @@ use crate::{
     SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, Weave,
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
-        topological_sort, topological_sort_rev,
+        topological_sort, topological_sort_mirrored,
     },
 };
 
@@ -38,7 +38,7 @@ use crate::{
     ImmutableSortableWeave, ImmutableWeave,
     dependent::{
         ArchivedDependentNode, archived_detect_cycles, archived_path_to_root,
-        archived_topological_sort, archived_topological_sort_rev,
+        archived_topological_sort, archived_topological_sort_mirrored,
     },
 };
 
@@ -541,20 +541,20 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.thread.clear();
 
         for root in &self.roots {
-            topological_sort_rev(&self.nodes, *root, &mut self.thread, output);
+            topological_sort_mirrored(&self.nodes, *root, &mut self.thread, output);
         }
     }
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
             self.thread.clear();
-            topological_sort_rev(&self.nodes, *id, &mut self.thread, output);
+            topological_sort_mirrored(&self.nodes, *id, &mut self.thread, output);
         }
     }
     fn sort_node_children_by(
@@ -958,15 +958,15 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut scratchpad = Vec::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            archived_topological_sort_rev(&self.nodes, *root, &mut scratchpad, output);
+            archived_topological_sort_mirrored(&self.nodes, *root, &mut scratchpad, output);
         }
     }
-    fn get_ordered_node_identifiers_from_reversed_children(
+    fn get_ordered_node_identifiers_mirrored_from(
         &self,
         id: &K::Archived,
         output: &mut Vec<K::Archived>,
@@ -976,7 +976,7 @@ where
         if self.nodes.contains_key(id) {
             let mut scratchpad = Vec::with_capacity(self.len());
 
-            archived_topological_sort_rev(&self.nodes, *id, &mut scratchpad, output);
+            archived_topological_sort_mirrored(&self.nodes, *id, &mut scratchpad, output);
         }
     }
 }

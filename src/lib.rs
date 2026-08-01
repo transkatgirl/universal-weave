@@ -270,12 +270,12 @@ where
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
-    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>);
+    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of node children.
+    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     ///
-    /// Unlike [`Weave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>);
+    /// Unlike [`Weave::get_ordered_node_identifiers_from`], this function reverses the ordering of node children.
+    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
     ///
     /// # Panics
@@ -490,12 +490,12 @@ where
 {
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     ///
-    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K>);
+    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers`], this function reverses the ordering of node children.
+    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     ///
-    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of a node's children.
-    fn get_ordered_node_identifiers_from_reversed_children(&self, id: &K, output: &mut Vec<K>);
+    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of node children.
+    fn get_ordered_node_identifiers_mirrored_from(&self, id: &K, output: &mut Vec<K>);
 }
 
 /// An [`ImmutableWeave`] where only one [`Node`] can be considered "active" at a time.
@@ -597,7 +597,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     }
 }
 
-fn topological_sort_subgraph_rev<'a, K, N, T, S>(
+fn topological_sort_subgraph_mirrored<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     filter: &impl Fn(&K) -> bool,
     id: &'a K,
@@ -632,7 +632,7 @@ fn topological_sort_subgraph_rev<'a, K, N, T, S>(
     }
 }
 
-fn topological_sort_rev<'a, K, N, T, S>(
+fn topological_sort_mirrored<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
     scratchpad: &mut Vec<K>,

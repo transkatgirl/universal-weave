@@ -1125,14 +1125,13 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[inline]
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
-        self.weave
-            .get_ordered_node_identifiers_reversed_children(output);
+    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_node_identifiers_mirrored(output);
     }
     #[inline]
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave
-            .get_ordered_node_identifiers_from_reversed_children(id, output);
+            .get_ordered_node_identifiers_mirrored_from(id, output);
     }
     fn sort_node_children_by(
         &mut self,

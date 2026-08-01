@@ -746,11 +746,11 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     )]
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         for root in &self.roots {
-            topological_sort_rev(&self.nodes, *root, &mut self.scratchpad, output);
+            topological_sort_mirrored(&self.nodes, *root, &mut self.scratchpad, output);
         }
     }
     #[contract(
@@ -763,11 +763,11 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     )]
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
-            topological_sort_rev(&self.nodes, *id, &mut self.scratchpad, output);
+            topological_sort_mirrored(&self.nodes, *id, &mut self.scratchpad, output);
         }
     }
     #[contract(
@@ -1305,15 +1305,15 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut scratchpad = Vec::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            archived_topological_sort_rev(&self.nodes, *root, &mut scratchpad, output);
+            archived_topological_sort_mirrored(&self.nodes, *root, &mut scratchpad, output);
         }
     }
-    fn get_ordered_node_identifiers_from_reversed_children(
+    fn get_ordered_node_identifiers_mirrored_from(
         &self,
         id: &K::Archived,
         output: &mut Vec<K::Archived>,
@@ -1323,7 +1323,7 @@ where
         if self.nodes.contains_key(id) {
             let mut scratchpad = Vec::with_capacity(self.len());
 
-            archived_topological_sort_rev(&self.nodes, *id, &mut scratchpad, output);
+            archived_topological_sort_mirrored(&self.nodes, *id, &mut scratchpad, output);
         }
     }
 }
@@ -1382,7 +1382,7 @@ fn topological_sort<K, N, T, S>(
     }
 }
 
-fn topological_sort_rev<K, N, T, S>(
+fn topological_sort_mirrored<K, N, T, S>(
     nodes: &HashMap<K, N, S>,
     id: K,
     scratchpad: &mut Vec<K>,
@@ -1464,7 +1464,7 @@ fn archived_topological_sort<K, N, T>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort_rev<K, N, T>(
+fn archived_topological_sort_mirrored<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     scratchpad: &mut Vec<K>,

@@ -33,8 +33,8 @@ use crate::{
     contract::{active_path_is_valid, lacks_duplicates, valid_path, valid_topological_sort},
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_candidate_path_to_root, shortest_path_to_ancestor,
-    topological_sort, topological_sort_rev, topological_sort_subgraph,
-    topological_sort_subgraph_rev,
+    topological_sort, topological_sort_mirrored, topological_sort_subgraph,
+    topological_sort_subgraph_mirrored,
 };
 
 #[cfg(feature = "rkyv")]
@@ -1447,11 +1447,11 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     )]
-    fn get_ordered_node_identifiers_reversed_children(&mut self, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         for root in &self.roots {
-            topological_sort_rev(
+            topological_sort_mirrored(
                 &self.nodes,
                 root,
                 &mut self.scratchpad_stack,
@@ -1472,7 +1472,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     )]
-    fn get_ordered_node_identifiers_from_reversed_children(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
@@ -1483,7 +1483,7 @@ where
                 &mut self.scratchpad_set,
             );
 
-            topological_sort_subgraph_rev(
+            topological_sort_subgraph_mirrored(
                 &self.nodes,
                 &|id| self.scratchpad_set.contains(id),
                 id,
@@ -2272,13 +2272,13 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    fn get_ordered_node_identifiers_reversed_children(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut scratchpad = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
 
         for root in self.roots.iter() {
-            archived_topological_sort_rev(
+            archived_topological_sort_mirrored(
                 &self.nodes,
                 root,
                 &mut scratchpad,
@@ -2287,7 +2287,7 @@ where
             );
         }
     }
-    fn get_ordered_node_identifiers_from_reversed_children(
+    fn get_ordered_node_identifiers_mirrored_from(
         &self,
         id: &K::Archived,
         output: &mut Vec<K::Archived>,
@@ -2301,7 +2301,7 @@ where
 
             archived_descendant_subgraph(&self.nodes, *id, &mut scratchpad, &mut scratchpad_set);
 
-            archived_topological_sort_subgraph_rev(
+            archived_topological_sort_subgraph_mirrored(
                 &self.nodes,
                 &|id| scratchpad_set.contains(id),
                 id,
@@ -2401,7 +2401,7 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort_subgraph_rev<'a, K, N, T, S>(
+fn archived_topological_sort_subgraph_mirrored<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     filter: &impl Fn(&K) -> bool,
     id: &'a K,
@@ -2433,7 +2433,7 @@ fn archived_topological_sort_subgraph_rev<'a, K, N, T, S>(
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_topological_sort_rev<'a, K, N, T, S>(
+fn archived_topological_sort_mirrored<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
     scratchpad: &mut Vec<K>,
