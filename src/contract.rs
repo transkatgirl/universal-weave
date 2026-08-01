@@ -1,10 +1,10 @@
 #![allow(clippy::impl_trait_in_params, reason = "Readability")]
 
 use alloc::vec::Vec;
-use core::{
-    hash::{BuildHasher, Hash},
-    ops::Index,
-};
+use core::hash::{BuildHasher, Hash};
+
+#[cfg(debug_assertions)]
+use core::ops::Index;
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
 use core::{error::Error, fmt};
@@ -13,6 +13,7 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::{Node, longest_candidate_path_to_root, topological_sort};
 
+#[cfg(debug_assertions)]
 pub fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
 where
     &'a I: IntoIterator<Item = T, IntoIter: ExactSizeIterator>,
@@ -31,6 +32,7 @@ where
     true
 }
 
+#[cfg(debug_assertions)]
 pub fn valid_topological_sort<'a, K, N, T, S>(nodes: &'a HashMap<K, N, S>, value: &'a [K]) -> bool
 where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -57,6 +59,7 @@ where
     true
 }
 
+#[cfg(debug_assertions)]
 pub fn valid_path<'a, K, N, T>(nodes: &'a impl Index<&'a K, Output = N>, value: &'a [K]) -> bool
 where
     K: Hash + Copy + Eq + Ord + 'a,

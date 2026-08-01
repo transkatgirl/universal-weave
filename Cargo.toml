@@ -40,23 +40,17 @@ legacy = [  ]
 
 
 [dependencies]
-contracts = { version = "0.6.10", features = [
-	"override_debug",
-] }
+contracts = "0.6.10"
 hashbrown = { version = "0.17.1", features = [
 	"allocator-api2",
 	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: Function contracts (only enabled in debug mode) and Archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
 	"default-hasher",
-	"equivalent",
 	"inline-more",
 ], default-features = false }
 indexmap = { version = "2.14.0", default-features = false }
 rkyv = { version = "0.8.17", features = [
 	"alloc",
 	"bytecheck",
-	"little_endian",
-	"aligned",
-	"pointer_width_32",
 	"hashbrown-0_17",
 	"indexmap-2",
 ], default-features = false, optional = true }
