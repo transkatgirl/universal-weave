@@ -769,12 +769,8 @@ where
                     return true;
                 }
 
-                node.active = value;
-                if value {
-                    self.active.insert(node.id);
-                } else {
-                    self.active.remove(id);
-                }
+                node.active = true;
+                self.active.insert(node.id);
             } else {
                 return false;
             }
