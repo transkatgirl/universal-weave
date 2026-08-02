@@ -1,7 +1,5 @@
 # TODO
 
-## Release 0.1.x
-
 - [ ] Improve test coverage
     - [ ] **DependentWeave unit tests**
     - [ ] **IndependentWeave unit tests**
@@ -17,10 +15,7 @@
     - [ ] IndependentWeave (test validation of random weave + random weave action on success)
     - [ ] DependentLoroWeve import
 - [ ] Full (library) code review
-
-## Release 0.2.0
-
-- [ ] Separate bookmarking into a Weave wrapper?
+    - [ ] Performance optimization
 - [ ] Add node layout calculation behind a feature flag?
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
