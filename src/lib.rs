@@ -538,12 +538,13 @@ fn topological_sort<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
+    identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
@@ -552,15 +553,26 @@ fn topological_sort<'a, K, N, T, S>(
     while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
-        if !identifier_set.contains(&id)
-            && node
-                .from()
-                .into_iter()
-                .all(|parent| identifier_set.contains(parent))
+        if identifier_set.contains(&id)
+            || identifier_map
+                .get(&id)
+                .copied()
+                .unwrap_or_else(|| node.from().into_iter().len())
+                != 0
         {
-            identifiers.push(id);
-            identifier_set.insert(id);
-            scratchpad.extend(node.to().into_iter().rev().copied());
+            continue;
+        }
+
+        identifiers.push(id);
+        identifier_set.insert(id);
+
+        for child in node.to().into_iter().rev().copied() {
+            let remaining = identifier_map
+                .entry(child)
+                .or_insert_with(|| nodes[&child].from().into_iter().len());
+            *remaining = remaining.strict_sub(1);
+
+            scratchpad.push(child);
         }
     }
 }
@@ -572,6 +584,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
+    identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
@@ -586,16 +599,32 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
-        if filter(&id)
-            && !identifier_set.contains(&id)
-            && node
-                .from()
-                .into_iter()
-                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        if !filter(&id)
+            || identifier_set.contains(&id)
+            || identifier_map.get(&id).copied().unwrap_or_else(|| {
+                node.from()
+                    .into_iter()
+                    .filter(|&parent| filter(parent))
+                    .count()
+            }) != 0
         {
-            identifiers.push(id);
-            identifier_set.insert(id);
-            scratchpad.extend(node.to().into_iter().rev().copied());
+            continue;
+        }
+
+        identifiers.push(id);
+        identifier_set.insert(id);
+
+        for child in node.to().into_iter().rev().copied() {
+            let remaining = identifier_map.entry(child).or_insert_with(|| {
+                nodes[&child]
+                    .from()
+                    .into_iter()
+                    .filter(|&parent| filter(parent))
+                    .count()
+            });
+            *remaining = remaining.strict_sub(1);
+
+            scratchpad.push(child);
         }
     }
 }
@@ -607,6 +636,7 @@ fn topological_sort_subgraph_mirrored<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
+    identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
@@ -621,16 +651,32 @@ fn topological_sort_subgraph_mirrored<'a, K, N, T, S>(
     while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
-        if filter(&id)
-            && !identifier_set.contains(&id)
-            && node
-                .from()
-                .into_iter()
-                .all(|parent| identifier_set.contains(parent) || !filter(parent))
+        if !filter(&id)
+            || identifier_set.contains(&id)
+            || identifier_map.get(&id).copied().unwrap_or_else(|| {
+                node.from()
+                    .into_iter()
+                    .filter(|&parent| filter(parent))
+                    .count()
+            }) != 0
         {
-            identifiers.push(id);
-            identifier_set.insert(id);
-            scratchpad.extend(node.to().into_iter().copied());
+            continue;
+        }
+
+        identifiers.push(id);
+        identifier_set.insert(id);
+
+        for child in node.to().into_iter().copied() {
+            let remaining = identifier_map.entry(child).or_insert_with(|| {
+                nodes[&child]
+                    .from()
+                    .into_iter()
+                    .filter(|&parent| filter(parent))
+                    .count()
+            });
+            *remaining = remaining.strict_sub(1);
+
+            scratchpad.push(child);
         }
     }
 }
@@ -641,12 +687,13 @@ fn topological_sort_mirrored<'a, K, N, T, S>(
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
     identifier_set: &mut HashSet<K, S>,
+    identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
@@ -655,15 +702,26 @@ fn topological_sort_mirrored<'a, K, N, T, S>(
     while let Some(id) = scratchpad.pop() {
         let node = &nodes[&id];
 
-        if !identifier_set.contains(&id)
-            && node
-                .from()
-                .into_iter()
-                .all(|parent| identifier_set.contains(parent))
+        if identifier_set.contains(&id)
+            || identifier_map
+                .get(&id)
+                .copied()
+                .unwrap_or_else(|| node.from().into_iter().len())
+                != 0
         {
-            identifiers.push(id);
-            identifier_set.insert(id);
-            scratchpad.extend(node.to().into_iter().copied());
+            continue;
+        }
+
+        identifiers.push(id);
+        identifier_set.insert(id);
+
+        for child in node.to().into_iter().copied() {
+            let remaining = identifier_map
+                .entry(child)
+                .or_insert_with(|| nodes[&child].from().into_iter().len());
+            *remaining = remaining.strict_sub(1);
+
+            scratchpad.push(child);
         }
     }
 }

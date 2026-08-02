@@ -97,7 +97,7 @@ where
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
@@ -114,10 +114,12 @@ where
             &mut scratchpad,
             &mut scratchpad_list,
             &mut scratchpad_set,
+            &mut scratchpad_map,
         );
     }
 
     scratchpad_set.clear();
+    scratchpad_map.clear();
 
     longest_candidate_path_to_root(
         nodes,
