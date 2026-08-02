@@ -764,13 +764,10 @@ where
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
     pub fn set_node_active_status_dependent_semantics(&mut self, id: &K, value: bool) -> bool {
         if value {
-            if let Some(node) = self.nodes.get_mut(id) {
+            if let Some(node) = self.nodes.get(id) {
                 if node.active && !node.to.iter().any(|id| self.active.contains(id)) {
                     return true;
                 }
-
-                node.active = true;
-                self.active.insert(node.id);
             } else {
                 return false;
             }
