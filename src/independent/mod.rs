@@ -2084,7 +2084,7 @@ where
 {
     fn validate(&self) -> bool {
         let mut scratchpad = Vec::with_capacity(self.nodes.len());
-        let mut scratchpad_map = HashMap::with_capacity_and_hasher(self.nodes.len(), S::default());
+        let mut scratchpad_map = HashMap::with_capacity(self.nodes.len());
 
         self.roots
             .iter()
