@@ -1248,6 +1248,12 @@ where
             }
         }
 
+        let extends_active = node.active
+            && node.to.is_empty()
+            && node.from.iter().map(|id| &self.nodes[id]).any(|parent| {
+                parent.active && parent.to.iter().all(|child| !self.active.contains(child))
+            });
+
         if node.from.is_empty() {
             if let Some(index) = root_index {
                 self.roots.shift_insert(index, node.id);
@@ -1272,11 +1278,16 @@ where
 
         let id = node.id;
         let active = node.active;
-        node.active = false;
+
+        if !extends_active {
+            node.active = false;
+        }
 
         self.nodes.insert(node.id, node);
 
-        if active {
+        if extends_active {
+            self.active.insert(id);
+        } else if active {
             self.update_node_activity_in_place(&id, true);
         }
 
