@@ -1166,8 +1166,9 @@ where
     #[inline]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
         self.weave.metadata_mut(|metadata| {
+            let output = callback(metadata);
             self.count.metadata_mut = self.count.metadata_mut.saturating_add(1);
-            callback(metadata)
+            output
         })
     }
 }
@@ -1322,8 +1323,9 @@ where
     #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
         self.weave.get_contents_mut(id, |contents| {
+            let output = callback(contents);
             self.count.get_contents_mut = self.count.get_contents_mut.saturating_add(1);
-            callback(contents)
+            output
         })
     }
 }
