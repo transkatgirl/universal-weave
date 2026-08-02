@@ -1309,6 +1309,7 @@ where
     ))]
     fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         let mut removed_node = None;
+        let mut removed_active = false;
 
         self.scratchpad_stack.push(*id);
 
@@ -1322,6 +1323,7 @@ where
                 }
                 if node.active {
                     self.active.remove(&id);
+                    removed_active = true;
                 }
 
                 for parent in &node.from {
@@ -1346,7 +1348,9 @@ where
         }
 
         if removed_node.is_some() {
-            self.fix_orphaned_activations();
+            if removed_active {
+                self.fix_orphaned_activations();
+            }
             removed_node
         } else {
             None
@@ -1370,6 +1374,7 @@ where
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
     ) -> bool {
         let had_node = self.nodes.contains_key(id);
+        let mut removed_active = false;
 
         self.scratchpad_stack.push(*id);
 
@@ -1383,6 +1388,7 @@ where
                 }
                 if node.active {
                     self.active.remove(&id);
+                    removed_active = true;
                 }
 
                 for parent in &node.from {
@@ -1405,7 +1411,9 @@ where
         }
 
         if had_node {
-            self.fix_orphaned_activations();
+            if removed_active {
+                self.fix_orphaned_activations();
+            }
             true
         } else {
             false
