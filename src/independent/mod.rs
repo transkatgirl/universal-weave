@@ -646,7 +646,7 @@ where
                     .to
                     .iter()
                     .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
-                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+                    .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (child, score) = if let Some((child, mut score)) = best_child {
                     if node.active {
