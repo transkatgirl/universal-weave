@@ -195,7 +195,9 @@ where
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
-    /// Builds the longest contiguous path of active nodes which ends at a root node.
+    /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
+    ///
+    /// In an [`ActivePathWeave`], this path will be the longest contiguous path of active nodes.
     fn get_active_path(&mut self, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the specified node and ending at a root node.
     ///
@@ -347,7 +349,7 @@ where
     /// Returns a reference to the identifiers of active nodes.
     #[must_use]
     fn active(&self) -> &Self::Active;
-    /// Replaces the active path.
+    /// Replaces the currently active path with the specified set of node IDs.
     ///
     /// If the new active path would result in internal inconsistency, this function will correct the path in an implementation-specific manner.
     fn set_active_path(&mut self, active: impl Iterator<Item = K>);
@@ -449,7 +451,9 @@ where
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
     fn get_ordered_node_identifiers_from(&self, id: &K, output: &mut Vec<K>);
-    /// Builds the longest contiguous path of active nodes which ends at a root node.
+    /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
+    ///
+    /// In an [`ImmutableActivePathWeave`], this path will be the longest contiguous path of active nodes.
     fn get_active_path(&self, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the specified node and ending at a root node.
     ///

@@ -610,7 +610,7 @@ where
                     .from
                     .iter()
                     .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
-                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+                    .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
                     if node.active {
@@ -800,7 +800,7 @@ where
                     .from
                     .iter()
                     .map(|id| (id, self.scratchpad_map_3[id])) // score: (connectors, active)
-                    .min_by(|(_, a), (_, b)| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+                    .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
                     if node.active {
@@ -1080,8 +1080,9 @@ where
         output.clear();
 
         for root in &self.roots {
-            topological_sort(
+            topological_sort_subgraph(
                 &self.nodes,
+                &|id| self.active.contains(id),
                 root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
@@ -1129,8 +1130,9 @@ where
         );
 
         for root in &self.roots {
-            topological_sort(
+            topological_sort_subgraph(
                 &self.nodes,
+                &|id| self.active.contains(id),
                 root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
@@ -2297,8 +2299,9 @@ where
         archived_ancestor_subgraph(&self.nodes, *id, &mut scratchpad_stack, &mut scratchpad_set);
 
         for root in self.roots.iter() {
-            archived_topological_sort(
+            archived_topological_sort_subgraph(
                 &self.nodes,
+                &|id| self.active.contains(id),
                 root,
                 &mut scratchpad_stack,
                 &mut scratchpad_list_2,

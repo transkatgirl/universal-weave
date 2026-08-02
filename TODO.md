@@ -8,6 +8,10 @@
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
+- [ ] Improve documentation
+    - [ ] Trait documentation improvements
+    - [ ] DependentWeave-specific documentation
+    - [ ] IndependentWeave-specific documentation
 - [ ] Setup fuzzing w/ `cargo-fuzz`
 	- [ ] DependentWeave (test validation of random weave + random weave action on success)
     - [ ] IndependentWeave (test validation of random weave + random weave action on success)
