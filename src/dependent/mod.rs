@@ -501,8 +501,8 @@ where
             return false;
         }
 
-        if let Some(from) = node.from {
-            match self.nodes.get_mut(&from) {
+        if let Some(from) = &node.from {
+            match self.nodes.get_mut(from) {
                 Some(parent) => {
                     parent.to.insert(node.id);
                 }
