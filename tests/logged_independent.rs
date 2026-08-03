@@ -481,7 +481,7 @@ impl StateMachineTest for WeaveWrapper {
                     map_id(id_seed),
                     content_seed % 4
                 );*/
-                state
+                let _ = state
                     .weave
                     .get_contents_mut(&map_id(id_seed), |c| c.content_seed = content_seed % 4);
             }

@@ -1002,16 +1002,14 @@ where
     T: IndependentContents + Clone,
 {
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
-        self.weave.get_contents_mut(id, |contents| {
-            let output = callback(contents);
+        self.weave
+            .get_contents_mut(id, |contents| (callback(contents), contents.clone()))
+            .map(|(output, contents)| {
+                self.actions
+                    .push_back(WeaveAction::SetNodeContent { id: *id, contents });
 
-            self.actions.push_back(WeaveAction::SetNodeContent {
-                id: *id,
-                contents: contents.clone(),
-            });
-
-            output
-        })
+                output
+            })
     }
 }
 
@@ -1314,10 +1312,8 @@ where
 {
     #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
-        self.weave.get_contents_mut(id, |contents| {
-            let output = callback(contents);
+        self.weave.get_contents_mut(id, callback).inspect(|_| {
             self.count.get_contents_mut = self.count.get_contents_mut.saturating_add(1);
-            output
         })
     }
 }

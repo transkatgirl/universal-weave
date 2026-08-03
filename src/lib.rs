@@ -394,9 +394,12 @@ where
 {
     /// Mutable access to the contents of a node with the specified identifier.
     ///
+    /// Returns `Some` if the node's contents were successfully updated.
+    ///
     /// # Panics
     ///
     /// May panic if `callback` panics.
+    #[must_use]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O>;
 }
 
@@ -413,7 +416,7 @@ where
 {
     /// Splits a node with the specified identifier at the given index, creating a new child node with the identifier `new_id`.
     ///
-    /// Returns `false` if splitting the node failed or the node could not be found.
+    /// Returns `false` if splitting the node failed.
     ///
     /// # Panics
     ///
