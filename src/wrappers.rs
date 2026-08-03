@@ -744,6 +744,14 @@ where
         self.weave.get_node(id)
     }
     #[inline]
+    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_node_parents(id)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_node_children(id)
+    }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }
@@ -1084,6 +1092,14 @@ where
     #[inline]
     fn get_node(&self, id: &K) -> Option<&N> {
         self.weave.get_node(id)
+    }
+    #[inline]
+    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_node_parents(id)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_node_children(id)
     }
     #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {

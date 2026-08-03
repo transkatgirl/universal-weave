@@ -603,6 +603,14 @@ where
         self.weave.get_node(id)
     }
     #[inline]
+    fn get_node_parents(&self, id: &K) -> Option<&Option<K>> {
+        self.weave.get_node_parents(id)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
+        self.weave.get_node_children(id)
+    }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }

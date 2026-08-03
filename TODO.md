@@ -45,7 +45,6 @@
     - [ ] Deduplication wrapper
     - [ ] Cached active path wrapper
 - [ ] Additional Weave traversal methods
-    - [ ] Node parents
     - [ ] Node siblings
     - [ ] Node siblings or roots
     - [ ] Threads as DoubleEndedIterator of &node

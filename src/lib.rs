@@ -191,6 +191,12 @@ where
     /// Returns a reference to the node corresponding to the identifier.
     #[must_use]
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Convenience method for `self.get_node(id).map(Node::from)`.
+    #[must_use]
+    fn get_node_parents(&self, id: &K) -> Option<&N::From>;
+    /// Convenience method for `self.get_node(id).map(Node::to)`.
+    #[must_use]
+    fn get_node_children<'a>(&'a self, id: &K) -> Option<&'a N::To>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
@@ -441,6 +447,12 @@ where
     /// Returns a reference to the node corresponding to the identifier.
     #[must_use]
     fn get_node(&self, id: &K) -> Option<&N>;
+    /// Convenience method for `self.get_node(id).map(Node::from)`.
+    #[must_use]
+    fn get_node_parents(&self, id: &K) -> Option<&N::From>;
+    /// Convenience method for `self.get_node(id).map(Node::to)`.
+    #[must_use]
+    fn get_node_children<'a>(&'a self, id: &K) -> Option<&'a N::To>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.

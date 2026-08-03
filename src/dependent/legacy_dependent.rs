@@ -321,6 +321,14 @@ where
     fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
+    #[inline]
+    fn get_node_parents(&self, id: &K) -> Option<&Option<K>> {
+        self.nodes.get(id).map(|node| &node.from)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
+        self.nodes.get(id).map(|node| &node.to)
+    }
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
         self.thread.clear();
@@ -908,6 +916,14 @@ where
     #[inline]
     fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
+    }
+    #[inline]
+    fn get_node_parents(&self, id: &K::Archived) -> Option<&ArchivedOption<K::Archived>> {
+        self.nodes.get(id).map(|node| &node.from)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
+        self.nodes.get(id).map(|node| &node.to)
     }
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
