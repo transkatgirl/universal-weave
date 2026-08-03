@@ -400,6 +400,10 @@ where
     fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
         self.nodes.get(id).map(|node| &node.to)
     }
+    #[inline]
+    fn get_node_contents(&self, id: &K) -> Option<&T> {
+        self.nodes.get(id).map(|node| &node.contents)
+    }
     #[cfg_attr(debug_assertions, contract(
         ensures(output.len() == self.nodes.len()),
         ensures(valid_topological_sort(&self.nodes, output)),
@@ -1228,6 +1232,10 @@ where
     #[inline]
     fn get_node_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
         self.nodes.get(id).map(|node| &node.to)
+    }
+    #[inline]
+    fn get_node_contents(&self, id: &K::Archived) -> Option<&T::Archived> {
+        self.nodes.get(id).map(|node| &node.contents)
     }
     fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();

@@ -610,6 +610,10 @@ where
         self.weave.get_node_children(id)
     }
     #[inline]
+    fn get_node_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_node_contents(id)
+    }
+    #[inline]
     fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
         self.weave.get_ordered_node_identifiers(output);
     }
