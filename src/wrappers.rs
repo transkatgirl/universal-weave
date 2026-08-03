@@ -456,10 +456,7 @@ where
                 assert!(self.insert(node), "Failed to apply Weave action");
             }
             WeaveAction::SetActive { id, value } => {
-                assert!(
-                    self.set_active(&id, value),
-                    "Failed to apply Weave action"
-                );
+                assert!(self.set_active(&id, value), "Failed to apply Weave action");
             }
             WeaveAction::SetBookmarked { id, value } => {
                 assert!(
@@ -467,10 +464,9 @@ where
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::Remove(id) => assert!(
-                self.remove(&id).is_some(),
-                "Failed to apply Weave action"
-            ),
+            WeaveAction::Remove(id) => {
+                assert!(self.remove(&id).is_some(), "Failed to apply Weave action");
+            }
             WeaveAction::Clear => self.clear(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
@@ -518,10 +514,9 @@ where
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::Split { id, at, new_id } => assert!(
-                self.split(&id, at, new_id),
-                "Failed to apply Weave action"
-            ),
+            WeaveAction::Split { id, at, new_id } => {
+                assert!(self.split(&id, at, new_id), "Failed to apply Weave action");
+            }
             WeaveAction::MergeWithParent(id) => assert!(
                 self.merge_with_parent(&id).is_some(),
                 "Failed to apply Weave action"
