@@ -988,7 +988,7 @@ where
     ))]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         if let Some(mut node) = self.nodes.remove(id) {
-            if let Some(mut parent) = node.from.and_then(|id| self.nodes.remove(&id)) {
+            if let Some(mut parent) = node.from.as_ref().and_then(|id| self.nodes.remove(id)) {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
                     self.nodes.insert(node.id, node);
