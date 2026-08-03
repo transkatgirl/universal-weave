@@ -1809,9 +1809,22 @@ where
 
                         let parent_id = parent.id;
 
-                        self.nodes.insert(parent.id, parent);
+                        if node.bookmarked && !parent.bookmarked {
+                            parent.bookmarked = true;
+                            assert!(
+                                self.bookmarked
+                                    .replace_index(
+                                        self.bookmarked.get_index_of(&node.id).unwrap(),
+                                        parent.id,
+                                    )
+                                    .is_ok(),
+                                "Should be unreachable"
+                            );
+                        } else {
+                            self.bookmarked.shift_remove(&node.id);
+                        }
 
-                        self.bookmarked.shift_remove(&node.id);
+                        self.nodes.insert(parent.id, parent);
                         self.active.remove(&node.id);
 
                         Some(parent_id)
