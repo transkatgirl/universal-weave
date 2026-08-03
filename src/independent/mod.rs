@@ -1356,6 +1356,7 @@ where
 
         if removed_node.is_some() {
             if removed_active {
+                // matches set_node_active_status(id, false)
                 self.fix_orphaned_activations();
             }
             removed_node
