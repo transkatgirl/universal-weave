@@ -113,7 +113,7 @@ where
             && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
             && self.active == other.active
             && self.bookmarked == other.bookmarked
-            && self.contents.eq(&other.contents)
+            && self.contents == other.contents
     }
 }
 
