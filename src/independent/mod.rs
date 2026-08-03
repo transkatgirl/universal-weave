@@ -718,7 +718,7 @@ where
         }
     }
     #[cfg_attr(debug_assertions, contract(
-        ensures(!ret || value || self.active.is_empty() || (old(self.active.clone()) == self.active && (!self.active.contains(id) || self.nodes[id].to.iter().any(|id| self.contains_active(id))))),
+        ensures(!ret || value || !self.active.contains(id) || (old(self.active.clone()) == self.active && self.nodes[id].to.iter().any(|id| self.contains_active(id)))),
         ensures(!ret || !value || self.contains_active(id) && !self.nodes[id].to.iter().any(|id| self.active.contains(id))),
         ensures(ret || old(self.active.clone()) == self.active),
         ensures(ret == self.nodes.contains_key(id)),
@@ -808,19 +808,15 @@ where
                 self.nodes.get_mut(&id).unwrap().active = true;
                 self.active.insert(id);
             }
-        } else {
-            if let Some(node) = self.nodes.get(id) {
-                if !node.active || node.to.iter().any(|id| self.active.contains(id)) {
-                    return true;
-                }
-            } else {
-                return false;
+        } else if let Some(node) = self.nodes.get_mut(id) {
+            if !node.active || node.to.iter().any(|id| self.active.contains(id)) {
+                return true;
             }
 
-            self.active.iter().for_each(|active| {
-                self.nodes.get_mut(active).unwrap().active = false;
-            });
-            self.active.clear();
+            node.active = false;
+            self.active.remove(&node.id);
+        } else {
+            return false;
         }
 
         true

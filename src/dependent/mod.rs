@@ -541,7 +541,11 @@ where
 
                     self.active = Some(*id);
                 } else if self.active == Some(node.id) {
-                    self.active = None;
+                    self.active = node.from;
+
+                    if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                        active.active = true;
+                    }
                 }
 
                 true
