@@ -54,7 +54,7 @@ impl ReferenceStateMachine for WeaveStateMachine {
 #[derive(Arbitrary, Debug, Clone)]
 enum WeaveTransition {
     #[proptest(weight = 8)]
-    AddNode {
+    Insert {
         from_seed: Option<u32>,
         active: bool,
         bookmarked: bool,
@@ -62,33 +62,33 @@ enum WeaveTransition {
         length: u32,
     },
     #[proptest(weight = 6)]
-    SetNodeActiveStatus {
+    SetActive {
         value: bool,
         id_seed: u32,
     },
-    SetNodeBookmarkedStatus {
+    SetBookmarked {
         value: bool,
         id_seed: u32,
     },
     #[proptest(weight = 3)]
-    RemoveNode {
+    Remove {
         id_seed: u32,
     },
     #[proptest(weight = 3)]
-    RemoveNodeTracked {
+    RemoveTracked {
         id_seed: u32,
     },
-    RemoveAllNodes {
+    Clear {
         apply_seed: u16,
     },
     MetadataMut {
         content_seed: u32,
     },
-    SortNodeChildrenBy {
+    SortChildrenBy {
         id_seed: u32,
         sort_seed: u32,
     },
-    SortNodeChildrenById {
+    SortChildrenById {
         id_seed: u32,
         sort_seed: u32,
     },
@@ -109,12 +109,12 @@ enum WeaveTransition {
         content_seed: u32,
     },
     #[proptest(weight = 3)]
-    SplitNode {
+    Split {
         at_seed: u32,
         id_seed: u32,
     },
     #[proptest(weight = 3)]
-    MergeNodeWithParent {
+    MergeWithParent {
         id_seed: u32,
     },
 }
@@ -207,7 +207,7 @@ impl StateMachineTest for WeaveWrapper {
         let target = map_id(transition.1);
 
         match transition.0 {
-            WeaveTransition::AddNode {
+            WeaveTransition::Insert {
                 from_seed,
                 active,
                 bookmarked,
@@ -215,7 +215,7 @@ impl StateMachineTest for WeaveWrapper {
                 content_seed,
             } => {
                 assert_eq!(
-                    state.d_weave.add_node(DependentNode {
+                    state.d_weave.insert(DependentNode {
                         id: state.counter,
                         from: from_seed.map(map_id),
                         to: IndexSet::default(),
@@ -226,7 +226,7 @@ impl StateMachineTest for WeaveWrapper {
                             content_seed: content_seed % 4,
                         },
                     }),
-                    state.i_weave.add_node(IndependentNode {
+                    state.i_weave.insert(IndependentNode {
                         id: state.counter,
                         from: IndexSet::from_iter(from_seed.into_iter().map(&map_id)),
                         to: IndexSet::default(),
@@ -239,86 +239,64 @@ impl StateMachineTest for WeaveWrapper {
                     })
                 );
             }
-            WeaveTransition::SetNodeActiveStatus { id_seed, value } => {
+            WeaveTransition::SetActive { id_seed, value } => {
                 assert_eq!(
-                    state
-                        .d_weave
-                        .set_node_active_status(&map_id(id_seed), value),
+                    state.d_weave.set_active(&map_id(id_seed), value),
                     state
                         .i_weave
-                        .set_node_active_status_dependent_semantics(&map_id(id_seed), value)
+                        .set_active_dependent_semantics(&map_id(id_seed), value)
                 );
             }
-            WeaveTransition::SetNodeBookmarkedStatus { id_seed, value } => {
+            WeaveTransition::SetBookmarked { id_seed, value } => {
                 assert_eq!(
-                    state
-                        .d_weave
-                        .set_node_bookmarked_status(&map_id(id_seed), value),
-                    state
-                        .i_weave
-                        .set_node_bookmarked_status(&map_id(id_seed), value)
+                    state.d_weave.set_bookmarked(&map_id(id_seed), value),
+                    state.i_weave.set_bookmarked(&map_id(id_seed), value)
                 );
             }
-            WeaveTransition::RemoveNode { id_seed } => {
+            WeaveTransition::Remove { id_seed } => {
                 assert_eq!(
-                    state
-                        .d_weave
-                        .remove_node(&map_id(id_seed))
-                        .map(|node| node.id),
-                    state
-                        .i_weave
-                        .remove_node(&map_id(id_seed))
-                        .map(|node| node.id)
+                    state.d_weave.remove(&map_id(id_seed)).map(|node| node.id),
+                    state.i_weave.remove(&map_id(id_seed)).map(|node| node.id)
                 );
             }
-            WeaveTransition::RemoveNodeTracked { id_seed } => {
+            WeaveTransition::RemoveTracked { id_seed } => {
                 assert_eq!(
-                    state.d_weave.remove_node_tracked(&map_id(id_seed), |_r| {}),
-                    state.i_weave.remove_node_tracked(&map_id(id_seed), |_r| {})
+                    state.d_weave.remove_tracked(&map_id(id_seed), |_r| {}),
+                    state.i_weave.remove_tracked(&map_id(id_seed), |_r| {})
                 );
             }
-            WeaveTransition::RemoveAllNodes { apply_seed } => {
+            WeaveTransition::Clear { apply_seed } => {
                 if apply_seed == 0 {
-                    state.d_weave.remove_all_nodes();
-                    state.i_weave.remove_all_nodes();
+                    state.d_weave.clear();
+                    state.i_weave.clear();
                 }
             }
             WeaveTransition::MetadataMut { content_seed } => {
                 state.d_weave.metadata_mut(|m| *m = content_seed);
                 state.i_weave.metadata_mut(|m| *m = content_seed);
             }
-            WeaveTransition::SortNodeChildrenBy { id_seed, sort_seed } => {
+            WeaveTransition::SortChildrenBy { id_seed, sort_seed } => {
                 let sort_seed = sort_seed as u64;
                 assert_eq!(
-                    state
-                        .d_weave
-                        .sort_node_children_by(&map_id(id_seed), |a, b| {
-                            hash_value(a.id as u64 + sort_seed)
-                                .cmp(&hash_value(b.id as u64 + sort_seed))
-                        }),
-                    state
-                        .i_weave
-                        .sort_node_children_by(&map_id(id_seed), |a, b| {
-                            hash_value(a.id as u64 + sort_seed)
-                                .cmp(&hash_value(b.id as u64 + sort_seed))
-                        })
+                    state.d_weave.sort_children_by(&map_id(id_seed), |a, b| {
+                        hash_value(a.id as u64 + sort_seed)
+                            .cmp(&hash_value(b.id as u64 + sort_seed))
+                    }),
+                    state.i_weave.sort_children_by(&map_id(id_seed), |a, b| {
+                        hash_value(a.id as u64 + sort_seed)
+                            .cmp(&hash_value(b.id as u64 + sort_seed))
+                    })
                 );
             }
-            WeaveTransition::SortNodeChildrenById { id_seed, sort_seed } => {
+            WeaveTransition::SortChildrenById { id_seed, sort_seed } => {
                 let sort_seed = sort_seed as u64;
                 assert_eq!(
-                    state
-                        .d_weave
-                        .sort_node_children_by_id(&map_id(id_seed), |a, b| {
-                            hash_value(*a as u64 + sort_seed)
-                                .cmp(&hash_value(*b as u64 + sort_seed))
-                        }),
-                    state
-                        .i_weave
-                        .sort_node_children_by_id(&map_id(id_seed), |a, b| {
-                            hash_value(*a as u64 + sort_seed)
-                                .cmp(&hash_value(*b as u64 + sort_seed))
-                        })
+                    state.d_weave.sort_children_by_id(&map_id(id_seed), |a, b| {
+                        hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
+                    }),
+                    state.i_weave.sort_children_by_id(&map_id(id_seed), |a, b| {
+                        hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
+                    })
                 );
             }
             WeaveTransition::SortRootsBy { sort_seed } => {
@@ -370,13 +348,13 @@ impl StateMachineTest for WeaveWrapper {
                         .get_contents_mut(&map_id(id_seed), |c| c.content_seed = content_seed % 4)
                 )
             }
-            WeaveTransition::SplitNode { id_seed, at_seed } => {
+            WeaveTransition::Split { id_seed, at_seed } => {
                 assert_eq!(
-                    state.d_weave.split_node(
+                    state.d_weave.split(
                         &map_id(id_seed),
                         state
                             .d_weave
-                            .get_node(&map_id(id_seed))
+                            .get(&map_id(id_seed))
                             .map(|node| {
                                 (at_seed
                                     .checked_rem(node.contents.length)
@@ -385,11 +363,11 @@ impl StateMachineTest for WeaveWrapper {
                             .unwrap_or_default(),
                         state.counter,
                     ),
-                    state.i_weave.split_node(
+                    state.i_weave.split(
                         &map_id(id_seed),
                         state
                             .i_weave
-                            .get_node(&map_id(id_seed))
+                            .get(&map_id(id_seed))
                             .map(|node| {
                                 (at_seed
                                     .checked_rem(node.contents.length)
@@ -400,7 +378,7 @@ impl StateMachineTest for WeaveWrapper {
                     )
                 );
             }
-            WeaveTransition::MergeNodeWithParent { id_seed } => {
+            WeaveTransition::MergeWithParent { id_seed } => {
                 assert_eq!(
                     state.d_weave.merge_with_parent(&map_id(id_seed)),
                     state.i_weave.merge_with_parent(&map_id(id_seed))
@@ -418,18 +396,16 @@ impl StateMachineTest for WeaveWrapper {
         if transition.2.is_multiple_of(4) {
             state
                 .d_weave
-                .get_ordered_node_identifiers(&mut state.d_ordered_node_identifiers);
+                .get_ordered_identifiers(&mut state.d_ordered_node_identifiers);
             state
                 .i_weave
-                .get_ordered_node_identifiers(&mut state.i_ordered_node_identifiers);
-            state.d_weave.get_ordered_node_identifiers_from(
-                &target,
-                &mut state.d_ordered_node_identifiers_from,
-            );
-            state.i_weave.get_ordered_node_identifiers_from(
-                &target,
-                &mut state.i_ordered_node_identifiers_from,
-            );
+                .get_ordered_identifiers(&mut state.i_ordered_node_identifiers);
+            state
+                .d_weave
+                .get_ordered_identifiers_from(&target, &mut state.d_ordered_node_identifiers_from);
+            state
+                .i_weave
+                .get_ordered_identifiers_from(&target, &mut state.i_ordered_node_identifiers_from);
             state.d_weave.get_active_path(&mut state.d_active_path);
             state.i_weave.get_active_path(&mut state.i_active_path);
             state.d_weave.get_path_from(&target, &mut state.d_path_from);

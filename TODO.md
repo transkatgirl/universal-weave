@@ -42,7 +42,6 @@
 
 ## Features
 
-- [ ] Cleanup API methods to remove _node from name
 - [ ] ID reassignment module
 - [ ] Rkyv convenience wrappers
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)

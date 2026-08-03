@@ -389,19 +389,19 @@ where
         self.active == Some(*id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
+    fn get(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
         self.nodes.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&Option<K>> {
+    fn get_parents(&self, id: &K) -> Option<&Option<K>> {
         self.nodes.get(id).map(|node| &node.from)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
+    fn get_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
         self.nodes.get(id).map(|node| &node.to)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
+    fn get_contents(&self, id: &K) -> Option<&T> {
         self.nodes.get(id).map(|node| &node.contents)
     }
     #[cfg_attr(debug_assertions, contract(
@@ -413,7 +413,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         for root in &self.roots {
@@ -430,7 +430,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
@@ -486,7 +486,7 @@ where
         ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
+    fn insert(&mut self, node: DependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty() {
             return false;
         }
@@ -527,7 +527,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.active = value;
@@ -561,7 +561,7 @@ where
         ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
+    fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         let mut removed_node = None;
         let mut removed_active = false;
 
@@ -615,7 +615,7 @@ where
         ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn remove_node_tracked(
+    fn remove_tracked(
         &mut self,
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
@@ -664,7 +664,7 @@ where
         ensures(self.nodes.is_empty()),
         ensures(self.validate())
     ))]
-    fn remove_all_nodes(&mut self) {
+    fn clear(&mut self) {
         self.nodes.clear();
         self.roots.clear();
         self.active = None;
@@ -766,7 +766,7 @@ where
         ensures(old(self.active) == self.active),
         invariant(self.validate())
     ))]
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.bookmarked = value;
@@ -797,7 +797,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn sort_node_children_by(
+    fn sort_children_by(
         &mut self,
         id: &K,
         mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
@@ -820,7 +820,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             node.to.sort_by(cmp);
 
@@ -918,7 +918,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
@@ -1222,22 +1222,22 @@ where
         self.active == Some(*id)
     }
     #[inline]
-    fn get_node(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
+    fn get(&self, id: &K::Archived) -> Option<&ArchivedDependentNode<K, T, S>> {
         self.nodes.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K::Archived) -> Option<&ArchivedOption<K::Archived>> {
+    fn get_parents(&self, id: &K::Archived) -> Option<&ArchivedOption<K::Archived>> {
         self.nodes.get(id).map(|node| &node.from)
     }
     #[inline]
-    fn get_node_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
+    fn get_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
         self.nodes.get(id).map(|node| &node.to)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K::Archived) -> Option<&T::Archived> {
+    fn get_contents(&self, id: &K::Archived) -> Option<&T::Archived> {
         self.nodes.get(id).map(|node| &node.contents)
     }
-    fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
         let mut scratchpad = Vec::with_capacity(self.len());
@@ -1253,7 +1253,7 @@ where
             );
         }
     }
-    fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+    fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if self.nodes.contains_key(id) {

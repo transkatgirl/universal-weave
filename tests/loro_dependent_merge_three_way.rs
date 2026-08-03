@@ -76,40 +76,40 @@ enum VirtualPeerTransition {
 #[derive(Arbitrary, Debug, Clone)]
 enum WeaveTransition {
     #[proptest(weight = 8)]
-    AddNode {
+    Insert {
         from_seed: Option<u32>,
         active: bool,
         bookmarked: bool,
         content_seed: u32,
     },
     #[proptest(weight = 6)]
-    SetNodeActiveStatus {
+    SetActive {
         value: bool,
         id_seed: u32,
     },
-    SetNodeBookmarkedStatus {
+    SetBookmarked {
         value: bool,
         id_seed: u32,
     },
     #[proptest(weight = 3)]
-    RemoveNode {
+    Remove {
         id_seed: u32,
     },
     #[proptest(weight = 3)]
-    RemoveNodeTracked {
+    RemoveTracked {
         id_seed: u32,
     },
-    RemoveAllNodes {
+    Clear {
         apply_seed: u8,
     },
     MetadataMut {
         content_seed: u32,
     },
-    SortNodeChildrenBy {
+    SortChildrenBy {
         id_seed: u32,
         sort_seed: u32,
     },
-    SortNodeChildrenById {
+    SortChildrenById {
         id_seed: u32,
         sort_seed: u32,
     },
@@ -185,13 +185,13 @@ impl WeaveWrapper {
         let target = map_id(transition.1);
 
         match transition.0 {
-            WeaveTransition::AddNode {
+            WeaveTransition::Insert {
                 from_seed,
                 active,
                 bookmarked,
                 content_seed,
             } => {
-                self.weave.add_node(DependentNode {
+                self.weave.insert(DependentNode {
                     id: *counter,
                     from: from_seed.map(map_id),
                     to: IndexSet::default(),
@@ -200,39 +200,37 @@ impl WeaveWrapper {
                     contents: WeaveContent(content_seed),
                 });
             }
-            WeaveTransition::SetNodeActiveStatus { id_seed, value } => {
-                self.weave.set_node_active_status(&map_id(id_seed), value);
+            WeaveTransition::SetActive { id_seed, value } => {
+                self.weave.set_active(&map_id(id_seed), value);
             }
-            WeaveTransition::SetNodeBookmarkedStatus { id_seed, value } => {
-                self.weave
-                    .set_node_bookmarked_status(&map_id(id_seed), value);
+            WeaveTransition::SetBookmarked { id_seed, value } => {
+                self.weave.set_bookmarked(&map_id(id_seed), value);
             }
-            WeaveTransition::RemoveNode { id_seed } => {
-                self.weave.remove_node(&map_id(id_seed));
+            WeaveTransition::Remove { id_seed } => {
+                self.weave.remove(&map_id(id_seed));
             }
-            WeaveTransition::RemoveNodeTracked { id_seed } => {
-                self.weave.remove_node_tracked(&map_id(id_seed), |_r| {});
+            WeaveTransition::RemoveTracked { id_seed } => {
+                self.weave.remove_tracked(&map_id(id_seed), |_r| {});
             }
-            WeaveTransition::RemoveAllNodes { apply_seed } => {
+            WeaveTransition::Clear { apply_seed } => {
                 if apply_seed == 0 {
-                    self.weave.remove_all_nodes();
+                    self.weave.clear();
                 }
             }
             WeaveTransition::MetadataMut { content_seed } => {
                 self.weave.metadata_mut(|m| *m = content_seed)
             }
-            WeaveTransition::SortNodeChildrenBy { id_seed, sort_seed } => {
+            WeaveTransition::SortChildrenBy { id_seed, sort_seed } => {
                 let sort_seed = sort_seed as u64;
-                self.weave.sort_node_children_by(&map_id(id_seed), |a, b| {
+                self.weave.sort_children_by(&map_id(id_seed), |a, b| {
                     hash_value(a.id as u64 + sort_seed).cmp(&hash_value(b.id as u64 + sort_seed))
                 });
             }
-            WeaveTransition::SortNodeChildrenById { id_seed, sort_seed } => {
+            WeaveTransition::SortChildrenById { id_seed, sort_seed } => {
                 let sort_seed = sort_seed as u64;
-                self.weave
-                    .sort_node_children_by_id(&map_id(id_seed), |a, b| {
-                        hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
-                    });
+                self.weave.sort_children_by_id(&map_id(id_seed), |a, b| {
+                    hash_value(*a as u64 + sort_seed).cmp(&hash_value(*b as u64 + sort_seed))
+                });
             }
             WeaveTransition::SortRootsBy { sort_seed } => {
                 let sort_seed = sort_seed as u64;
@@ -284,11 +282,9 @@ impl WeaveWrapper {
 
         if transition.2.is_multiple_of(4) {
             self.weave
-                .get_ordered_node_identifiers(&mut self.ordered_node_identifiers);
-            self.weave.get_ordered_node_identifiers_from(
-                &target,
-                &mut self.ordered_node_identifiers_from,
-            );
+                .get_ordered_identifiers(&mut self.ordered_node_identifiers);
+            self.weave
+                .get_ordered_identifiers_from(&target, &mut self.ordered_node_identifiers_from);
             self.weave.get_active_path(&mut self.active_path);
             self.weave.get_path_from(&target, &mut self.path_from);
         }

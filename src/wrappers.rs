@@ -135,32 +135,32 @@ where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
-    /// [`Weave::add_node()`]
-    AddNode(N),
-    /// [`Weave::set_node_active_status()`]
-    SetNodeActiveStatus { id: K, value: bool },
-    /// [`BookmarkableWeave::set_node_bookmarked_status()`]
-    SetNodeBookmarkedStatus { id: K, value: bool },
-    /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
-    RemoveNode(K),
-    /// [`Weave::remove_all_nodes()`]
-    RemoveAllNodes,
+    /// [`Weave::insert()`]
+    Insert(N),
+    /// [`Weave::set_active()`]
+    SetActive { id: K, value: bool },
+    /// [`BookmarkableWeave::set_bookmarked()`]
+    SetBookmarked { id: K, value: bool },
+    /// [`Weave::remove()`] or [`Weave::remove_tracked()`]
+    Remove(K),
+    /// [`Weave::clear()`]
+    Clear,
     /// [`MetadataWeave::metadata_mut()`]
     SetMetadata(M),
-    /// Caused by [`SortableWeave::sort_node_children_by()`], [`SortableWeave::sort_node_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
-    SetNodeChildOrdering { parent: Option<K>, children: Vec<K> },
+    /// Caused by [`SortableWeave::sort_children_by()`], [`SortableWeave::sort_children_by_id()`], [`SortableWeave::sort_roots_by()`], and [`SortableWeave::sort_roots_by_id()`]
+    SetChildOrdering { parent: Option<K>, children: Vec<K> },
     /// Caused by [`SortableBookmarkableWeave::sort_bookmarks_by()`] and [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     SetBookmarkOrdering(Vec<K>),
     /// [`ActivePathWeave::set_active_path()`]
     SetActivePath(Vec<K>),
-    /// [`IndependentWeave::move_node()`]
-    MoveNode { id: K, new_parents: Vec<K> },
+    /// [`IndependentWeave::move_to()`]
+    MoveTo { id: K, new_parents: Vec<K> },
     /// Caused by [`SemiIndependentWeave::get_contents_mut()`]
-    SetNodeContent { id: K, contents: T },
-    /// [`DiscreteWeave::split_node()`]
-    SplitNode { id: K, at: usize, new_id: K },
+    SetContents { id: K, contents: T },
+    /// [`DiscreteWeave::split()`]
+    Split { id: K, at: usize, new_id: K },
     /// [`DiscreteWeave::merge_with_parent()`]
-    MergeNodeWithParent(K),
+    MergeWithParent(K),
 }
 
 /// A [`Weave`] wrapper which logs the number of actions successfully performed on the inner [`Weave`].
@@ -273,32 +273,32 @@ where
 #[non_exhaustive]
 #[must_use]
 pub struct WeaveActionCount {
-    /// [`Weave::add_node()`]
-    pub add_node: usize,
-    /// [`Weave::set_node_active_status()`]
-    pub set_node_active_status: usize,
-    /// [`BookmarkableWeave::set_node_bookmarked_status()`]
-    pub set_node_bookmarked_status: usize,
-    /// [`Weave::remove_node()`] or [`Weave::remove_node_tracked()`]
-    pub remove_node: usize,
-    /// [`Weave::remove_all_nodes()`]
-    pub remove_all_nodes: usize,
+    /// [`Weave::insert()`]
+    pub insert: usize,
+    /// [`Weave::set_active()`]
+    pub set_active: usize,
+    /// [`BookmarkableWeave::set_bookmarked()`]
+    pub set_bookmarked: usize,
+    /// [`Weave::remove()`] or [`Weave::remove_tracked()`]
+    pub remove: usize,
+    /// [`Weave::clear()`]
+    pub clear: usize,
     /// [`MetadataWeave::metadata_mut()`]
     pub metadata_mut: usize,
-    /// [`SortableWeave::sort_node_children_by()`] or [`SortableWeave::sort_node_children_by_id()`]
-    pub sort_node_children: usize,
+    /// [`SortableWeave::sort_children_by()`] or [`SortableWeave::sort_children_by_id()`]
+    pub sort_children: usize,
     /// [`SortableWeave::sort_roots_by()`] or [`SortableWeave::sort_roots_by_id()`]
     pub sort_roots: usize,
     /// [`SortableBookmarkableWeave::sort_bookmarks_by()`] or [`SortableBookmarkableWeave::sort_bookmarks_by_id()`]
     pub sort_bookmarks: usize,
     /// [`ActivePathWeave::set_active_path()`]
     pub set_active_path: usize,
-    /// [`IndependentWeave::move_node()`]
-    pub move_node: usize,
+    /// [`IndependentWeave::move_to()`]
+    pub move_to: usize,
     /// [`SemiIndependentWeave::get_contents_mut()`]
     pub get_contents_mut: usize,
-    /// [`DiscreteWeave::split_node()`]
-    pub split_node: usize,
+    /// [`DiscreteWeave::split()`]
+    pub split: usize,
     /// [`DiscreteWeave::merge_with_parent()`]
     pub merge_with_parent: usize,
     /// User defined; Not incremented/decremented by the [`CountedWeave`] wrapper or [`WeaveActionCount`] functions.
@@ -319,19 +319,19 @@ impl WeaveActionCount {
     /// Returns the sum of all action counts.
     #[must_use]
     pub const fn total_count(&self) -> usize {
-        self.add_node
-            .saturating_add(self.set_node_active_status)
-            .saturating_add(self.set_node_bookmarked_status)
-            .saturating_add(self.remove_node)
-            .saturating_add(self.remove_all_nodes)
+        self.insert
+            .saturating_add(self.set_active)
+            .saturating_add(self.set_bookmarked)
+            .saturating_add(self.remove)
+            .saturating_add(self.clear)
             .saturating_add(self.metadata_mut)
-            .saturating_add(self.sort_node_children)
+            .saturating_add(self.sort_children)
             .saturating_add(self.sort_roots)
             .saturating_add(self.sort_bookmarks)
             .saturating_add(self.set_active_path)
-            .saturating_add(self.move_node)
+            .saturating_add(self.move_to)
             .saturating_add(self.get_contents_mut)
-            .saturating_add(self.split_node)
+            .saturating_add(self.split)
             .saturating_add(self.merge_with_parent)
             .saturating_add(self.other)
     }
@@ -342,22 +342,22 @@ impl WeaveActionCount {
         N: Node<K, T>,
     {
         match action {
-            WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_add(1),
-            WeaveAction::SetNodeActiveStatus { .. } => {
-                self.set_node_active_status = self.set_node_active_status.saturating_add(1);
+            WeaveAction::Insert(_node) => self.insert = self.insert.saturating_add(1),
+            WeaveAction::SetActive { .. } => {
+                self.set_active = self.set_active.saturating_add(1);
             }
-            WeaveAction::SetNodeBookmarkedStatus { .. } => {
-                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_add(1);
+            WeaveAction::SetBookmarked { .. } => {
+                self.set_bookmarked = self.set_bookmarked.saturating_add(1);
             }
-            WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_add(1),
-            WeaveAction::RemoveAllNodes => {
-                self.remove_all_nodes = self.remove_all_nodes.saturating_add(1);
+            WeaveAction::Remove(_id) => self.remove = self.remove.saturating_add(1),
+            WeaveAction::Clear => {
+                self.clear = self.clear.saturating_add(1);
             }
             WeaveAction::SetMetadata(_metadata) => {
                 self.metadata_mut = self.metadata_mut.saturating_add(1);
             }
-            WeaveAction::SetNodeChildOrdering { parent, .. } => match parent {
-                Some(_id) => self.sort_node_children = self.sort_node_children.saturating_add(1),
+            WeaveAction::SetChildOrdering { parent, .. } => match parent {
+                Some(_id) => self.sort_children = self.sort_children.saturating_add(1),
                 None => self.sort_roots = self.sort_roots.saturating_add(1),
             },
             WeaveAction::SetBookmarkOrdering(_ids) => {
@@ -366,12 +366,12 @@ impl WeaveActionCount {
             WeaveAction::SetActivePath(_) => {
                 self.set_active_path = self.set_active_path.saturating_add(1);
             }
-            WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_add(1),
-            WeaveAction::SetNodeContent { .. } => {
+            WeaveAction::MoveTo { .. } => self.move_to = self.move_to.saturating_add(1),
+            WeaveAction::SetContents { .. } => {
                 self.get_contents_mut = self.get_contents_mut.saturating_add(1);
             }
-            WeaveAction::SplitNode { .. } => self.split_node = self.split_node.saturating_add(1),
-            WeaveAction::MergeNodeWithParent(_id) => {
+            WeaveAction::Split { .. } => self.split = self.split.saturating_add(1),
+            WeaveAction::MergeWithParent(_id) => {
                 self.merge_with_parent = self.merge_with_parent.saturating_add(1);
             }
         }
@@ -383,22 +383,22 @@ impl WeaveActionCount {
         N: Node<K, T>,
     {
         match action {
-            WeaveAction::AddNode(_node) => self.add_node = self.add_node.saturating_sub(1),
-            WeaveAction::SetNodeActiveStatus { .. } => {
-                self.set_node_active_status = self.set_node_active_status.saturating_sub(1);
+            WeaveAction::Insert(_node) => self.insert = self.insert.saturating_sub(1),
+            WeaveAction::SetActive { .. } => {
+                self.set_active = self.set_active.saturating_sub(1);
             }
-            WeaveAction::SetNodeBookmarkedStatus { .. } => {
-                self.set_node_bookmarked_status = self.set_node_bookmarked_status.saturating_sub(1);
+            WeaveAction::SetBookmarked { .. } => {
+                self.set_bookmarked = self.set_bookmarked.saturating_sub(1);
             }
-            WeaveAction::RemoveNode(_id) => self.remove_node = self.remove_node.saturating_sub(1),
-            WeaveAction::RemoveAllNodes => {
-                self.remove_all_nodes = self.remove_all_nodes.saturating_sub(1);
+            WeaveAction::Remove(_id) => self.remove = self.remove.saturating_sub(1),
+            WeaveAction::Clear => {
+                self.clear = self.clear.saturating_sub(1);
             }
             WeaveAction::SetMetadata(_metadata) => {
                 self.metadata_mut = self.metadata_mut.saturating_sub(1);
             }
-            WeaveAction::SetNodeChildOrdering { parent, .. } => match parent {
-                Some(_id) => self.sort_node_children = self.sort_node_children.saturating_sub(1),
+            WeaveAction::SetChildOrdering { parent, .. } => match parent {
+                Some(_id) => self.sort_children = self.sort_children.saturating_sub(1),
                 None => self.sort_roots = self.sort_roots.saturating_sub(1),
             },
             WeaveAction::SetBookmarkOrdering(_ids) => {
@@ -407,12 +407,12 @@ impl WeaveActionCount {
             WeaveAction::SetActivePath(_) => {
                 self.set_active_path = self.set_active_path.saturating_sub(1);
             }
-            WeaveAction::MoveNode { .. } => self.move_node = self.move_node.saturating_sub(1),
-            WeaveAction::SetNodeContent { .. } => {
+            WeaveAction::MoveTo { .. } => self.move_to = self.move_to.saturating_sub(1),
+            WeaveAction::SetContents { .. } => {
                 self.get_contents_mut = self.get_contents_mut.saturating_sub(1);
             }
-            WeaveAction::SplitNode { .. } => self.split_node = self.split_node.saturating_sub(1),
-            WeaveAction::MergeNodeWithParent(_id) => {
+            WeaveAction::Split { .. } => self.split = self.split.saturating_sub(1),
+            WeaveAction::MergeWithParent(_id) => {
                 self.merge_with_parent = self.merge_with_parent.saturating_sub(1);
             }
         }
@@ -452,30 +452,30 @@ where
 {
     fn apply(&mut self, action: WeaveAction<K, N, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => {
-                assert!(self.add_node(node), "Failed to apply Weave action");
+            WeaveAction::Insert(node) => {
+                assert!(self.insert(node), "Failed to apply Weave action");
             }
-            WeaveAction::SetNodeActiveStatus { id, value } => {
+            WeaveAction::SetActive { id, value } => {
                 assert!(
-                    self.set_node_active_status(&id, value),
+                    self.set_active(&id, value),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SetNodeBookmarkedStatus { id, value } => {
+            WeaveAction::SetBookmarked { id, value } => {
                 assert!(
-                    self.set_node_bookmarked_status(&id, value),
+                    self.set_bookmarked(&id, value),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::RemoveNode(id) => assert!(
-                self.remove_node(&id).is_some(),
+            WeaveAction::Remove(id) => assert!(
+                self.remove(&id).is_some(),
                 "Failed to apply Weave action"
             ),
-            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::Clear => self.clear(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
             }
-            WeaveAction::SetNodeChildOrdering { parent, children } => {
+            WeaveAction::SetChildOrdering { parent, children } => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
                 id_mapping.extend(
@@ -488,7 +488,7 @@ where
                 match parent {
                     Some(id) => {
                         assert!(
-                            self.sort_node_children_by_id(&id, |a, b| {
+                            self.sort_children_by_id(&id, |a, b| {
                                 id_mapping[a].cmp(&id_mapping[b])
                             }),
                             "Failed to apply Weave action"
@@ -508,21 +508,21 @@ where
             WeaveAction::SetActivePath(active) => {
                 self.set_active_path(active.into_iter());
             }
-            WeaveAction::MoveNode { id, new_parents } => assert!(
-                self.move_node(&id, &new_parents),
+            WeaveAction::MoveTo { id, new_parents } => assert!(
+                self.move_to(&id, &new_parents),
                 "Failed to apply Weave action"
             ),
-            WeaveAction::SetNodeContent { id, contents } => {
+            WeaveAction::SetContents { id, contents } => {
                 assert!(
                     self.get_contents_mut(&id, |c| *c = contents).is_some(),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(
-                self.split_node(&id, at, new_id),
+            WeaveAction::Split { id, at, new_id } => assert!(
+                self.split(&id, at, new_id),
                 "Failed to apply Weave action"
             ),
-            WeaveAction::MergeNodeWithParent(id) => assert!(
+            WeaveAction::MergeWithParent(id) => assert!(
                 self.merge_with_parent(&id).is_some(),
                 "Failed to apply Weave action"
             ),
@@ -541,30 +541,26 @@ where
     #[allow(clippy::panic, reason = "Necessary due to API shape")]
     fn apply(&mut self, action: WeaveAction<K, dependent::DependentNode<K, T, S>, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => {
-                assert!(self.add_node(node), "Failed to apply Weave action");
+            WeaveAction::Insert(node) => {
+                assert!(self.insert(node), "Failed to apply Weave action");
             }
-            WeaveAction::SetNodeActiveStatus { id, value } => {
+            WeaveAction::SetActive { id, value } => {
+                assert!(self.set_active(&id, value), "Failed to apply Weave action");
+            }
+            WeaveAction::SetBookmarked { id, value } => {
                 assert!(
-                    self.set_node_active_status(&id, value),
+                    self.set_bookmarked(&id, value),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(
-                    self.set_node_bookmarked_status(&id, value),
-                    "Failed to apply Weave action"
-                );
+            WeaveAction::Remove(id) => {
+                assert!(self.remove(&id).is_some(), "Failed to apply Weave action");
             }
-            WeaveAction::RemoveNode(id) => assert!(
-                self.remove_node(&id).is_some(),
-                "Failed to apply Weave action"
-            ),
-            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::Clear => self.clear(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
             }
-            WeaveAction::SetNodeChildOrdering { parent, children } => {
+            WeaveAction::SetChildOrdering { parent, children } => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
                 id_mapping.extend(
@@ -577,7 +573,7 @@ where
                 match parent {
                     Some(id) => {
                         assert!(
-                            self.sort_node_children_by_id(&id, |a, b| {
+                            self.sort_children_by_id(&id, |a, b| {
                                 id_mapping[a].cmp(&id_mapping[b])
                             }),
                             "Failed to apply Weave action"
@@ -597,20 +593,19 @@ where
             WeaveAction::SetActivePath(_) => {
                 panic!("Weave does not implement set_active_path()");
             }
-            WeaveAction::MoveNode { .. } => {
-                panic!("Weave does not implement move_node()");
+            WeaveAction::MoveTo { .. } => {
+                panic!("Weave does not implement move_to()");
             }
-            WeaveAction::SetNodeContent { id, contents } => {
+            WeaveAction::SetContents { id, contents } => {
                 assert!(
                     self.get_contents_mut(&id, |c| *c = contents).is_some(),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(
-                self.split_node(&id, at, new_id),
-                "Failed to apply Weave action"
-            ),
-            WeaveAction::MergeNodeWithParent(id) => assert!(
+            WeaveAction::Split { id, at, new_id } => {
+                assert!(self.split(&id, at, new_id), "Failed to apply Weave action");
+            }
+            WeaveAction::MergeWithParent(id) => assert!(
                 self.merge_with_parent(&id).is_some(),
                 "Failed to apply Weave action"
             ),
@@ -628,30 +623,26 @@ where
 {
     fn apply(&mut self, action: WeaveAction<K, independent::IndependentNode<K, T, S>, T, M>) {
         match action {
-            WeaveAction::AddNode(node) => {
-                assert!(self.add_node(node), "Failed to apply Weave action");
+            WeaveAction::Insert(node) => {
+                assert!(self.insert(node), "Failed to apply Weave action");
             }
-            WeaveAction::SetNodeActiveStatus { id, value } => {
+            WeaveAction::SetActive { id, value } => {
+                assert!(self.set_active(&id, value), "Failed to apply Weave action");
+            }
+            WeaveAction::SetBookmarked { id, value } => {
                 assert!(
-                    self.set_node_active_status(&id, value),
+                    self.set_bookmarked(&id, value),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SetNodeBookmarkedStatus { id, value } => {
-                assert!(
-                    self.set_node_bookmarked_status(&id, value),
-                    "Failed to apply Weave action"
-                );
+            WeaveAction::Remove(id) => {
+                assert!(self.remove(&id).is_some(), "Failed to apply Weave action");
             }
-            WeaveAction::RemoveNode(id) => assert!(
-                self.remove_node(&id).is_some(),
-                "Failed to apply Weave action"
-            ),
-            WeaveAction::RemoveAllNodes => self.remove_all_nodes(),
+            WeaveAction::Clear => self.clear(),
             WeaveAction::SetMetadata(metadata) => {
                 self.metadata_mut(|m| *m = metadata);
             }
-            WeaveAction::SetNodeChildOrdering { parent, children } => {
+            WeaveAction::SetChildOrdering { parent, children } => {
                 let mut id_mapping =
                     HashMap::with_capacity_and_hasher(children.len(), S::default());
                 id_mapping.extend(
@@ -664,7 +655,7 @@ where
                 match parent {
                     Some(id) => {
                         assert!(
-                            self.sort_node_children_by_id(&id, |a, b| {
+                            self.sort_children_by_id(&id, |a, b| {
                                 id_mapping[a].cmp(&id_mapping[b])
                             }),
                             "Failed to apply Weave action"
@@ -684,21 +675,20 @@ where
             WeaveAction::SetActivePath(active) => {
                 self.set_active_path(active.into_iter());
             }
-            WeaveAction::MoveNode { id, new_parents } => assert!(
-                self.move_node(&id, &new_parents),
+            WeaveAction::MoveTo { id, new_parents } => assert!(
+                self.move_to(&id, &new_parents),
                 "Failed to apply Weave action"
             ),
-            WeaveAction::SetNodeContent { id, contents } => {
+            WeaveAction::SetContents { id, contents } => {
                 assert!(
                     self.get_contents_mut(&id, |c| *c = contents).is_some(),
                     "Failed to apply Weave action"
                 );
             }
-            WeaveAction::SplitNode { id, at, new_id } => assert!(
-                self.split_node(&id, at, new_id),
-                "Failed to apply Weave action"
-            ),
-            WeaveAction::MergeNodeWithParent(id) => assert!(
+            WeaveAction::Split { id, at, new_id } => {
+                assert!(self.split(&id, at, new_id), "Failed to apply Weave action");
+            }
+            WeaveAction::MergeWithParent(id) => assert!(
                 self.merge_with_parent(&id).is_some(),
                 "Failed to apply Weave action"
             ),
@@ -740,28 +730,28 @@ where
         self.weave.contains_active(id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&N> {
-        self.weave.get_node(id)
+    fn get(&self, id: &K) -> Option<&N> {
+        self.weave.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
-        self.weave.get_node_parents(id)
+    fn get_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_parents(id)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&N::To> {
-        self.weave.get_node_children(id)
+    fn get_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_children(id)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
-        self.weave.get_node_contents(id)
+    fn get_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_contents(id)
     }
     #[inline]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers(output);
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers(output);
     }
     #[inline]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers_from(id, output);
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers_from(id, output);
     }
     #[inline]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
@@ -771,42 +761,42 @@ where
     fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_path_from(id, output);
     }
-    fn add_node(&mut self, node: N) -> bool {
-        if self.weave.add_node(node.clone()) {
-            self.actions.push_back(WeaveAction::AddNode(node));
+    fn insert(&mut self, node: N) -> bool {
+        if self.weave.insert(node.clone()) {
+            self.actions.push_back(WeaveAction::Insert(node));
             true
         } else {
             false
         }
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status(id, value) {
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_active(id, value) {
             self.actions
-                .push_back(WeaveAction::SetNodeActiveStatus { id: *id, value });
+                .push_back(WeaveAction::SetActive { id: *id, value });
             true
         } else {
             false
         }
     }
-    fn remove_node(&mut self, id: &K) -> Option<N> {
-        if let Some(removed) = self.weave.remove_node(id) {
-            self.actions.push_back(WeaveAction::RemoveNode(*id));
+    fn remove(&mut self, id: &K) -> Option<N> {
+        if let Some(removed) = self.weave.remove(id) {
+            self.actions.push_back(WeaveAction::Remove(*id));
             Some(removed)
         } else {
             None
         }
     }
-    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
-        if self.weave.remove_node_tracked(id, on_removal) {
-            self.actions.push_back(WeaveAction::RemoveNode(*id));
+    fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        if self.weave.remove_tracked(id, on_removal) {
+            self.actions.push_back(WeaveAction::Remove(*id));
             true
         } else {
             false
         }
     }
-    fn remove_all_nodes(&mut self) {
-        self.weave.remove_all_nodes();
-        self.actions.push_back(WeaveAction::RemoveAllNodes);
+    fn clear(&mut self) {
+        self.weave.clear();
+        self.actions.push_back(WeaveAction::Clear);
     }
 }
 
@@ -849,10 +839,10 @@ where
     fn contains_bookmark(&self, id: &K) -> bool {
         self.weave.contains_bookmark(id)
     }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_bookmarked_status(id, value) {
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_bookmarked(id, value) {
             self.actions
-                .push_back(WeaveAction::SetNodeBookmarkedStatus { id: *id, value });
+                .push_back(WeaveAction::SetBookmarked { id: *id, value });
             true
         } else {
             false
@@ -868,13 +858,13 @@ where
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
 {
-    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
-        if self.weave.sort_node_children_by(id, cmp) {
-            self.actions.push_back(WeaveAction::SetNodeChildOrdering {
+    fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
+        if self.weave.sort_children_by(id, cmp) {
+            self.actions.push_back(WeaveAction::SetChildOrdering {
                 parent: Some(*id),
                 children: self
                     .weave
-                    .get_node_children(id)
+                    .get_children(id)
                     .unwrap()
                     .into_iter()
                     .copied()
@@ -885,13 +875,13 @@ where
             false
         }
     }
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
-        if self.weave.sort_node_children_by_id(id, cmp) {
-            self.actions.push_back(WeaveAction::SetNodeChildOrdering {
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        if self.weave.sort_children_by_id(id, cmp) {
+            self.actions.push_back(WeaveAction::SetChildOrdering {
                 parent: Some(*id),
                 children: self
                     .weave
-                    .get_node_children(id)
+                    .get_children(id)
                     .unwrap()
                     .into_iter()
                     .copied()
@@ -904,14 +894,14 @@ where
     }
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
         self.weave.sort_roots_by(cmp);
-        self.actions.push_back(WeaveAction::SetNodeChildOrdering {
+        self.actions.push_back(WeaveAction::SetChildOrdering {
             parent: None,
             children: self.weave.roots().into_iter().copied().collect(),
         });
     }
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.weave.sort_roots_by_id(cmp);
-        self.actions.push_back(WeaveAction::SetNodeChildOrdering {
+        self.actions.push_back(WeaveAction::SetChildOrdering {
             parent: None,
             children: self.weave.roots().into_iter().copied().collect(),
         });
@@ -980,9 +970,9 @@ where
     N: Node<K, T> + Clone,
     T: IndependentContents + Clone,
 {
-    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
-        if self.weave.move_node(id, new_parents) {
-            self.actions.push_back(WeaveAction::MoveNode {
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
+        if self.weave.move_to(id, new_parents) {
+            self.actions.push_back(WeaveAction::MoveTo {
                 id: *id,
                 new_parents: new_parents.to_vec(),
             });
@@ -1005,7 +995,7 @@ where
             .get_contents_mut(id, |contents| (callback(contents), contents.clone()))
             .map(|(output, contents)| {
                 self.actions
-                    .push_back(WeaveAction::SetNodeContent { id: *id, contents });
+                    .push_back(WeaveAction::SetContents { id: *id, contents });
 
                 output
             })
@@ -1019,9 +1009,9 @@ where
     N: Node<K, T> + Clone,
     T: DiscreteContents,
 {
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.weave.split_node(id, at, new_id) {
-            self.actions.push_back(WeaveAction::SplitNode {
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
+        if self.weave.split(id, at, new_id) {
+            self.actions.push_back(WeaveAction::Split {
                 id: *id,
                 at,
                 new_id,
@@ -1034,8 +1024,7 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         match self.weave.merge_with_parent(id) {
             Some(new_id) => {
-                self.actions
-                    .push_back(WeaveAction::MergeNodeWithParent(*id));
+                self.actions.push_back(WeaveAction::MergeWithParent(*id));
                 Some(new_id)
             }
             None => None,
@@ -1077,28 +1066,28 @@ where
         self.weave.contains_active(id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&N> {
-        self.weave.get_node(id)
+    fn get(&self, id: &K) -> Option<&N> {
+        self.weave.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
-        self.weave.get_node_parents(id)
+    fn get_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_parents(id)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&N::To> {
-        self.weave.get_node_children(id)
+    fn get_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_children(id)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
-        self.weave.get_node_contents(id)
+    fn get_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_contents(id)
     }
     #[inline]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers(output);
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers(output);
     }
     #[inline]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers_from(id, output);
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers_from(id, output);
     }
     #[inline]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
@@ -1109,45 +1098,45 @@ where
         self.weave.get_path_from(id, output);
     }
     #[inline]
-    fn add_node(&mut self, node: N) -> bool {
-        if self.weave.add_node(node) {
-            self.count.add_node = self.count.add_node.saturating_add(1);
+    fn insert(&mut self, node: N) -> bool {
+        if self.weave.insert(node) {
+            self.count.insert = self.count.insert.saturating_add(1);
             true
         } else {
             false
         }
     }
     #[inline]
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status(id, value) {
-            self.count.set_node_active_status = self.count.set_node_active_status.saturating_add(1);
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_active(id, value) {
+            self.count.set_active = self.count.set_active.saturating_add(1);
             true
         } else {
             false
         }
     }
     #[inline]
-    fn remove_node(&mut self, id: &K) -> Option<N> {
-        if let Some(removed) = self.weave.remove_node(id) {
-            self.count.remove_node = self.count.remove_node.saturating_add(1);
+    fn remove(&mut self, id: &K) -> Option<N> {
+        if let Some(removed) = self.weave.remove(id) {
+            self.count.remove = self.count.remove.saturating_add(1);
             Some(removed)
         } else {
             None
         }
     }
     #[inline]
-    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
-        if self.weave.remove_node_tracked(id, on_removal) {
-            self.count.remove_node = self.count.remove_node.saturating_add(1);
+    fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        if self.weave.remove_tracked(id, on_removal) {
+            self.count.remove = self.count.remove.saturating_add(1);
             true
         } else {
             false
         }
     }
     #[inline]
-    fn remove_all_nodes(&mut self) {
-        self.weave.remove_all_nodes();
-        self.count.remove_all_nodes = self.count.remove_all_nodes.saturating_add(1);
+    fn clear(&mut self) {
+        self.weave.clear();
+        self.count.clear = self.count.clear.saturating_add(1);
     }
 }
 
@@ -1188,10 +1177,9 @@ where
         self.weave.contains_bookmark(id)
     }
     #[inline]
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_bookmarked_status(id, value) {
-            self.count.set_node_bookmarked_status =
-                self.count.set_node_bookmarked_status.saturating_add(1);
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_bookmarked(id, value) {
+            self.count.set_bookmarked = self.count.set_bookmarked.saturating_add(1);
             true
         } else {
             false
@@ -1206,18 +1194,18 @@ where
     N: Node<K, T>,
 {
     #[inline]
-    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
-        if self.weave.sort_node_children_by(id, cmp) {
-            self.count.sort_node_children = self.count.sort_node_children.saturating_add(1);
+    fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
+        if self.weave.sort_children_by(id, cmp) {
+            self.count.sort_children = self.count.sort_children.saturating_add(1);
             true
         } else {
             false
         }
     }
     #[inline]
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
-        if self.weave.sort_node_children_by_id(id, cmp) {
-            self.count.sort_node_children = self.count.sort_node_children.saturating_add(1);
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        if self.weave.sort_children_by_id(id, cmp) {
+            self.count.sort_children = self.count.sort_children.saturating_add(1);
             true
         } else {
             false
@@ -1292,9 +1280,9 @@ where
     T: IndependentContents,
 {
     #[inline]
-    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
-        if self.weave.move_node(id, new_parents) {
-            self.count.move_node = self.count.move_node.saturating_add(1);
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
+        if self.weave.move_to(id, new_parents) {
+            self.count.move_to = self.count.move_to.saturating_add(1);
             true
         } else {
             false
@@ -1325,9 +1313,9 @@ where
     T: DiscreteContents,
 {
     #[inline]
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if self.weave.split_node(id, at, new_id) {
-            self.count.split_node = self.count.split_node.saturating_add(1);
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
+        if self.weave.split(id, at, new_id) {
+            self.count.split = self.count.split.saturating_add(1);
             true
         } else {
             false
@@ -1351,7 +1339,7 @@ where
 ///
 /// # Limitations
 ///
-/// It is possible for [`Weave::add_node()`], [`Weave::remove_node()`], and [`Weave::remove_node_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
+/// It is possible for [`Weave::insert()`], [`Weave::remove()`], and [`Weave::remove_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub struct DeduplicatedWeave<W, K, N, T, S>
@@ -1435,7 +1423,7 @@ where
     } else {
         for sibling in parents
             .into_iter()
-            .filter_map(|id| weave.get_node_children(id))
+            .filter_map(|id| weave.get_children(id))
             .flatten()
             .copied()
         {
@@ -1457,7 +1445,7 @@ where
 
     scratchpad
         .drain()
-        .filter_map(|id| weave.get_node_contents(&id))
+        .filter_map(|id| weave.get_contents(&id))
         .any(|c| c.is_duplicate_of(contents))
 }
 
@@ -1500,28 +1488,28 @@ where
         self.weave.contains_active(id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&N> {
-        self.weave.get_node(id)
+    fn get(&self, id: &K) -> Option<&N> {
+        self.weave.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
-        self.weave.get_node_parents(id)
+    fn get_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_parents(id)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&N::To> {
-        self.weave.get_node_children(id)
+    fn get_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_children(id)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
-        self.weave.get_node_contents(id)
+    fn get_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_contents(id)
     }
     #[inline]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers(output);
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers(output);
     }
     #[inline]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers_from(id, output);
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers_from(id, output);
     }
     #[inline]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
@@ -1538,7 +1526,7 @@ where
     /// # Deduplication
     ///
     /// This function does not deduplicate the node's children. As a result, it is possible (albeit uncommon) for this operation to create duplicate siblings.
-    fn add_node(&mut self, node: N) -> bool {
+    fn insert(&mut self, node: N) -> bool {
         if has_duplicate_siblings(
             &self.weave,
             &[node.id()],
@@ -1550,24 +1538,24 @@ where
             return false;
         }
 
-        self.weave.add_node(node)
+        self.weave.insert(node)
     }
     #[inline]
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
-        self.weave.set_node_active_status(id, value)
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_active(id, value)
     }
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may remove or update other nodes if it is necessary to preserve internal consistency.
     ///
-    /// This function uses the same removal logic as [`Weave::remove_node_tracked`].
+    /// This function uses the same removal logic as [`Weave::remove_tracked`].
     ///
     /// # Deduplication
     ///
-    /// If the underlying [`Weave::remove_node()`] implementation reparents nodes, this operation may create duplicate siblings.
+    /// If the underlying [`Weave::remove()`] implementation reparents nodes, this operation may create duplicate siblings.
     #[inline]
-    fn remove_node(&mut self, id: &K) -> Option<N> {
-        self.weave.remove_node(id)
+    fn remove(&mut self, id: &K) -> Option<N> {
+        self.weave.remove(id)
     }
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
@@ -1579,14 +1567,14 @@ where
     ///
     /// # Deduplication
     ///
-    /// If the underlying [`Weave::remove_node_tracked()`] implementation reparents nodes, this operation may create duplicate siblings.
+    /// If the underlying [`Weave::remove_tracked()`] implementation reparents nodes, this operation may create duplicate siblings.
     #[inline]
-    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
-        self.weave.remove_node_tracked(id, on_removal)
+    fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        self.weave.remove_tracked(id, on_removal)
     }
     #[inline]
-    fn remove_all_nodes(&mut self) {
-        self.weave.remove_all_nodes();
+    fn clear(&mut self) {
+        self.weave.clear();
     }
 }
 
@@ -1633,8 +1621,8 @@ where
         self.weave.contains_bookmark(id)
     }
     #[inline]
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
-        self.weave.set_node_bookmarked_status(id, value)
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_bookmarked(id, value)
     }
 }
 
@@ -1650,12 +1638,12 @@ where
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
     #[inline]
-    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
-        self.weave.sort_node_children_by(id, cmp)
+    fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
+        self.weave.sort_children_by(id, cmp)
     }
     #[inline]
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
-        self.weave.sort_node_children_by_id(id, cmp)
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        self.weave.sort_children_by_id(id, cmp)
     }
     #[inline]
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
@@ -1739,8 +1727,8 @@ where
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
-    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
-        if let Some(node) = self.weave.get_node(id) {
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
+        if let Some(node) = self.weave.get(id) {
             if has_duplicate_siblings(
                 &self.weave,
                 &[node.id()],
@@ -1752,7 +1740,7 @@ where
                 return false;
             }
 
-            self.weave.move_node(id, new_parents)
+            self.weave.move_to(id, new_parents)
         } else {
             false
         }
@@ -1778,7 +1766,7 @@ where
     ///
     /// May panic if `callback` panics.
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
-        if let Some(node) = self.weave.get_node(id) {
+        if let Some(node) = self.weave.get(id) {
             let mut contents = node.contents().clone();
             let output = callback(&mut contents);
 
@@ -1813,8 +1801,8 @@ where
     for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
-        if let Some(node) = self.weave.get_node(id)
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
+        if let Some(node) = self.weave.get(id)
             && let DiscreteContentResult::Two(left, _right) = node.contents().clone().split(at)
             && has_duplicate_siblings(
                 &self.weave,
@@ -1828,16 +1816,16 @@ where
             return false;
         }
 
-        self.weave.split_node(id, at, new_id)
+        self.weave.split(id, at, new_id)
     }
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
-        if let Some(node) = self.weave.get_node(id) {
+        if let Some(node) = self.weave.get(id) {
             if node.from().into_iter().len() != 1 {
                 return None;
             }
 
             if let Some(parent_id) = node.from().into_iter().next()
-                && let Some(parent) = self.weave.get_node(parent_id)
+                && let Some(parent) = self.weave.get(parent_id)
                 && let DiscreteContentResult::One(merged) =
                     parent.contents().clone().merge(node.contents().clone())
                 && has_duplicate_siblings(

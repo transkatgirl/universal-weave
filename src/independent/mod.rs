@@ -729,7 +729,7 @@ where
     ))]
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
-    pub fn set_node_active_status_dependent_semantics(&mut self, id: &K, value: bool) -> bool {
+    pub fn set_active_dependent_semantics(&mut self, id: &K, value: bool) -> bool {
         if value {
             if let Some(node) = self.nodes.get(id) {
                 if node.active && !node.to.iter().any(|id| self.active.contains(id)) {
@@ -870,7 +870,7 @@ where
         };
 
         if let Some(active) = value.active {
-            output.set_node_active_status(&active, true);
+            output.set_active(&active, true);
         }
 
         debug_assert!(output.validate(), "Converted weave is malformed");
@@ -960,19 +960,19 @@ where
         self.active.contains(id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
+    fn get(&self, id: &K) -> Option<&IndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&IndexSet<K, S>> {
+    fn get_parents(&self, id: &K) -> Option<&IndexSet<K, S>> {
         self.nodes.get(id).map(|node| &node.from)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
+    fn get_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
         self.nodes.get(id).map(|node| &node.to)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
+    fn get_contents(&self, id: &K) -> Option<&T> {
         self.nodes.get(id).map(|node| &node.contents)
     }
     #[cfg_attr(debug_assertions, contract(
@@ -984,7 +984,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
 
         for root in &self.roots {
@@ -1011,7 +1011,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
@@ -1173,7 +1173,7 @@ where
         ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn add_node(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
+    fn insert(&mut self, mut node: IndependentNode<K, T, S>) -> bool {
         if self.nodes.contains_key(&node.id)
             || !node.validate()
             || !node.from.iter().all(|id| self.nodes.contains_key(id))
@@ -1277,7 +1277,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
         self.update_node_activity_in_place(id, value)
     }
     #[cfg_attr(debug_assertions, contract(
@@ -1293,7 +1293,7 @@ where
         ensures(ret.is_some() || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn remove_node(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
+    fn remove(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
         let mut removed_node = None;
         let mut removed_active = false;
 
@@ -1335,7 +1335,7 @@ where
 
         if removed_node.is_some() {
             if removed_active {
-                // matches set_node_active_status(id, false)
+                // matches set_active(id, false)
                 self.fix_orphaned_activations();
             }
             removed_node
@@ -1355,7 +1355,7 @@ where
         ensures(ret || old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn remove_node_tracked(
+    fn remove_tracked(
         &mut self,
         id: &K,
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
@@ -1410,7 +1410,7 @@ where
         ensures(self.nodes.is_empty()),
         ensures(self.validate())
     ))]
-    fn remove_all_nodes(&mut self) {
+    fn clear(&mut self) {
         self.nodes.clear();
         self.roots.clear();
         self.active.clear();
@@ -1526,7 +1526,7 @@ where
         ensures(old(self.active.clone()) == self.active),
         invariant(self.validate())
     ))]
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
         match self.nodes.get_mut(id) {
             Some(node) => {
                 node.bookmarked = value;
@@ -1558,7 +1558,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn sort_node_children_by(
+    fn sort_children_by(
         &mut self,
         id: &K,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
@@ -1581,7 +1581,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             node.to.sort_by(cmp);
 
@@ -1701,7 +1701,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.nodes.contains_key(&new_id) || *id == new_id {
             return false;
         }
@@ -1885,7 +1885,7 @@ where
         ensures(old(self.active.contains(id)) == self.active.contains(id)),
         invariant(self.validate())
     ))]
-    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
         if new_parents
             .iter()
             .any(|new_parent| !self.nodes.contains_key(new_parent))
@@ -2130,22 +2130,22 @@ where
         self.active.contains(id)
     }
     #[inline]
-    fn get_node(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
+    fn get(&self, id: &K::Archived) -> Option<&ArchivedIndependentNode<K, T, S>> {
         self.nodes.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
+    fn get_parents(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
         self.nodes.get(id).map(|node| &node.from)
     }
     #[inline]
-    fn get_node_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
+    fn get_children(&self, id: &K::Archived) -> Option<&ArchivedIndexSet<K::Archived>> {
         self.nodes.get(id).map(|node| &node.to)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K::Archived) -> Option<&T::Archived> {
+    fn get_contents(&self, id: &K::Archived) -> Option<&T::Archived> {
         self.nodes.get(id).map(|node| &node.contents)
     }
-    fn get_ordered_node_identifiers(&self, output: &mut Vec<K::Archived>) {
+    fn get_ordered_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
         let mut scratchpad = Vec::with_capacity(self.len());
         let mut scratchpad_2 = Vec::with_capacity(self.len());
@@ -2164,7 +2164,7 @@ where
             );
         }
     }
-    fn get_ordered_node_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
+    fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
 
         if self.nodes.contains_key(id) {

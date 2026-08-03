@@ -35,7 +35,7 @@ use crate::{DiscreteWeave, Node};
 
 /// A [`DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library.
 ///
-/// [`DiscreteWeave::split_node()`] and [`DiscreteWeave::merge_with_parent()`] are left intentionally unimplemented due to algorithmic limitations; Splitting/merging node contents must be done by adding a new [`Node`] with the updated contents to the [`Weave`].
+/// [`DiscreteWeave::split()`] and [`DiscreteWeave::merge_with_parent()`] are left intentionally unimplemented due to algorithmic limitations; Splitting/merging node contents must be done by adding a new [`Node`] with the updated contents to the [`Weave`].
 ///
 /// It is strongly recommended that you make use of globally unique node identifiers (such as UUIDs) when using this wrapper to prevent node ID collisions.
 ///
@@ -224,12 +224,12 @@ where
         tree.enable_fractional_index(0);
 
         let mut self_nodes = Vec::with_capacity(value.len());
-        value.get_ordered_node_identifiers(&mut self_nodes);
+        value.get_ordered_identifiers(&mut self_nodes);
 
         let mut tree_mapping = HashMap::with_capacity_and_hasher(value.capacity(), S::default());
 
         for node in self_nodes {
-            let node = value.get_node(&node).unwrap();
+            let node = value.get(&node).unwrap();
 
             let tree_id = tree
                 .create(node.from.map(|id| tree_mapping.get(&id).copied().unwrap()))
@@ -398,7 +398,7 @@ where
             Ok(()) => Ok(output),
             Err(error) => {
                 self.scratchpad.clear();
-                self.weave.remove_all_nodes();
+                self.weave.clear();
                 self.tree_mapping.clear();
                 self.bookmark_mapping.clear();
                 Err(error)
@@ -429,7 +429,7 @@ where
     fn import(&mut self) -> Result<(), rancor::Error> {
         self.tree_mapping.clear();
         self.bookmark_mapping.clear();
-        self.weave.remove_all_nodes();
+        self.weave.clear();
 
         let tree = self.doc.get_tree("tree");
         let metadata = self.doc.get_map("metadata");
@@ -467,7 +467,7 @@ where
             let active = from_bytes_aligned(&binary, &mut self.buffer)?;
 
             if let Some(active) = active {
-                self.weave.set_node_active_status(&active, true);
+                self.weave.set_active(&active, true);
             } else {
                 self.weave.active = None;
             }
@@ -482,7 +482,7 @@ where
                 let bookmark = from_bytes_aligned(&binary, &mut self.buffer)?;
 
                 if !self.weave.contains_bookmark(&bookmark)
-                    && self.weave.set_node_bookmarked_status(&bookmark, true)
+                    && self.weave.set_bookmarked(&bookmark, true)
                 {
                     self.bookmark_mapping.push(index);
                 }
@@ -511,7 +511,7 @@ where
                     meta.get("contents")
             {
                 let id = from_bytes_aligned(&binary_id, &mut self.buffer)?;
-                if self.weave.add_node(DependentNode {
+                if self.weave.insert(DependentNode {
                     id,
                     from: parent,
                     to: IndexSet::default(),
@@ -598,28 +598,28 @@ where
         self.weave.contains_active(id)
     }
     #[inline]
-    fn get_node(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
-        self.weave.get_node(id)
+    fn get(&self, id: &K) -> Option<&DependentNode<K, T, S>> {
+        self.weave.get(id)
     }
     #[inline]
-    fn get_node_parents(&self, id: &K) -> Option<&Option<K>> {
-        self.weave.get_node_parents(id)
+    fn get_parents(&self, id: &K) -> Option<&Option<K>> {
+        self.weave.get_parents(id)
     }
     #[inline]
-    fn get_node_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
-        self.weave.get_node_children(id)
+    fn get_children(&self, id: &K) -> Option<&IndexSet<K, S>> {
+        self.weave.get_children(id)
     }
     #[inline]
-    fn get_node_contents(&self, id: &K) -> Option<&T> {
-        self.weave.get_node_contents(id)
+    fn get_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_contents(id)
     }
     #[inline]
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers(output);
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers(output);
     }
     #[inline]
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
-        self.weave.get_ordered_node_identifiers_from(id, output);
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers_from(id, output);
     }
     #[inline]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
@@ -629,14 +629,14 @@ where
     fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         self.weave.get_path_from(id, output);
     }
-    fn add_node(&mut self, node: DependentNode<K, T, S>) -> bool {
+    fn insert(&mut self, node: DependentNode<K, T, S>) -> bool {
         let id = node.id;
         let from = node.from;
         let mut active = node.active;
         let bookmarked = node.bookmarked;
         let contents = to_bytes(&node.contents).unwrap();
 
-        if self.weave.add_node(node) {
+        if self.weave.insert(node) {
             assert!(self.weave.nodes.len() < usize::MAX - 1, "Too many nodes");
 
             let id_bytes = to_bytes(&id).unwrap().into_vec();
@@ -708,8 +708,8 @@ where
             false
         }
     }
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
-        if self.weave.set_node_active_status(id, value) {
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
+        if self.weave.set_active(id, value) {
             self.doc
                 .get_map("metadata")
                 .insert(
@@ -722,7 +722,7 @@ where
             false
         }
     }
-    fn remove_node(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
+    fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         let old_bookmarks: Option<HashSet<K>> = if self.weave.contains(id) {
             Some(self.weave.bookmarked.iter().copied().collect())
         } else {
@@ -731,7 +731,7 @@ where
 
         let mut removed_node = None;
 
-        if self.weave.remove_node_tracked(id, |node| {
+        if self.weave.remove_tracked(id, |node| {
             if &node.id == id {
                 removed_node = Some(node);
             } else {
@@ -783,7 +783,7 @@ where
 
         removed_node
     }
-    fn remove_node_tracked(
+    fn remove_tracked(
         &mut self,
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
@@ -794,7 +794,7 @@ where
             None
         };
 
-        if self.weave.remove_node_tracked(id, |node| {
+        if self.weave.remove_tracked(id, |node| {
             if &node.id != id {
                 self.tree_mapping.remove(&node.id).unwrap();
             }
@@ -847,8 +847,8 @@ where
             false
         }
     }
-    fn remove_all_nodes(&mut self) {
-        self.weave.remove_all_nodes();
+    fn clear(&mut self) {
+        self.weave.clear();
         self.tree_mapping.clear();
         self.bookmark_mapping.clear();
 
@@ -977,7 +977,7 @@ where
                             meta.get("contents")
                         && let Ok(id) = from_bytes_aligned(&binary_id, &mut buffer)
                         && let Ok(contents) = from_bytes_aligned(&binary_contents, &mut buffer)
-                        && let Some(node) = self.weave.get_node(&id)
+                        && let Some(node) = self.weave.get(&id)
                         && node.from == parent
                         && node.contents == contents
                     {
@@ -1080,10 +1080,10 @@ where
     fn contains_bookmark(&self, id: &K) -> bool {
         self.weave.contains_bookmark(id)
     }
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
         let was_bookmarked = self.weave.contains_bookmark(id);
 
-        if self.weave.set_node_bookmarked_status(id, value) {
+        if self.weave.set_bookmarked(id, value) {
             if value != was_bookmarked {
                 let bookmarks = self.doc.get_movable_list("bookmarks");
 
@@ -1141,16 +1141,16 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    fn sort_node_children_by(
+    fn sort_children_by(
         &mut self,
         id: &K,
         cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
-        if self.weave.sort_node_children_by(id, cmp) {
+        if self.weave.sort_children_by(id, cmp) {
             let tree = self.doc.get_tree("tree");
             let parent = self.tree_mapping.get(id).copied().unwrap();
 
-            for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
+            for (index, child) in self.weave.get(id).unwrap().to.iter().enumerate() {
                 tree.mov_to(
                     self.tree_mapping.get(child).copied().unwrap(),
                     Some(parent),
@@ -1164,12 +1164,12 @@ where
             false
         }
     }
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
-        if self.weave.sort_node_children_by_id(id, cmp) {
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        if self.weave.sort_children_by_id(id, cmp) {
             let tree = self.doc.get_tree("tree");
             let parent = self.tree_mapping.get(id).copied().unwrap();
 
-            for (index, child) in self.weave.get_node(id).unwrap().to.iter().enumerate() {
+            for (index, child) in self.weave.get(id).unwrap().to.iter().enumerate() {
                 tree.mov_to(
                     self.tree_mapping.get(child).copied().unwrap(),
                     Some(parent),

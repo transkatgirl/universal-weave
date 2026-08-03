@@ -190,20 +190,20 @@ where
     fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     #[must_use]
-    fn get_node(&self, id: &K) -> Option<&N>;
-    /// Convenience method for `self.get_node(id).map(Node::from)`.
+    fn get(&self, id: &K) -> Option<&N>;
+    /// Convenience method for `self.get(id).map(Node::from)`.
     #[must_use]
-    fn get_node_parents(&self, id: &K) -> Option<&N::From>;
-    /// Convenience method for `self.get_node(id).map(Node::to)`.
+    fn get_parents(&self, id: &K) -> Option<&N::From>;
+    /// Convenience method for `self.get(id).map(Node::to)`.
     #[must_use]
-    fn get_node_children(&self, id: &K) -> Option<&N::To>;
-    /// Convenience method for `self.get_node(id).map(Node::contents)`.
+    fn get_children(&self, id: &K) -> Option<&N::To>;
+    /// Convenience method for `self.get(id).map(Node::contents)`.
     #[must_use]
-    fn get_node_contents(&self, id: &K) -> Option<&T>;
+    fn get_contents(&self, id: &K) -> Option<&T>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>);
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
-    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
     ///
     /// In an [`ActivePathWeave`], this path will be the longest contiguous path of active nodes.
@@ -215,17 +215,17 @@ where
     /// Inserts a node into the Weave, returning `true` if the insertion was successful.
     ///
     /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
-    fn add_node(&mut self, node: N) -> bool;
+    fn insert(&mut self, node: N) -> bool;
     /// Sets the active status of a node with the specified identifier.
     ///
     /// This function may change the active status of other nodes in an implementation-specific manner if it is necessary to preserve internal consistency.
-    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool;
+    fn set_active(&mut self, id: &K, value: bool) -> bool;
     /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
     ///
     /// This function may remove or update other nodes if it is necessary to preserve internal consistency.
     ///
-    /// This function uses the same removal logic as [`Weave::remove_node_tracked`].
-    fn remove_node(&mut self, id: &K) -> Option<N>;
+    /// This function uses the same removal logic as [`Weave::remove_tracked`].
+    fn remove(&mut self, id: &K) -> Option<N>;
     /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
     ///
     /// This function may remove or update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
@@ -233,9 +233,11 @@ where
     /// # Panics
     ///
     /// May panic if `on_removal` panics.
-    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
+    fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
-    fn remove_all_nodes(&mut self);
+    ///
+    /// In a [`MetadataWeave`], the associated metadata is left unchanged.
+    fn clear(&mut self);
 }
 
 /// A [`Weave`] containing document-wide metadata.
@@ -275,7 +277,7 @@ where
     #[must_use]
     fn contains_bookmark(&self, id: &K) -> bool;
     /// Sets the bookmarked status of a node with the specified identifier.
-    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool;
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool;
 }
 
 /// A [`Weave`] where the ordering of nodes is stable and can be user-defined.
@@ -293,13 +295,13 @@ where
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
-    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
+    fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts the identifiers of a parent node's children with the specified identifier using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
-    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
     /// Sorts root nodes (nodes which do not have any parents) using the comparison function `cmp`.
     ///
     /// # Panics
@@ -378,7 +380,7 @@ where
     /// Moves a node with the specified identifier to a new set of parent nodes, returning `true` if the move was successful.
     ///
     /// This function may change the active status of other nodes if it is necessary to preserve internal consistency.
-    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool;
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool;
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on the *contents* of their parents in order to be meaningful.
@@ -421,7 +423,7 @@ where
     /// # Panics
     ///
     /// May panic if `T::split` panics.
-    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool;
     /// Merges a node with the specified identifier with its parent, with the newly merged node inheriting the parent's identifier.
     ///
     /// Returns the identifier of the merged node if merging was successful.
@@ -466,20 +468,20 @@ where
     fn contains_active(&self, id: &K) -> bool;
     /// Returns a reference to the node corresponding to the identifier.
     #[must_use]
-    fn get_node(&self, id: &K) -> Option<&N>;
-    /// Convenience method for `self.get_node(id).map(Node::from)`.
+    fn get(&self, id: &K) -> Option<&N>;
+    /// Convenience method for `self.get(id).map(Node::from)`.
     #[must_use]
-    fn get_node_parents(&self, id: &K) -> Option<&N::From>;
-    /// Convenience method for `self.get_node(id).map(Node::to)`.
+    fn get_parents(&self, id: &K) -> Option<&N::From>;
+    /// Convenience method for `self.get(id).map(Node::to)`.
     #[must_use]
-    fn get_node_children(&self, id: &K) -> Option<&N::To>;
-    /// Convenience method for `self.get_node(id).map(Node::contents)`.
+    fn get_children(&self, id: &K) -> Option<&N::To>;
+    /// Convenience method for `self.get(id).map(Node::contents)`.
     #[must_use]
-    fn get_node_contents(&self, id: &K) -> Option<&T>;
+    fn get_contents(&self, id: &K) -> Option<&T>;
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    fn get_ordered_node_identifiers(&self, output: &mut Vec<K>);
+    fn get_ordered_identifiers(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
-    fn get_ordered_node_identifiers_from(&self, id: &K, output: &mut Vec<K>);
+    fn get_ordered_identifiers_from(&self, id: &K, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
     ///
     /// In an [`ImmutableActivePathWeave`], this path will be the longest contiguous path of active nodes.
