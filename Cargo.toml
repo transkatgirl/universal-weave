@@ -5,7 +5,7 @@ authors = [
 	"transkatgirl",
 ]
 license = "Unlicense"
-description = "General-purpose building blocks for \"Loom\" implementations."
+description = "General-purpose building blocks for Loom implementations."
 categories = [
 	"data-structures",
 	"no-std",
