@@ -9,6 +9,7 @@
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
+- [ ] **Turn function contracts into readable & executable documentation**
 - [ ] Improve documentation
     - [ ] Trait documentation improvements
     - [ ] DependentWeave-specific documentation
