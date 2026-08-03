@@ -874,9 +874,8 @@ where
                 parent: Some(*id),
                 children: self
                     .weave
-                    .get_node(id)
+                    .get_node_children(id)
                     .unwrap()
-                    .to()
                     .into_iter()
                     .copied()
                     .collect(),
@@ -892,9 +891,8 @@ where
                 parent: Some(*id),
                 children: self
                     .weave
-                    .get_node(id)
+                    .get_node_children(id)
                     .unwrap()
-                    .to()
                     .into_iter()
                     .copied()
                     .collect(),
