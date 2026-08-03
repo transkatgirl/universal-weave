@@ -41,13 +41,11 @@
 
 ## Features
 
-- [ ] Additional Weave wrappers
-    - [ ] Deduplication wrapper
-    - [ ] Cached active path wrapper
+- [ ] Weave Deduplication wrapper
+    - [ ] Remove DeduplicatableWeave trait
 - [ ] Additional Weave traversal methods
     - [ ] Node siblings
     - [ ] Node siblings or roots
-    - [ ] Threads as DoubleEndedIterator of &node
 - [ ] ID reassignment module
 - [ ] Rkyv convenience wrappers
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
