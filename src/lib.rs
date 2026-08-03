@@ -236,6 +236,10 @@ where
 }
 
 /// A [`Weave`] containing document-wide metadata.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 pub trait MetadataWeave<K, N, T, M>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -272,6 +276,10 @@ where
 }
 
 /// A [`Weave`] where the ordering of nodes is stable and can be user-defined.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -304,6 +312,10 @@ where
 }
 
 /// A [`Weave`] where the ordering of bookmarked nodes is stable and can be user-defined.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 pub trait SortableBookmarkableWeave<K, N, T>:
     BookmarkableWeave<K, N, T> + SortableWeave<K, N, T>
 where
@@ -367,6 +379,10 @@ where
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on the *contents* of their parents in order to be meaningful.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 pub trait SemiIndependentWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -382,6 +398,10 @@ where
 }
 
 /// A [`Weave`] where the contents of [`Node`] objects can be split and merged.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
 pub trait DiscreteWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
@@ -391,10 +411,18 @@ where
     /// Splits a node with the specified identifier at the given index, creating a new child node with the identifier `new_id`.
     ///
     /// Returns `false` if splitting the node failed or the node could not be found.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split` panics.
     fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool;
     /// Merges a node with the specified identifier with its parent, with the newly merged node inheriting the parent's identifier.
     ///
     /// Returns the identifier of the merged node if merging was successful.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::merge` panics.
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
