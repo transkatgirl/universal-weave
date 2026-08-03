@@ -348,24 +348,15 @@ where
     {
         let proxy = ProxyIndependentWeave::deserialize(deserializer)?;
         let weave = Self {
-            scratchpad_list: Vec::with_capacity(proxy.nodes.capacity()),
-            scratchpad_list_2: Vec::with_capacity(proxy.nodes.capacity()),
-            scratchpad_set: HashSet::with_capacity_and_hasher(proxy.nodes.capacity(), S::default()),
-            scratchpad_set_2: HashSet::with_capacity_and_hasher(
-                proxy.nodes.capacity(),
-                S::default(),
-            ),
-            scratchpad_map: HashMap::with_capacity_and_hasher(proxy.nodes.capacity(), S::default()),
-            scratchpad_map_2: HashMap::with_capacity_and_hasher(
-                proxy.nodes.capacity(),
-                S::default(),
-            ),
-            scratchpad_map_3: HashMap::with_capacity_and_hasher(
-                proxy.nodes.capacity(),
-                S::default(),
-            ),
-            scratchpad_stack: Vec::with_capacity(proxy.nodes.capacity()),
-            scratchpad_queue: VecDeque::with_capacity(proxy.nodes.capacity()),
+            scratchpad_list: Vec::default(),
+            scratchpad_list_2: Vec::default(),
+            scratchpad_set: HashSet::default(),
+            scratchpad_set_2: HashSet::default(),
+            scratchpad_map: HashMap::default(),
+            scratchpad_map_2: HashMap::default(),
+            scratchpad_map_3: HashMap::default(),
+            scratchpad_stack: Vec::default(),
+            scratchpad_queue: VecDeque::default(),
             nodes: proxy.nodes,
             roots: proxy.roots,
             active: proxy.active,

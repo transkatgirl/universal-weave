@@ -161,7 +161,7 @@ where
     {
         let proxy = ProxyDependentWeave::deserialize(deserializer)?;
         let weave = Self {
-            scratchpad_step_stack: Vec::with_capacity(proxy.nodes.capacity()),
+            scratchpad_step_stack: Vec::default(),
             nodes: proxy.nodes,
             roots: proxy.roots,
             active: proxy.active,
