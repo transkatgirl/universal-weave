@@ -5,6 +5,7 @@
 - [ ] Improve test coverage
     - [ ] **DependentWeave unit tests**
     - [ ] **IndependentWeave unit tests**
+    - [ ] DeduplicatedWeave unit tests
 - [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
@@ -42,10 +43,6 @@
 ## Features
 
 - [ ] Cleanup API methods to remove _node from name
-- [ ] Weave deduplication wrapper
-- [ ] Additional Weave traversal methods
-    - [ ] Node siblings
-    - [ ] Node siblings or roots
 - [ ] ID reassignment module
 - [ ] Rkyv convenience wrappers
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)

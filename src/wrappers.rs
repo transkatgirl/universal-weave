@@ -9,7 +9,7 @@ use core::{
     marker::PhantomData,
 };
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 #[cfg(feature = "rkyv")]
 use rkyv::{Archive, Deserialize, Serialize};
@@ -18,9 +18,10 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DiscreteContents, DiscreteWeave,
-    IndependentContents, IndependentWeave, MetadataWeave, Node, SemiIndependentWeave,
-    SortableBookmarkableWeave, SortableWeave, Weave, dependent, independent,
+    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
+    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
+    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    dependent, independent,
 };
 
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
@@ -1343,5 +1344,517 @@ where
             }
             None => None,
         }
+    }
+}
+
+/// A [`Weave`] wrapper which prevents actions from creating siblings with duplicate contents.
+///
+/// Siblings which are also parents or children of the target node are excluded.
+///
+/// # Limitations
+///
+/// It is possible for [`Weave::add_node()`], [`Weave::remove_node()`], and [`Weave::remove_node_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub struct DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    /// The [`Weave`] being wrapped.
+    ///
+    /// Actions performed directly on the inner [`Weave`] (without using the wrapper's functions) are not checked.
+    pub weave: W,
+
+    scratchpad: HashSet<K, S>,
+    _phantom_n: PhantomData<N>,
+    _phantom_t: PhantomData<T>,
+}
+
+impl<W, K, N, T, S> DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    /// Creates a [`DeduplicatedWeave`] from a [`Weave`].
+    pub fn new(weave: W) -> Self {
+        Self {
+            scratchpad: HashSet::with_capacity_and_hasher(weave.len(), S::default()),
+            weave,
+            _phantom_n: PhantomData,
+            _phantom_t: PhantomData,
+        }
+    }
+    /// Converts a [`DeduplicatedWeave`] into it's inner [`Weave`].
+    #[inline]
+    pub fn into_inner(self) -> W {
+        self.weave
+    }
+    /// Returns a reference to the inner [`Weave`].
+    #[inline]
+    pub const fn as_inner(&self) -> &W {
+        &self.weave
+    }
+}
+
+fn has_duplicate_siblings<W, K, N, T, S, I, F, O>(
+    weave: &W,
+    ignored: &I,
+    parents: &F,
+    children: &O,
+    contents: &T,
+    scratchpad: &mut HashSet<K, S>,
+) -> bool
+where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+    for<'a> &'a I: IntoIterator<Item = &'a K>,
+    for<'a> &'a F: IntoIterator<Item = &'a K>,
+    for<'a> &'a O: IntoIterator<Item = &'a K>,
+    F: ?Sized,
+    O: ?Sized,
+{
+    if parents.into_iter().next().is_none() {
+        scratchpad.extend(weave.roots().into_iter().copied());
+    } else {
+        for sibling in parents
+            .into_iter()
+            .filter_map(|id| weave.get_node_children(id))
+            .flatten()
+            .copied()
+        {
+            scratchpad.insert(sibling);
+        }
+    }
+
+    for parent in parents {
+        scratchpad.remove(parent);
+    }
+
+    for child in children {
+        scratchpad.remove(child);
+    }
+
+    for ignore in ignored {
+        scratchpad.remove(ignore);
+    }
+
+    scratchpad
+        .drain()
+        .filter_map(|id| weave.get_node_contents(&id))
+        .any(|c| c.is_duplicate_of(contents))
+}
+
+impl<W, K, N, T, S> Weave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    type Nodes = W::Nodes;
+    type Roots = W::Roots;
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.weave.len()
+    }
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.weave.is_empty()
+    }
+    #[inline]
+    fn nodes(&self) -> &Self::Nodes {
+        self.weave.nodes()
+    }
+    #[inline]
+    fn roots(&self) -> &Self::Roots {
+        self.weave.roots()
+    }
+    #[inline]
+    fn contains(&self, id: &K) -> bool {
+        self.weave.contains(id)
+    }
+    #[inline]
+    fn contains_active(&self, id: &K) -> bool {
+        self.weave.contains_active(id)
+    }
+    #[inline]
+    fn get_node(&self, id: &K) -> Option<&N> {
+        self.weave.get_node(id)
+    }
+    #[inline]
+    fn get_node_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_node_parents(id)
+    }
+    #[inline]
+    fn get_node_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_node_children(id)
+    }
+    #[inline]
+    fn get_node_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_node_contents(id)
+    }
+    #[inline]
+    fn get_ordered_node_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_node_identifiers(output);
+    }
+    #[inline]
+    fn get_ordered_node_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_node_identifiers_from(id, output);
+    }
+    #[inline]
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
+        self.weave.get_active_path(output);
+    }
+    #[inline]
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_path_from(id, output);
+    }
+    /// Inserts a node into the Weave, returning `true` if the insertion was successful.
+    ///
+    /// This function may change the active status of nodes if it is necessary to preserve internal consistency.
+    ///
+    /// # Deduplication
+    ///
+    /// This function does not deduplicate the node's children. As a result, it is possible (albeit uncommon) for this operation to create duplicate siblings.
+    fn add_node(&mut self, node: N) -> bool {
+        if has_duplicate_siblings(
+            &self.weave,
+            &[node.id()],
+            node.from(),
+            node.to(),
+            node.contents(),
+            &mut self.scratchpad,
+        ) {
+            return false;
+        }
+
+        self.weave.add_node(node)
+    }
+    #[inline]
+    fn set_node_active_status(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_node_active_status(id, value)
+    }
+    /// Removes a node with the specified identifier, returning its value if it was present within the Weave.
+    ///
+    /// This function may remove or update other nodes if it is necessary to preserve internal consistency.
+    ///
+    /// This function uses the same removal logic as [`Weave::remove_node_tracked`].
+    ///
+    /// # Deduplication
+    ///
+    /// If the underlying [`Weave::remove_node()`] implementation reparents nodes, this operation may create duplicate siblings.
+    #[inline]
+    fn remove_node(&mut self, id: &K) -> Option<N> {
+        self.weave.remove_node(id)
+    }
+    /// Removes a node with the specified identifier, returning `true` if it was present within the Weave.
+    ///
+    /// This function may remove or update other nodes if it is necessary to preserve internal consistency. Every removed node will be returned by the `on_removal` call, with removal ordering being defined by the `Weave` implementation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `on_removal` panics.
+    ///
+    /// # Deduplication
+    ///
+    /// If the underlying [`Weave::remove_node_tracked()`] implementation reparents nodes, this operation may create duplicate siblings.
+    #[inline]
+    fn remove_node_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        self.weave.remove_node_tracked(id, on_removal)
+    }
+    #[inline]
+    fn remove_all_nodes(&mut self) {
+        self.weave.remove_all_nodes();
+    }
+}
+
+impl<W, K, N, T, M, S> MetadataWeave<K, N, T, M> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: MetadataWeave<K, N, T, M>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn metadata(&self) -> &M {
+        self.weave.metadata()
+    }
+    #[inline]
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        self.weave.metadata_mut(callback)
+    }
+}
+
+impl<W, K, N, T, S> BookmarkableWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: BookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    type Bookmarks = W::Bookmarks;
+
+    #[inline]
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        self.weave.bookmarks()
+    }
+    #[inline]
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.weave.contains_bookmark(id)
+    }
+    #[inline]
+    fn set_node_bookmarked_status(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_node_bookmarked_status(id, value)
+    }
+}
+
+impl<W, K, N, T, S> SortableWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: SortableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn sort_node_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
+        self.weave.sort_node_children_by(id, cmp)
+    }
+    #[inline]
+    fn sort_node_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        self.weave.sort_node_children_by_id(id, cmp)
+    }
+    #[inline]
+    fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
+        self.weave.sort_roots_by(cmp);
+    }
+    #[inline]
+    fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.weave.sort_roots_by_id(cmp);
+    }
+}
+
+impl<W, K, N, T, S> SortableBookmarkableWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: SortableBookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
+        self.weave.sort_bookmarks_by(cmp);
+    }
+    #[inline]
+    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.weave.sort_bookmarks_by_id(cmp);
+    }
+}
+
+impl<W, K, N, T, S> ActiveSingularWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: ActiveSingularWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn active(&self) -> Option<K> {
+        self.weave.active()
+    }
+}
+
+impl<W, K, N, T, S> ActivePathWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: ActivePathWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    type Active = W::Active;
+
+    #[inline]
+    fn active(&self) -> &Self::Active {
+        self.weave.active()
+    }
+    #[inline]
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
+        self.weave.set_active_path(active);
+    }
+}
+
+impl<W, K, N, T, S> IndependentWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents + DeduplicatableContents + Clone,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    fn move_node(&mut self, id: &K, new_parents: &[K]) -> bool {
+        if let Some(node) = self.weave.get_node(id) {
+            if has_duplicate_siblings(
+                &self.weave,
+                &[node.id()],
+                new_parents,
+                node.to(),
+                node.contents(),
+                &mut self.scratchpad,
+            ) {
+                return false;
+            }
+
+            self.weave.move_node(id, new_parents)
+        } else {
+            false
+        }
+    }
+}
+
+impl<W, K, N, T, S> SemiIndependentWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: SemiIndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents + DeduplicatableContents + Clone,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    /// Mutable access to the contents of a node with the specified identifier.
+    ///
+    /// `callback` may be executed without updating the node's contents.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `callback` panics.
+    fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+        if let Some(node) = self.weave.get_node(id) {
+            let mut contents = node.contents().clone();
+            let output = callback(&mut contents);
+
+            if has_duplicate_siblings(
+                &self.weave,
+                &[node.id()],
+                node.from(),
+                node.to(),
+                &contents,
+                &mut self.scratchpad,
+            ) {
+                None
+            } else if self.weave.get_contents_mut(id, |c| *c = contents).is_some() {
+                Some(output)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl<W, K, N, T, S> DiscreteWeave<K, N, T> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: DiscreteWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    T: DiscreteContents + DeduplicatableContents + Clone,
+    N: Node<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    fn split_node(&mut self, id: &K, at: usize, new_id: K) -> bool {
+        if let Some(node) = self.weave.get_node(id)
+            && let DiscreteContentResult::Two(left, _right) = node.contents().clone().split(at)
+            && has_duplicate_siblings(
+                &self.weave,
+                &[node.id()],
+                node.from(),
+                &[],
+                &left,
+                &mut self.scratchpad,
+            )
+        {
+            return false;
+        }
+
+        self.weave.split_node(id, at, new_id)
+    }
+    fn merge_with_parent(&mut self, id: &K) -> Option<K> {
+        if let Some(node) = self.weave.get_node(id) {
+            if node.from().into_iter().len() != 1 {
+                return None;
+            }
+
+            if let Some(parent_id) = node.from().into_iter().next()
+                && let Some(parent) = self.weave.get_node(parent_id)
+                && let DiscreteContentResult::One(merged) =
+                    parent.contents().clone().merge(node.contents().clone())
+                && has_duplicate_siblings(
+                    &self.weave,
+                    &[node.id(), *parent_id],
+                    parent.from(),
+                    node.to(),
+                    &merged,
+                    &mut self.scratchpad,
+                )
+            {
+                return None;
+            }
+        }
+
+        self.weave.merge_with_parent(id)
     }
 }
