@@ -1241,7 +1241,7 @@ where
         let mut scratchpad = Vec::with_capacity(self.len());
         let mut scratchpad_2 = Vec::with_capacity(self.len());
 
-        for root in self.roots().iter() {
+        for root in self.roots.iter() {
             archived_topological_sort(
                 &self.nodes,
                 *root,

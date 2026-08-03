@@ -1905,10 +1905,10 @@ where
 {
     #[cfg_attr(debug_assertions, contract(
         ensures(!ret || self.nodes[id].from.iter().copied().collect::<HashSet<_>>() == new_parents.iter().copied().collect::<HashSet<_>>()),
-        ensures(ret || old(self.nodes().get(id).map(|node| node.from.clone())).as_ref() == self.nodes().get(id).map(|node| &node.from)),
+        ensures(ret || old(self.nodes.get(id).map(|node| node.from.clone())).as_ref() == self.nodes.get(id).map(|node| &node.from)),
         ensures(ret || old(self.roots.clone()) == self.roots),
         ensures(ret || old(self.active.clone()) == self.active),
-        ensures(old(self.nodes().get(id).map(|node| node.to.clone())).as_ref() == self.nodes().get(id).map(|node| &node.to)),
+        ensures(old(self.nodes.get(id).map(|node| node.to.clone())).as_ref() == self.nodes.get(id).map(|node| &node.to)),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         ensures(old(self.active.contains(id)) == self.active.contains(id)),
