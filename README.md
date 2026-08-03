@@ -39,7 +39,7 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 		- Node sorting
 	- Tree-based Weave implementation
 		- CRDT-based collaborative editing (requires loro & rkyv, *experimental*)
-	- DAG-based Weave implementation (*experimental*)
+	- DAG-based Weave implementation
 		- Node moving
 	- Support for Weave wrapper implementations
 		- Built-in action queuing wrapper (can be used to implement undo/redo)

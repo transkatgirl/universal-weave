@@ -408,6 +408,8 @@ where
     T: DeduplicatableContents,
 {
     /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
+    ///
+    /// Siblings which are also parents/children of the specified node are excluded.
     #[must_use]
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
 }

@@ -572,7 +572,7 @@ where
         ensures(!ret || value == self.active.contains(id)),
         ensures(self.validate())
     ))]
-    pub(super) fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
+    fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
             if node.active == value {
                 return true;
@@ -711,7 +711,7 @@ where
         requires(self.validate_scratchpads()),
         ensures(self.validate())
     ))]
-    pub(super) fn fix_orphaned_activations(&mut self) {
+    fn fix_orphaned_activations(&mut self) {
         for root in &self.roots {
             topological_sort(
                 &self.nodes,
@@ -1225,11 +1225,14 @@ where
             self.scratchpad_set.clear();
         }
 
-        let root_index = node
-            .to
-            .iter()
-            .filter_map(|child| self.roots.get_index_of(child))
-            .min();
+        let root_index = if node.from.is_empty() {
+            node.to
+                .iter()
+                .filter_map(|child| self.roots.get_index_of(child))
+                .min()
+        } else {
+            None
+        };
 
         for child in &node.to {
             let child = &self.nodes[child];
@@ -1807,9 +1810,10 @@ where
                         let child = self.nodes.get_mut(child).unwrap();
 
                         if let Some(index) = child.from.get_index_of(&left_node.id) {
-                            if child.from.replace_index(index, node.id).is_err() {
-                                child.from.shift_remove_index(index);
-                            }
+                            assert!(
+                                child.from.replace_index(index, node.id).is_ok(),
+                                "Should be unreachable"
+                            );
                         } else {
                             child.from.insert(node.id);
                         }
@@ -1880,9 +1884,10 @@ where
                             let child = self.nodes.get_mut(child).unwrap();
 
                             if let Some(index) = child.from.get_index_of(&node.id) {
-                                if child.from.replace_index(index, parent.id).is_err() {
-                                    child.from.shift_remove_index(index);
-                                }
+                                assert!(
+                                    child.from.replace_index(index, parent.id).is_ok(),
+                                    "Should be unreachable"
+                                );
                             } else {
                                 child.from.insert(parent.id);
                             }
