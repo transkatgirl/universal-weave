@@ -31,17 +31,17 @@ use crate::{
     SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, Weave,
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
-        topological_sort, topological_sort_mirrored,
+        topological_sort,
     },
 };
 
 #[cfg(feature = "rkyv")]
 use crate::{
     ImmutableActiveSingularWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave,
-    ImmutableSortableWeave, ImmutableWeave,
+    ImmutableWeave,
     dependent::{
         ArchivedDependentNode, archived_detect_cycles, archived_path_to_root,
-        archived_topological_sort, archived_topological_sort_mirrored,
+        archived_topological_sort,
     },
 };
 
@@ -600,22 +600,6 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
-    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
-        output.clear();
-        self.thread.clear();
-
-        for root in &self.roots {
-            topological_sort_mirrored(&self.nodes, *root, &mut self.thread, output);
-        }
-    }
-    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
-        output.clear();
-
-        if self.nodes.contains_key(id) {
-            self.thread.clear();
-            topological_sort_mirrored(&self.nodes, *id, &mut self.thread, output);
-        }
-    }
     fn sort_node_children_by(
         &mut self,
         id: &K,
@@ -1004,39 +988,6 @@ where
     #[inline]
     fn contains_bookmark(&self, id: &K::Archived) -> bool {
         self.bookmarked.contains(id)
-    }
-}
-
-#[cfg(feature = "rkyv")]
-impl<K, T, M, S> ImmutableSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
-    for ArchivedDependentWeave<K, T, M, S>
-where
-    K: Archive + Hash + Copy + Eq + Ord,
-    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive,
-    M: Archive,
-    S: BuildHasher + Default + Clone,
-{
-    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K::Archived>) {
-        output.clear();
-        let mut scratchpad = Vec::with_capacity(self.len());
-
-        for root in self.roots().iter() {
-            archived_topological_sort_mirrored(&self.nodes, *root, &mut scratchpad, output);
-        }
-    }
-    fn get_ordered_node_identifiers_mirrored_from(
-        &self,
-        id: &K::Archived,
-        output: &mut Vec<K::Archived>,
-    ) {
-        output.clear();
-
-        if self.nodes.contains_key(id) {
-            let mut scratchpad = Vec::with_capacity(self.len());
-
-            archived_topological_sort_mirrored(&self.nodes, *id, &mut scratchpad, output);
-        }
     }
 }
 

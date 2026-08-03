@@ -10,7 +10,7 @@ use rkyv::{
 };
 use universal_weave::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    ImmutableBookmarkableWeave, ImmutableSortableWeave, ImmutableWeave, IndependentContents,
+    ImmutableBookmarkableWeave, ImmutableWeave, IndependentContents,
     IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node, SemiIndependentWeave,
     SortableBookmarkableWeave, SortableWeave, Weave,
     independent::{IndependentNode, IndependentWeave},
@@ -155,9 +155,7 @@ struct WeaveWrapper {
     scratchpad_set: HashSet<u32>,
     target: u32,
     ordered_node_identifiers: Vec<u32>,
-    ordered_node_identifiers_mirrored: Vec<u32>,
     ordered_node_identifiers_from: Vec<u32>,
-    ordered_node_identifiers_mirrored_from: Vec<u32>,
     active_path: Vec<u32>,
     path_from: Vec<u32>,
     buffer: AlignedVec,
@@ -219,9 +217,7 @@ impl StateMachineTest for WeaveWrapper {
             scratchpad_set: HashSet::with_capacity(ref_state.len()),
             target: 0,
             ordered_node_identifiers: Vec::with_capacity(ref_state.len()),
-            ordered_node_identifiers_mirrored: Vec::with_capacity(ref_state.len()),
             ordered_node_identifiers_from: Vec::with_capacity(ref_state.len()),
-            ordered_node_identifiers_mirrored_from: Vec::with_capacity(ref_state.len()),
             active_path: Vec::with_capacity(ref_state.len()),
             path_from: Vec::with_capacity(ref_state.len()),
             buffer: AlignedVec::new(),
@@ -514,16 +510,9 @@ impl StateMachineTest for WeaveWrapper {
         state
             .weave
             .get_ordered_node_identifiers(&mut state.ordered_node_identifiers);
-        state
-            .weave
-            .get_ordered_node_identifiers_mirrored(&mut state.ordered_node_identifiers_mirrored);
         state.weave.get_ordered_node_identifiers_from(
             &state.target,
             &mut state.ordered_node_identifiers_from,
-        );
-        state.weave.get_ordered_node_identifiers_mirrored_from(
-            &state.target,
-            &mut state.ordered_node_identifiers_mirrored_from,
         );
         state.weave.get_active_path(&mut state.active_path);
         state
@@ -571,11 +560,6 @@ impl StateMachineTest for WeaveWrapper {
         assert!(state.ordered_node_identifiers == buffer);
         archived.get_ordered_node_identifiers_from(&u32_le::from(state.target), &mut buffer);
         assert!(state.ordered_node_identifiers_from == buffer);
-        archived.get_ordered_node_identifiers_mirrored(&mut buffer);
-        assert!(state.ordered_node_identifiers_mirrored == buffer);
-        archived
-            .get_ordered_node_identifiers_mirrored_from(&u32_le::from(state.target), &mut buffer);
-        assert!(state.ordered_node_identifiers_mirrored_from == buffer);
         archived.get_active_path(&mut buffer);
         assert!(state.active_path == buffer);
         archived.get_path_from(&u32_le::from(state.target), &mut buffer);

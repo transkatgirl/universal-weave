@@ -141,9 +141,7 @@ struct WeaveWrapper {
     weave: DependentLoroWeave<u32, WeaveContent, u32, RandomState>,
     peers: HashMap<PeerID, VersionVector>,
     ordered_node_identifiers: Vec<u32>,
-    ordered_node_identifiers_mirrored: Vec<u32>,
     ordered_node_identifiers_from: Vec<u32>,
-    ordered_node_identifiers_mirrored_from: Vec<u32>,
     active_path: Vec<u32>,
     path_from: Vec<u32>,
 }
@@ -158,9 +156,7 @@ impl Default for WeaveWrapper {
                 .unwrap(),
             peers: HashMap::new(),
             ordered_node_identifiers: Vec::with_capacity(MAX_TRANSITIONS),
-            ordered_node_identifiers_mirrored: Vec::with_capacity(MAX_TRANSITIONS),
             ordered_node_identifiers_from: Vec::with_capacity(MAX_TRANSITIONS),
-            ordered_node_identifiers_mirrored_from: Vec::with_capacity(MAX_TRANSITIONS),
             active_path: Vec::with_capacity(MAX_TRANSITIONS),
             path_from: Vec::with_capacity(MAX_TRANSITIONS),
         }
@@ -278,15 +274,9 @@ impl WeaveWrapper {
         if transition.2.is_multiple_of(4) {
             self.weave
                 .get_ordered_node_identifiers(&mut self.ordered_node_identifiers);
-            self.weave
-                .get_ordered_node_identifiers_mirrored(&mut self.ordered_node_identifiers_mirrored);
             self.weave.get_ordered_node_identifiers_from(
                 &target,
                 &mut self.ordered_node_identifiers_from,
-            );
-            self.weave.get_ordered_node_identifiers_mirrored_from(
-                &target,
-                &mut self.ordered_node_identifiers_mirrored_from,
             );
             self.weave.get_active_path(&mut self.active_path);
             self.weave.get_path_from(&target, &mut self.path_from);

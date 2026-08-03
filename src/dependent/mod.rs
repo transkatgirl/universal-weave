@@ -40,7 +40,7 @@ use crate::contract::{lacks_duplicates, valid_path, valid_topological_sort};
 #[cfg(feature = "rkyv")]
 use crate::{
     ImmutableActiveSingularWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave,
-    ImmutableSortableWeave, ImmutableWeave,
+    ImmutableWeave,
 };
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
@@ -799,39 +799,6 @@ where
     S: BuildHasher + Default + Clone,
 {
     #[cfg_attr(debug_assertions, contract(
-        ensures(output.len() == self.nodes.len()),
-        ensures(valid_topological_sort(&self.nodes, output)),
-        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
-        ensures(old(self.roots.clone()) == self.roots),
-        ensures(old(self.active) == self.active),
-        ensures(old(self.bookmarked.clone()) == self.bookmarked),
-        invariant(self.validate())
-    ))]
-    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>) {
-        output.clear();
-
-        for root in &self.roots {
-            topological_sort_mirrored(&self.nodes, *root, &mut self.scratchpad, output);
-        }
-    }
-    #[cfg_attr(debug_assertions, contract(
-        ensures(lacks_duplicates(output)),
-        ensures(!self.nodes.contains_key(id) || output.first() == Some(id)),
-        ensures(self.nodes.contains_key(id) || output.is_empty()),
-        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
-        ensures(old(self.roots.clone()) == self.roots),
-        ensures(old(self.active) == self.active),
-        ensures(old(self.bookmarked.clone()) == self.bookmarked),
-        invariant(self.validate())
-    ))]
-    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>) {
-        output.clear();
-
-        if self.nodes.contains_key(id) {
-            topological_sort_mirrored(&self.nodes, *id, &mut self.scratchpad, output);
-        }
-    }
-    #[cfg_attr(debug_assertions, contract(
         ensures(ret == self.nodes.contains_key(id)),
         ensures(old(self.nodes.get(id).map(|n| n.to.clone())) == self.nodes.get(id).map(|n| n.to.clone())),
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
@@ -1357,39 +1324,6 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-impl<K, T, M, S> ImmutableSortableWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
-    for ArchivedDependentWeave<K, T, M, S>
-where
-    K: Archive + Hash + Copy + Eq + Ord,
-    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive,
-    M: Archive,
-    S: BuildHasher + Default + Clone,
-{
-    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K::Archived>) {
-        output.clear();
-        let mut scratchpad = Vec::with_capacity(self.len());
-
-        for root in self.roots().iter() {
-            archived_topological_sort_mirrored(&self.nodes, *root, &mut scratchpad, output);
-        }
-    }
-    fn get_ordered_node_identifiers_mirrored_from(
-        &self,
-        id: &K::Archived,
-        output: &mut Vec<K::Archived>,
-    ) {
-        output.clear();
-
-        if self.nodes.contains_key(id) {
-            let mut scratchpad = Vec::with_capacity(self.len());
-
-            archived_topological_sort_mirrored(&self.nodes, *id, &mut scratchpad, output);
-        }
-    }
-}
-
-#[cfg(feature = "rkyv")]
 impl<K, T, M, S>
     ImmutableActiveSingularWeave<K::Archived, ArchivedDependentNode<K, T, S>, T::Archived>
     for ArchivedDependentWeave<K, T, M, S>
@@ -1442,25 +1376,6 @@ fn topological_sort<K, N, T, S>(
         scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
     }
 }
-
-fn topological_sort_mirrored<K, N, T, S>(
-    nodes: &HashMap<K, N, S>,
-    id: K,
-    scratchpad: &mut Vec<K>,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T, From = Option<K>, To = IndexSet<K, S>>,
-    S: BuildHasher + Default + Clone,
-{
-    scratchpad.push(id);
-
-    while let Some(id) = scratchpad.pop() {
-        identifiers.push(id);
-        scratchpad.extend(nodes[&id].to().into_iter().copied());
-    }
-}
-
 fn detect_cycles<K, N, T, S>(
     nodes: &HashMap<K, N, S>,
     roots: impl Iterator<Item = K>,
@@ -1521,24 +1436,6 @@ fn archived_topological_sort<K, N, T>(
         scratchpad_2.extend(nodes[&id].to().iter().copied());
         scratchpad_2.reverse();
         scratchpad.append(scratchpad_2);
-    }
-}
-
-#[cfg(feature = "rkyv")]
-fn archived_topological_sort_mirrored<K, N, T>(
-    nodes: &ArchivedHashMap<K, N>,
-    id: K,
-    scratchpad: &mut Vec<K>,
-    identifiers: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T, From = ArchivedOption<K>, To = ArchivedIndexSet<K>>,
-{
-    scratchpad.push(id);
-
-    while let Some(id) = scratchpad.pop() {
-        identifiers.push(id);
-        scratchpad.extend(nodes[&id].to().iter().copied());
     }
 }
 

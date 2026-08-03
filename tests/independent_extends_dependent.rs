@@ -124,15 +124,11 @@ struct WeaveWrapper {
     i_weave: IndependentWeave<u32, WeaveContent, u32, RandomState>,
     counter: u32,
     d_ordered_node_identifiers: Vec<u32>,
-    d_ordered_node_identifiers_mirrored: Vec<u32>,
     d_ordered_node_identifiers_from: Vec<u32>,
-    d_ordered_node_identifiers_mirrored_from: Vec<u32>,
     d_active_path: Vec<u32>,
     d_path_from: Vec<u32>,
     i_ordered_node_identifiers: Vec<u32>,
-    i_ordered_node_identifiers_mirrored: Vec<u32>,
     i_ordered_node_identifiers_from: Vec<u32>,
-    i_ordered_node_identifiers_mirrored_from: Vec<u32>,
     i_active_path: Vec<u32>,
     i_path_from: Vec<u32>,
 }
@@ -190,15 +186,11 @@ impl StateMachineTest for WeaveWrapper {
             i_weave: IndependentWeave::with_capacity(ref_state.len(), ref_state.len() as u32),
             counter: 0,
             d_ordered_node_identifiers: Vec::with_capacity(ref_state.len()),
-            d_ordered_node_identifiers_mirrored: Vec::with_capacity(ref_state.len()),
             d_ordered_node_identifiers_from: Vec::with_capacity(ref_state.len()),
-            d_ordered_node_identifiers_mirrored_from: Vec::with_capacity(ref_state.len()),
             d_active_path: Vec::with_capacity(ref_state.len()),
             d_path_from: Vec::with_capacity(ref_state.len()),
             i_ordered_node_identifiers: Vec::with_capacity(ref_state.len()),
-            i_ordered_node_identifiers_mirrored: Vec::with_capacity(ref_state.len()),
             i_ordered_node_identifiers_from: Vec::with_capacity(ref_state.len()),
-            i_ordered_node_identifiers_mirrored_from: Vec::with_capacity(ref_state.len()),
             i_active_path: Vec::with_capacity(ref_state.len()),
             i_path_from: Vec::with_capacity(ref_state.len()),
         }
@@ -402,12 +394,6 @@ impl StateMachineTest for WeaveWrapper {
             state
                 .i_weave
                 .get_ordered_node_identifiers(&mut state.i_ordered_node_identifiers);
-            state.d_weave.get_ordered_node_identifiers_mirrored(
-                &mut state.d_ordered_node_identifiers_mirrored,
-            );
-            state.i_weave.get_ordered_node_identifiers_mirrored(
-                &mut state.i_ordered_node_identifiers_mirrored,
-            );
             state.d_weave.get_ordered_node_identifiers_from(
                 &target,
                 &mut state.d_ordered_node_identifiers_from,
@@ -415,14 +401,6 @@ impl StateMachineTest for WeaveWrapper {
             state.i_weave.get_ordered_node_identifiers_from(
                 &target,
                 &mut state.i_ordered_node_identifiers_from,
-            );
-            state.d_weave.get_ordered_node_identifiers_mirrored_from(
-                &target,
-                &mut state.d_ordered_node_identifiers_mirrored_from,
-            );
-            state.i_weave.get_ordered_node_identifiers_mirrored_from(
-                &target,
-                &mut state.i_ordered_node_identifiers_mirrored_from,
             );
             state.d_weave.get_active_path(&mut state.d_active_path);
             state.i_weave.get_active_path(&mut state.i_active_path);
@@ -436,14 +414,6 @@ impl StateMachineTest for WeaveWrapper {
             assert_eq!(
                 state.d_ordered_node_identifiers_from,
                 state.i_ordered_node_identifiers_from
-            );
-            assert_eq!(
-                state.d_ordered_node_identifiers_mirrored,
-                state.i_ordered_node_identifiers_mirrored
-            );
-            assert_eq!(
-                state.d_ordered_node_identifiers_mirrored_from,
-                state.i_ordered_node_identifiers_mirrored_from
             );
             assert_eq!(state.d_active_path, state.i_active_path);
             assert_eq!(state.d_path_from, state.i_path_from);

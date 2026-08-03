@@ -271,14 +271,6 @@ where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
-    /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    ///
-    /// Unlike [`Weave::get_ordered_node_identifiers`], this function reverses the ordering of node children.
-    fn get_ordered_node_identifiers_mirrored(&mut self, output: &mut Vec<K>);
-    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
-    ///
-    /// Unlike [`Weave::get_ordered_node_identifiers_from`], this function reverses the ordering of node children.
-    fn get_ordered_node_identifiers_mirrored_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
     ///
     /// # Panics
@@ -491,22 +483,6 @@ where
     fn contains_bookmark(&self, id: &K) -> bool;
 }
 
-/// An [`ImmutableWeave`] where the ordering of nodes is stable and can be user-defined.
-pub trait ImmutableSortableWeave<K, N, T>: ImmutableWeave<K, N, T>
-where
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
-{
-    /// Builds a list of all node identifiers ordered by their positions in the Weave.
-    ///
-    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers`], this function reverses the ordering of node children.
-    fn get_ordered_node_identifiers_mirrored(&self, output: &mut Vec<K>);
-    /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
-    ///
-    /// Unlike [`ImmutableWeave::get_ordered_node_identifiers_from`], this function reverses the ordering of node children.
-    fn get_ordered_node_identifiers_mirrored_from(&self, id: &K, output: &mut Vec<K>);
-}
-
 /// An [`ImmutableWeave`] where only one [`Node`] can be considered active at a time.
 pub trait ImmutableActiveSingularWeave<K, N, T>: ImmutableWeave<K, N, T>
 where
@@ -628,103 +604,6 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
                     .filter(|&parent| filter(parent))
                     .count()
             });
-            *remaining = remaining.strict_sub(1);
-
-            scratchpad.push(child);
-        }
-    }
-}
-
-fn topological_sort_subgraph_mirrored<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    filter: &impl Fn(&K) -> bool,
-    id: &'a K,
-    scratchpad: &mut Vec<K>,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
-    identifier_map: &mut HashMap<K, usize, S>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    scratchpad.push(*id);
-
-    while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if !filter(&id)
-            || identifier_set.contains(&id)
-            || identifier_map.get(&id).copied().unwrap_or_else(|| {
-                node.from()
-                    .into_iter()
-                    .filter(|&parent| filter(parent))
-                    .count()
-            }) != 0
-        {
-            continue;
-        }
-
-        identifiers.push(id);
-        identifier_set.insert(id);
-
-        for child in node.to().into_iter().copied() {
-            let remaining = identifier_map.entry(child).or_insert_with(|| {
-                nodes[&child]
-                    .from()
-                    .into_iter()
-                    .filter(|&parent| filter(parent))
-                    .count()
-            });
-            *remaining = remaining.strict_sub(1);
-
-            scratchpad.push(child);
-        }
-    }
-}
-
-fn topological_sort_mirrored<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: &'a K,
-    scratchpad: &mut Vec<K>,
-    identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
-    identifier_map: &mut HashMap<K, usize, S>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    scratchpad.push(*id);
-
-    while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if identifier_set.contains(&id)
-            || identifier_map
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| node.from().into_iter().len())
-                != 0
-        {
-            continue;
-        }
-
-        identifiers.push(id);
-        identifier_set.insert(id);
-
-        for child in node.to().into_iter().copied() {
-            let remaining = identifier_map
-                .entry(child)
-                .or_insert_with(|| nodes[&child].from().into_iter().len());
             *remaining = remaining.strict_sub(1);
 
             scratchpad.push(child);
