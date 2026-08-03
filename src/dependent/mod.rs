@@ -1,6 +1,6 @@
 //! [`DependentWeave`] is a tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
@@ -29,9 +29,9 @@ use serde::{
 };
 
 use crate::{
-    ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    ActiveSingularWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    IndependentContents, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave,
+    SortableWeave, Weave,
 };
 
 #[cfg(debug_assertions)]
@@ -353,20 +353,6 @@ where
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad.shrink_to(min_capacity);
-    }
-    fn siblings<'a>(
-        &'a self,
-        node: &'a DependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = K> + 'a> {
-        match &node.from {
-            Some(parent) => Box::new(
-                self.nodes
-                    .get(parent)
-                    .into_iter()
-                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id)),
-            ),
-            None => Box::new(self.roots.iter().copied().filter(|id| *id != node.id)),
-        }
     }
 }
 
@@ -1055,27 +1041,6 @@ where
         self.nodes
             .get_mut(id)
             .map(|node| callback(&mut node.contents))
-    }
-}
-
-impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
-where
-    K: Hash + Copy + Eq + Ord,
-    T: DeduplicatableContents,
-    S: BuildHasher + Default + Clone,
-{
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.nodes.get(id).into_iter().flat_map(|node| {
-            self.siblings(node)
-                .filter_map(|id| self.nodes.get(&id))
-                .filter_map(|sibling| {
-                    if node.contents.is_duplicate_of(&sibling.contents) {
-                        Some(sibling.id)
-                    } else {
-                        None
-                    }
-                })
-        })
     }
 }
 

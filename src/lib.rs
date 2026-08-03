@@ -398,20 +398,6 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
-/// A [`Weave`] where [`Node`] objects can be meaningfully deduplicated by their contents.
-pub trait DeduplicatableWeave<K, N, T>: Weave<K, N, T>
-where
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
-    T: DeduplicatableContents,
-{
-    /// An iterator over the specified node's sibling identifiers which contain contents which are duplicates of the specified node's contents.
-    ///
-    /// Siblings which are also parents/children of the specified node are excluded.
-    #[must_use]
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K>;
-}
-
 /// A read-only [`Weave`].
 #[must_use]
 pub trait ImmutableWeave<K, N, T>

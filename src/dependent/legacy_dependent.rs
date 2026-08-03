@@ -1,6 +1,6 @@
 //! A legacy version of `DependentWeave` used by `tapestry-weave`'s v0 format; Please don't use this!
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
@@ -26,9 +26,9 @@ use serde::{
 };
 
 use crate::{
-    ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Step, Weave,
+    ActiveSingularWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    IndependentContents, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
+    SortableWeave, Step, Weave,
     dependent::{
         DependentNode, DependentWeave as NewDependentWeave, detect_cycles, path_to_root,
         topological_sort,
@@ -260,28 +260,6 @@ where
         self.bookmarked.shrink_to(min_capacity);
         self.thread.shrink_to(min_capacity);
         self.scratchpad_step_stack.shrink_to(min_capacity);
-    }
-    fn siblings<'a>(
-        &'a self,
-        node: &'a DependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = &'a DependentNode<K, T, S>> + 'a> {
-        match &node.from {
-            Some(parent) => Box::new(self.nodes.get(parent).into_iter().flat_map(|parent| {
-                parent
-                    .to
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id)
-                    .filter_map(|id| self.nodes.get(&id))
-            })),
-            None => Box::new(
-                self.roots
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id)
-                    .filter_map(|id| self.nodes.get(&id)),
-            ),
-        }
     }
 }
 
@@ -782,25 +760,6 @@ where
         self.nodes
             .get_mut(id)
             .map(|node| callback(&mut node.contents))
-    }
-}
-
-impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T> for DependentWeave<K, T, M, S>
-where
-    K: Hash + Copy + Eq + Ord,
-    T: DeduplicatableContents,
-    S: BuildHasher + Default + Clone,
-{
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.nodes.get(id).into_iter().flat_map(|node| {
-            self.siblings(node).filter_map(|sibling| {
-                if node.contents.is_duplicate_of(&sibling.contents) {
-                    Some(sibling.id)
-                } else {
-                    None
-                }
-            })
-        })
     }
 }
 

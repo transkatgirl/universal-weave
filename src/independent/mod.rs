@@ -1,6 +1,6 @@
 //! [`IndependentWeave`] is a DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 
-use alloc::{boxed::Box, collections::vec_deque::VecDeque, vec::Vec};
+use alloc::{collections::vec_deque::VecDeque, vec::Vec};
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
@@ -35,9 +35,9 @@ use serde::{
 };
 
 use crate::{
-    ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
-    DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
+    ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    IndependentContents, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave,
+    SortableWeave, Weave, ancestor_subgraph,
     contract::active_path_is_valid,
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_candidate_path_to_root, shortest_path_to_ancestor,
@@ -537,29 +537,6 @@ where
         self.scratchpad_map_3.shrink_to(min_capacity);
         self.scratchpad_stack.shrink_to(min_capacity);
         self.scratchpad_queue.shrink_to(min_capacity);
-    }
-    fn sibling_ids_from_all_parents_including_roots<'a>(
-        &'a self,
-        node: &'a IndependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = K> + 'a> {
-        if node.from.is_empty() {
-            Box::new(self.roots.iter().copied().filter(|id| *id != node.id))
-        } else {
-            Box::new(
-                node.from
-                    .iter()
-                    .filter_map(|id| self.nodes.get(id))
-                    .flat_map(|parent| {
-                        {
-                            parent.to.iter().copied().filter(|id| {
-                                *id != node.id && !node.from.contains(id) && !node.to.contains(id)
-                            })
-                        }
-                    })
-                    .collect::<IndexSet<K, S>>()
-                    .into_iter(),
-            )
-        }
     }
     #[allow(
         clippy::too_many_lines,
@@ -1879,28 +1856,6 @@ where
         self.nodes
             .get_mut(id)
             .map(|node| callback(&mut node.contents))
-    }
-}
-
-impl<K, T, M, S> DeduplicatableWeave<K, IndependentNode<K, T, S>, T>
-    for IndependentWeave<K, T, M, S>
-where
-    K: Hash + Copy + Eq + Ord,
-    T: IndependentContents + DeduplicatableContents,
-    S: BuildHasher + Default + Clone,
-{
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.nodes.get(id).into_iter().flat_map(|node| {
-            self.sibling_ids_from_all_parents_including_roots(node)
-                .filter_map(|id| self.nodes.get(&id))
-                .filter_map(|sibling| {
-                    if node.contents.is_duplicate_of(&sibling.contents) {
-                        Some(sibling.id)
-                    } else {
-                        None
-                    }
-                })
-        })
     }
 }
 

@@ -18,10 +18,9 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
-    DeduplicatableWeave, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
-    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
-    dependent, independent,
+    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DiscreteContents, DiscreteWeave,
+    IndependentContents, IndependentWeave, MetadataWeave, Node, SemiIndependentWeave,
+    SortableBookmarkableWeave, SortableWeave, Weave, dependent, independent,
 };
 
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
@@ -1043,19 +1042,6 @@ where
     }
 }
 
-impl<W, K, N, T, M> DeduplicatableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
-where
-    W: DeduplicatableWeave<K, N, T>,
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
-    T: DeduplicatableContents,
-{
-    #[inline]
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.weave.find_duplicates(id)
-    }
-}
-
 impl<W, K, N, T> Weave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
@@ -1353,18 +1339,5 @@ where
             }
             None => None,
         }
-    }
-}
-
-impl<W, K, N, T> DeduplicatableWeave<K, N, T> for CountedWeave<W, K, N, T>
-where
-    W: DeduplicatableWeave<K, N, T>,
-    K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
-    T: DeduplicatableContents,
-{
-    #[inline]
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.weave.find_duplicates(id)
     }
 }

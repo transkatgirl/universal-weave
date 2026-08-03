@@ -25,9 +25,8 @@ use rkyv::{
 };
 
 use crate::{
-    ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
-    IndependentContents, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, Weave,
+    ActiveSingularWeave, BookmarkableWeave, IndependentContents, MetadataWeave,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
 };
 
@@ -1339,32 +1338,5 @@ where
 
             output
         })
-    }
-}
-
-impl<K, T, M, S> DeduplicatableWeave<K, DependentNode<K, T, S>, T>
-    for DependentLoroWeave<K, T, M, S>
-where
-    for<'a> K: Archive
-        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
-        + Hash
-        + Copy
-        + Eq
-        + Ord,
-    for<'a> K::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<K, Strategy<Pool, rancor::Error>>,
-    for<'a> T: Archive
-        + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>
-        + DeduplicatableContents,
-    for<'a> T::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<T, Strategy<Pool, rancor::Error>>,
-    for<'a> M: Archive + Serialize<HighSerializer<AlignedVec, ArenaHandle<'a>, rancor::Error>>,
-    for<'a> M::Archived: CheckBytes<HighValidator<'a, rancor::Error>>
-        + Deserialize<M, Strategy<Pool, rancor::Error>>,
-    S: BuildHasher + Default + Clone,
-{
-    #[inline]
-    fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
-        self.weave.find_duplicates(id)
     }
 }

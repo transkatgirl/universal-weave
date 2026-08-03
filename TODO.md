@@ -41,8 +41,7 @@
 
 ## Features
 
-- [ ] Weave Deduplication wrapper
-    - [ ] Remove DeduplicatableWeave trait
+- [ ] Weave deduplication wrapper
 - [ ] Additional Weave traversal methods
     - [ ] Node siblings
     - [ ] Node siblings or roots
