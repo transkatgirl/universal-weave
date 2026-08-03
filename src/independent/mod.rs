@@ -37,7 +37,7 @@ use serde::{
 use crate::{
     ActivePathWeave, BookmarkableWeave, DeduplicatableContents, DeduplicatableWeave,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, MetadataWeave,
-    Node, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
+    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
     contract::active_path_is_valid,
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, detect_cycles, longest_candidate_path_to_root, shortest_path_to_ancestor,
@@ -1851,7 +1851,7 @@ where
     }
 }
 
-impl<K, T, M, S> crate::SemiIndependentWeave<K, IndependentNode<K, T, S>, T>
+impl<K, T, M, S> SemiIndependentWeave<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,

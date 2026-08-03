@@ -357,23 +357,15 @@ where
     fn siblings<'a>(
         &'a self,
         node: &'a DependentNode<K, T, S>,
-    ) -> Box<dyn Iterator<Item = &'a DependentNode<K, T, S>> + 'a> {
+    ) -> Box<dyn Iterator<Item = K> + 'a> {
         match &node.from {
-            Some(parent) => Box::new(self.nodes.get(parent).into_iter().flat_map(|parent| {
-                parent
-                    .to
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id)
-                    .filter_map(|id| self.nodes.get(&id))
-            })),
-            None => Box::new(
-                self.roots
-                    .iter()
-                    .copied()
-                    .filter(|id| *id != node.id)
-                    .filter_map(|id| self.nodes.get(&id)),
+            Some(parent) => Box::new(
+                self.nodes
+                    .get(parent)
+                    .into_iter()
+                    .flat_map(|parent| parent.to.iter().copied().filter(|id| *id != node.id)),
             ),
+            None => Box::new(self.roots.iter().copied().filter(|id| *id != node.id)),
         }
     }
 }
@@ -1066,13 +1058,15 @@ where
 {
     fn find_duplicates(&self, id: &K) -> impl Iterator<Item = K> {
         self.nodes.get(id).into_iter().flat_map(|node| {
-            self.siblings(node).filter_map(|sibling| {
-                if node.contents.is_duplicate_of(&sibling.contents) {
-                    Some(sibling.id)
-                } else {
-                    None
-                }
-            })
+            self.siblings(node)
+                .filter_map(|id| self.nodes.get(&id))
+                .filter_map(|sibling| {
+                    if node.contents.is_duplicate_of(&sibling.contents) {
+                        Some(sibling.id)
+                    } else {
+                        None
+                    }
+                })
         })
     }
 }
