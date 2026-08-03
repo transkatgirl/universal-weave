@@ -2238,72 +2238,76 @@ where
     }
     fn get_path_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
-        if !self.nodes.contains_key(id) {
-            return;
-        }
 
-        let mut scratchpad_list = Vec::with_capacity(self.len());
-        let mut scratchpad_list_2 = Vec::with_capacity(self.len());
-        let mut scratchpad_stack = Vec::with_capacity(self.len());
-        let mut scratchpad_queue = VecDeque::with_capacity(self.len());
-        let mut scratchpad_set = HashSet::with_capacity(self.len());
-        let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
-        let mut scratchpad_map = HashMap::with_capacity(self.len());
-        let mut scratchpad_map_2 = HashMap::with_capacity(self.len());
+        if self.nodes.contains_key(id) {
+            let mut scratchpad_list = Vec::with_capacity(self.len());
+            let mut scratchpad_list_2 = Vec::with_capacity(self.len());
+            let mut scratchpad_stack = Vec::with_capacity(self.len());
+            let mut scratchpad_queue = VecDeque::with_capacity(self.len());
+            let mut scratchpad_set = HashSet::with_capacity(self.len());
+            let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
+            let mut scratchpad_map = HashMap::with_capacity(self.len());
+            let mut scratchpad_map_2 = HashMap::with_capacity(self.len());
 
-        archived_ancestor_subgraph(&self.nodes, *id, &mut scratchpad_stack, &mut scratchpad_set);
-
-        for root in self.roots.iter() {
-            archived_topological_sort_subgraph(
+            archived_ancestor_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id),
-                root,
+                *id,
                 &mut scratchpad_stack,
-                &mut scratchpad_list_2,
-                &mut scratchpad_list,
-                &mut scratchpad_set_2,
+                &mut scratchpad_set,
+            );
+
+            for root in self.roots.iter() {
+                archived_topological_sort_subgraph(
+                    &self.nodes,
+                    &|id| self.active.contains(id),
+                    root,
+                    &mut scratchpad_stack,
+                    &mut scratchpad_list_2,
+                    &mut scratchpad_list,
+                    &mut scratchpad_set_2,
+                    &mut scratchpad_map,
+                );
+            }
+
+            scratchpad_map.clear();
+
+            archived_longest_candidate_path_to_root(
+                &self.nodes,
+                &scratchpad_list,
+                &|id| self.active.contains(id) && scratchpad_set.contains(id),
                 &mut scratchpad_map,
-            );
-        }
-
-        scratchpad_map.clear();
-
-        archived_longest_candidate_path_to_root(
-            &self.nodes,
-            &scratchpad_list,
-            &|id| self.active.contains(id) && scratchpad_set.contains(id),
-            &mut scratchpad_map,
-            &mut scratchpad_list_2,
-        );
-
-        scratchpad_set_2.clear();
-
-        if let Some(target) = scratchpad_list_2.first().copied() {
-            archived_shortest_path_to_ancestor(
-                &self.nodes,
-                id,
-                &|node| node.id == target,
-                &mut scratchpad_queue,
-                &mut scratchpad_map_2,
-                &mut scratchpad_set_2,
-                output,
+                &mut scratchpad_list_2,
             );
 
-            output.reverse();
-            output.pop();
-            output.append(&mut scratchpad_list_2);
-        } else {
-            archived_shortest_path_to_ancestor(
-                &self.nodes,
-                id,
-                &|node| node.from.is_empty(),
-                &mut scratchpad_queue,
-                &mut scratchpad_map_2,
-                &mut scratchpad_set_2,
-                output,
-            );
+            scratchpad_set_2.clear();
 
-            output.reverse();
+            if let Some(target) = scratchpad_list_2.first().copied() {
+                archived_shortest_path_to_ancestor(
+                    &self.nodes,
+                    id,
+                    &|node| node.id == target,
+                    &mut scratchpad_queue,
+                    &mut scratchpad_map_2,
+                    &mut scratchpad_set_2,
+                    output,
+                );
+
+                output.reverse();
+                output.pop();
+                output.append(&mut scratchpad_list_2);
+            } else {
+                archived_shortest_path_to_ancestor(
+                    &self.nodes,
+                    id,
+                    &|node| node.from.is_empty(),
+                    &mut scratchpad_queue,
+                    &mut scratchpad_map_2,
+                    &mut scratchpad_set_2,
+                    output,
+                );
+
+                output.reverse();
+            }
         }
     }
 }

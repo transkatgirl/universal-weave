@@ -1118,7 +1118,7 @@ where
         self.active
     }
     #[inline]
-    fn contents(&self) -> &<T as Archive>::Archived {
+    fn contents(&self) -> &T::Archived {
         &self.contents
     }
 }
