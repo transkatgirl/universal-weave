@@ -41,6 +41,7 @@
 
 ## Features
 
+- [ ] Cleanup API methods to remove _node from name
 - [ ] Weave deduplication wrapper
 - [ ] Additional Weave traversal methods
     - [ ] Node siblings
