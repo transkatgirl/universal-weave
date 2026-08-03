@@ -42,8 +42,6 @@
 
 ## Features
 
-- [ ] ID reassignment module
-- [ ] Rkyv convenience wrappers
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
     - [ ] Implement graphing using [dagre](https://crates.io/crates/dagre) or by building our own fork to improve efficiency and add functionality?
 
