@@ -540,19 +540,36 @@ where
         ensures(self.validate())
     ))]
     fn update_node_activity_in_place(&mut self, id: &K, value: bool) -> bool {
-        if let Some(node) = self.nodes.get_mut(id) {
+        let at_end = if let Some(node) = self.nodes.get(id) {
             if node.active == value {
                 return true;
             }
 
-            node.active = value;
             if value {
-                self.active.insert(node.id);
+                node.from.iter().any(|parent| {
+                    self.active.contains(parent)
+                        && self.nodes[parent]
+                            .to
+                            .iter()
+                            .all(|child| !self.active.contains(child))
+                })
             } else {
-                self.active.remove(id);
+                node.to.iter().all(|child| !self.active.contains(child))
             }
         } else {
             return false;
+        };
+
+        let node = self.nodes.get_mut(id).unwrap();
+        node.active = value;
+        if value {
+            self.active.insert(node.id);
+        } else {
+            self.active.remove(id);
+        }
+
+        if at_end {
+            return true;
         }
 
         if value {
@@ -733,6 +750,20 @@ where
         if value {
             if let Some(node) = self.nodes.get(id) {
                 if node.active && !node.to.iter().any(|id| self.active.contains(id)) {
+                    return true;
+                }
+
+                if !node.active
+                    && node.from.iter().any(|parent| {
+                        self.active.contains(parent)
+                            && self.nodes[parent]
+                                .to
+                                .iter()
+                                .all(|child| !self.active.contains(child))
+                    })
+                {
+                    self.nodes.get_mut(id).unwrap().active = true;
+                    self.active.insert(*id);
                     return true;
                 }
             } else {
