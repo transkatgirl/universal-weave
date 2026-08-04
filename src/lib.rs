@@ -203,6 +203,8 @@ where
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_identifiers(&mut self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    ///
+    /// The returned list starts with the identifier of the specified node.
     fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
     ///
@@ -418,6 +420,8 @@ where
 {
     /// Splits a node with the specified identifier at the given index, creating a new child node with the identifier `new_id`.
     ///
+    /// If the target node is at the end of the active path, the right side of the split will be inactive.
+    ///
     /// Returns `false` if splitting the node failed.
     ///
     /// # Panics
@@ -481,6 +485,8 @@ where
     /// Builds a list of all node identifiers ordered by their positions in the Weave.
     fn get_ordered_identifiers(&self, output: &mut Vec<K>);
     /// Recursively builds a list of all children of the specified node ordered by their positions in the Weave.
+    ///
+    /// The returned list starts with the identifier of the specified node.
     fn get_ordered_identifiers_from(&self, id: &K, output: &mut Vec<K>);
     /// Builds a path through the Weave starting at the deepest active node and ending at a root node.
     ///
