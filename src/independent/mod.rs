@@ -1722,15 +1722,13 @@ where
 
                     for child in &node.to {
                         let child = self.nodes.get_mut(child).unwrap();
+                        let index = child.from.get_index_of(&left_node.id).unwrap();
 
-                        if let Some(index) = child.from.get_index_of(&left_node.id) {
-                            assert!(
-                                child.from.replace_index(index, node.id).is_ok(),
-                                "Should be unreachable"
-                            );
-                        } else {
-                            child.from.insert(node.id);
-                        }
+                        assert!(
+                            child.from.replace_index(index, node.id).is_ok(),
+                            "Should be unreachable"
+                        );
+
                         if child.active && left_node.active {
                             node.active = true;
                             self.active.insert(node.id);
@@ -1796,15 +1794,12 @@ where
 
                         for child in &parent.to {
                             let child = self.nodes.get_mut(child).unwrap();
+                            let index = child.from.get_index_of(&node.id).unwrap();
 
-                            if let Some(index) = child.from.get_index_of(&node.id) {
-                                assert!(
-                                    child.from.replace_index(index, parent.id).is_ok(),
-                                    "Should be unreachable"
-                                );
-                            } else {
-                                child.from.insert(parent.id);
-                            }
+                            assert!(
+                                child.from.replace_index(index, parent.id).is_ok(),
+                                "Should be unreachable"
+                            );
                         }
 
                         let parent_id = parent.id;
