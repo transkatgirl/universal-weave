@@ -6,10 +6,9 @@
     - [ ] **DependentWeave unit tests**
     - [ ] **IndependentWeave unit tests**
     - [ ] DeduplicatedWeave unit tests
-- [ ] Review function contracts to ensure consistency with documentation & reasonable behavior
+- [ ] **Turn function contracts into readable & executable documentation**
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
-- [ ] **Turn function contracts into readable & executable documentation**
 - [ ] Improve documentation
     - [ ] Trait documentation improvements
     - [ ] DependentWeave-specific documentation
