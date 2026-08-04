@@ -378,7 +378,7 @@ where
     }
     /// Update the weave's state by modifying the inner [`LoroDoc`].
     ///
-    /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is farly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
+    /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is fairly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
     /// # Errors
     ///
