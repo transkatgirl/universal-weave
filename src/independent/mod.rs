@@ -546,13 +546,14 @@ where
             }
 
             if value {
-                node.from.iter().any(|parent| {
-                    self.active.contains(parent)
-                        && self.nodes[parent]
-                            .to
-                            .iter()
-                            .all(|child| !self.active.contains(child))
-                })
+                (node.from.is_empty() && self.active.is_empty())
+                    || node.from.iter().any(|parent| {
+                        self.active.contains(parent)
+                            && self.nodes[parent]
+                                .to
+                                .iter()
+                                .all(|child| !self.active.contains(child))
+                    })
             } else {
                 node.to.iter().all(|child| !self.active.contains(child))
             }
@@ -754,13 +755,14 @@ where
                 }
 
                 if !node.active
-                    && node.from.iter().any(|parent| {
-                        self.active.contains(parent)
-                            && self.nodes[parent]
-                                .to
-                                .iter()
-                                .all(|child| !self.active.contains(child))
-                    })
+                    && ((node.from.is_empty() && self.active.is_empty())
+                        || node.from.iter().any(|parent| {
+                            self.active.contains(parent)
+                                && self.nodes[parent]
+                                    .to
+                                    .iter()
+                                    .all(|child| !self.active.contains(child))
+                        }))
                 {
                     self.nodes.get_mut(id).unwrap().active = true;
                     self.active.insert(*id);
