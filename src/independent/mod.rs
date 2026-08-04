@@ -1156,7 +1156,6 @@ where
         self.scratchpad_set.clear();
         self.scratchpad_set_2.clear();
         self.scratchpad_map.clear();
-        self.scratchpad_map_2.clear();
 
         if let Some(target) = self.scratchpad_list_2.first().copied() {
             shortest_path_to_ancestor(
@@ -1330,7 +1329,7 @@ where
 
         while let Some(id) = self.scratchpad_stack.pop() {
             if let Some(node) = self.nodes.remove(&id) {
-                if node.from.is_empty() {
+                if removed_node.is_none() && node.from.is_empty() {
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
@@ -1389,16 +1388,22 @@ where
         id: &K,
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
     ) -> bool {
-        let had_node = self.nodes.contains_key(id);
+        let had_node = match self.nodes.get(id) {
+            Some(node) => {
+                if node.from.is_empty() {
+                    self.roots.shift_remove(id);
+                }
+
+                true
+            }
+            None => false,
+        };
         let mut removed_active = false;
 
         self.scratchpad_stack.push(*id);
 
         while let Some(id) = self.scratchpad_stack.pop() {
             if let Some(node) = self.nodes.remove(&id) {
-                if node.from.is_empty() {
-                    self.roots.shift_remove(&id);
-                }
                 if node.bookmarked {
                     self.bookmarked.shift_remove(&id);
                 }
@@ -1948,12 +1953,6 @@ where
         }
 
         if let Some(node) = self.nodes.get_mut(id) {
-            for child in &node.to {
-                if new_parents.contains(child) {
-                    return false;
-                }
-            }
-
             let old_parents = mem::take(&mut node.from);
 
             for old_parent in &old_parents {
@@ -1985,7 +1984,7 @@ where
         }
 
         if node.active {
-            node.active = false;
+            node.active = false; // hack
             self.update_node_activity_in_place(id, true);
         }
 
