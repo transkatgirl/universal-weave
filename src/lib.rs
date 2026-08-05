@@ -1,11 +1,11 @@
 //! General-purpose building blocks for [Loom](https://generative.ink/posts/loom-interface-to-the-multiverse/) implementations.
 //!
 //! This library aims to make building Loom implementations easier by providing the following primitives:
-//! - [`dependent::DependentWeave`] - A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
-//!     - [`dependent::loro::DependentLoroWeave`] - A [`dependent::DependentWeave`] wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
-//! - [`independent::IndependentWeave`] - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//! - [`DependentWeave`](dependent::DependentWeave) - A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
+//!     - [`DependentLoroWeave`](dependent::loro::DependentLoroWeave) - A [`DependentWeave`](dependent::DependentWeave) wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
+//! - [`IndependentWeave`](independent::IndependentWeave) - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
-//! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`versioning::VersionedBytes`] (requires `rkyv` feature to be enabled).
+//! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 //!
 
 #![no_std]
