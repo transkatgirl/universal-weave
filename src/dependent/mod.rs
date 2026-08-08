@@ -41,7 +41,7 @@ use crate::contract::{lacks_duplicates, valid_path, valid_topological_sort};
 #[cfg(feature = "rkyv")]
 use crate::{
     ImmutableActiveSingularWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave,
-    ImmutableWeave,
+    ImmutableWeave, archived_set_reverse_order,
 };
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
@@ -1284,16 +1284,9 @@ where
         output.reserve(self.nodes.len());
 
         let mut scratchpad = Vec::with_capacity(self.len());
-        let mut scratchpad_2 = Vec::with_capacity(self.len());
 
         for root in self.roots.iter() {
-            archived_topological_sort(
-                &self.nodes,
-                *root,
-                &mut scratchpad,
-                &mut scratchpad_2,
-                output,
-            );
+            archived_topological_sort(&self.nodes, *root, &mut scratchpad, output);
         }
     }
     fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
@@ -1303,9 +1296,8 @@ where
             output.reserve(self.nodes.len());
 
             let mut scratchpad = Vec::with_capacity(self.len());
-            let mut scratchpad_2 = Vec::with_capacity(self.len());
 
-            archived_topological_sort(&self.nodes, *id, &mut scratchpad, &mut scratchpad_2, output);
+            archived_topological_sort(&self.nodes, *id, &mut scratchpad, output);
         }
     }
     fn get_active_path(&self, output: &mut Vec<K::Archived>) {
@@ -1464,7 +1456,6 @@ fn archived_topological_sort<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     id: K,
     scratchpad: &mut Vec<K>,
-    scratchpad_2: &mut Vec<K>,
     identifiers: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + Ord,
@@ -1474,9 +1465,7 @@ fn archived_topological_sort<K, N, T>(
 
     while let Some(id) = scratchpad.pop() {
         identifiers.push(id);
-        scratchpad_2.extend(nodes[&id].to().iter().copied());
-        scratchpad_2.reverse();
-        scratchpad.append(scratchpad_2);
+        scratchpad.extend(archived_set_reverse_order(nodes[&id].to()).copied());
     }
 }
 

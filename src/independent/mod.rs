@@ -50,7 +50,7 @@ use crate::contract::{lacks_duplicates, valid_path, valid_topological_sort};
 #[cfg(feature = "rkyv")]
 use crate::{
     ImmutableActivePathWeave, ImmutableBookmarkableWeave, ImmutableMetadataWeave, ImmutableWeave,
-    Step,
+    Step, archived_set_reverse_order,
 };
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
@@ -574,18 +574,14 @@ where
         }
 
         if value {
-            for root in &self.roots {
-                topological_sort(
-                    &self.nodes,
-                    root,
-                    &mut self.scratchpad_stack,
-                    &mut self.scratchpad_list, // topological order
-                    &mut self.scratchpad_set,
-                    &mut self.scratchpad_map,
-                );
-            }
+            topological_sort(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut self.scratchpad_stack,
+                &mut self.scratchpad_list, // topological order
+                &mut self.scratchpad_map,
+            );
 
-            self.scratchpad_set.clear();
             self.scratchpad_map.clear();
 
             for id in self.scratchpad_list.iter().copied() {
@@ -697,16 +693,13 @@ where
         ensures(self.validate())
     ))]
     fn fix_orphaned_activations(&mut self) {
-        for root in &self.roots {
-            topological_sort(
-                &self.nodes,
-                root,
-                &mut self.scratchpad_stack,
-                &mut self.scratchpad_list,
-                &mut self.scratchpad_set,
-                &mut self.scratchpad_map,
-            );
-        }
+        topological_sort(
+            &self.nodes,
+            self.roots.iter().copied(),
+            &mut self.scratchpad_stack,
+            &mut self.scratchpad_list,
+            &mut self.scratchpad_map,
+        );
 
         self.scratchpad_map.clear();
 
@@ -719,7 +712,6 @@ where
         );
 
         self.scratchpad_list.clear();
-        self.scratchpad_set.clear();
         self.scratchpad_map.clear();
 
         self.scratchpad_set.extend(self.scratchpad_list_2.drain(..));
@@ -772,18 +764,14 @@ where
                 return false;
             }
 
-            for root in &self.roots {
-                topological_sort(
-                    &self.nodes,
-                    root,
-                    &mut self.scratchpad_stack,
-                    &mut self.scratchpad_list, // topological order
-                    &mut self.scratchpad_set,
-                    &mut self.scratchpad_map,
-                );
-            }
+            topological_sort(
+                &self.nodes,
+                self.roots.iter().copied(),
+                &mut self.scratchpad_stack,
+                &mut self.scratchpad_list, // topological order
+                &mut self.scratchpad_map,
+            );
 
-            self.scratchpad_set.clear();
             self.scratchpad_map.clear();
 
             for id in self.scratchpad_list.drain(..) {
@@ -1022,18 +1010,13 @@ where
         output.clear();
         output.reserve(self.nodes.len());
 
-        for root in &self.roots {
-            topological_sort(
-                &self.nodes,
-                root,
-                &mut self.scratchpad_stack,
-                output,
-                &mut self.scratchpad_set,
-                &mut self.scratchpad_map,
-            );
-        }
-
-        self.scratchpad_set.clear();
+        topological_sort(
+            &self.nodes,
+            self.roots.iter().copied(),
+            &mut self.scratchpad_stack,
+            output,
+            &mut self.scratchpad_map,
+        );
         self.scratchpad_map.clear();
     }
     #[cfg_attr(debug_assertions, contract(
@@ -1062,15 +1045,13 @@ where
             topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.scratchpad_set.contains(id),
-                id,
+                *id,
                 &mut self.scratchpad_stack,
                 output,
-                &mut self.scratchpad_set_2,
                 &mut self.scratchpad_map,
             );
 
             self.scratchpad_set.clear();
-            self.scratchpad_set_2.clear();
             self.scratchpad_map.clear();
         }
     }
@@ -1088,19 +1069,22 @@ where
     fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
 
-        for root in &self.roots {
+        for root in self
+            .roots
+            .iter()
+            .filter(|id| self.active.contains(*id))
+            .copied()
+        {
             topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
                 root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
-                &mut self.scratchpad_set,
                 &mut self.scratchpad_map,
             );
         }
 
-        self.scratchpad_set.clear();
         self.scratchpad_map.clear();
 
         longest_candidate_path_to_root(
@@ -1138,14 +1122,18 @@ where
             &mut self.scratchpad_set,
         );
 
-        for root in &self.roots {
+        for root in self
+            .roots
+            .iter()
+            .filter(|id| self.active.contains(*id))
+            .copied()
+        {
             topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
                 root,
                 &mut self.scratchpad_stack,
                 &mut self.scratchpad_list,
-                &mut self.scratchpad_set_2,
                 &mut self.scratchpad_map,
             );
         }
@@ -1162,7 +1150,6 @@ where
 
         self.scratchpad_list.clear();
         self.scratchpad_set.clear();
-        self.scratchpad_set_2.clear();
         self.scratchpad_map.clear();
 
         if let Some(target) = self.scratchpad_list_2.first().copied() {
@@ -2182,21 +2169,15 @@ where
         output.reserve(self.nodes.len());
 
         let mut scratchpad = Vec::with_capacity(self.len());
-        let mut scratchpad_2 = Vec::with_capacity(self.len());
-        let mut identifier_set = HashSet::with_capacity(self.len());
         let mut scratchpad_map = HashMap::with_capacity(self.len());
 
-        for root in self.roots.iter() {
-            archived_topological_sort(
-                &self.nodes,
-                root,
-                &mut scratchpad,
-                &mut scratchpad_2,
-                output,
-                &mut identifier_set,
-                &mut scratchpad_map,
-            );
-        }
+        archived_topological_sort(
+            &self.nodes,
+            &self.roots,
+            &mut scratchpad,
+            output,
+            &mut scratchpad_map,
+        );
     }
     fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
         output.clear();
@@ -2205,9 +2186,7 @@ where
             output.reserve(self.nodes.len());
 
             let mut scratchpad = Vec::with_capacity(self.len());
-            let mut scratchpad_2 = Vec::with_capacity(self.len());
             let mut scratchpad_set = HashSet::with_capacity(self.len());
-            let mut scratchpad_set_2 = HashSet::with_capacity(self.len());
             let mut scratchpad_map = HashMap::with_capacity(self.len());
 
             archived_descendant_subgraph(&self.nodes, *id, &mut scratchpad, &mut scratchpad_set);
@@ -2215,11 +2194,9 @@ where
             archived_topological_sort_subgraph(
                 &self.nodes,
                 &|id| scratchpad_set.contains(id),
-                id,
+                *id,
                 &mut scratchpad,
-                &mut scratchpad_2,
                 output,
-                &mut scratchpad_set_2,
                 &mut scratchpad_map,
             );
         }
@@ -2228,19 +2205,20 @@ where
         output.clear();
         let mut scratchpad_list = Vec::with_capacity(self.len());
         let mut scratchpad_list_2 = Vec::with_capacity(self.len());
-        let mut scratchpad_list_3 = Vec::with_capacity(self.len());
-        let mut scratchpad_set = HashSet::with_capacity(self.len());
         let mut scratchpad_map = HashMap::with_capacity(self.len());
 
-        for root in self.roots.iter() {
+        for root in self
+            .roots
+            .iter()
+            .filter(|id| self.active.contains(*id))
+            .copied()
+        {
             archived_topological_sort_subgraph(
                 &self.nodes,
                 &|id| self.active.contains(id),
                 root,
                 &mut scratchpad_list,
                 &mut scratchpad_list_2,
-                &mut scratchpad_list_3,
-                &mut scratchpad_set,
                 &mut scratchpad_map,
             );
         }
@@ -2249,7 +2227,7 @@ where
 
         archived_longest_candidate_path_to_root(
             &self.nodes,
-            &scratchpad_list_3,
+            &scratchpad_list_2,
             &|id| self.active.contains(id),
             &mut scratchpad_map,
             output,
@@ -2275,15 +2253,18 @@ where
                 &mut scratchpad_set,
             );
 
-            for root in self.roots.iter() {
+            for root in self
+                .roots
+                .iter()
+                .filter(|id| self.active.contains(*id))
+                .copied()
+            {
                 archived_topological_sort_subgraph(
                     &self.nodes,
                     &|id| self.active.contains(id),
                     root,
                     &mut scratchpad_stack,
-                    &mut scratchpad_list_2,
                     &mut scratchpad_list,
-                    &mut scratchpad_set_2,
                     &mut scratchpad_map,
                 );
             }
@@ -2297,8 +2278,6 @@ where
                 &mut scratchpad_map,
                 &mut scratchpad_list_2,
             );
-
-            scratchpad_set_2.clear();
 
             if let Some(target) = scratchpad_list_2.first().copied() {
                 archived_shortest_path_to_ancestor(
@@ -2393,85 +2372,58 @@ where
 #[cfg(feature = "rkyv")]
 fn archived_topological_sort<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
-    id: &'a K,
+    roots: &'a ArchivedIndexSet<K>,
     scratchpad: &mut Vec<K>,
-    scratchpad_2: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
     identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(*id);
+    for root in archived_set_reverse_order(roots).copied() {
+        scratchpad.push(root);
+    }
 
     while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if identifier_set.contains(&id)
-            || identifier_map
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| node.from().len())
-                != 0
-        {
-            continue;
-        }
-
         identifiers.push(id);
-        identifier_set.insert(id);
 
-        for child in node.to().iter().copied() {
+        for child in archived_set_reverse_order(nodes[&id].to()).copied() {
             let remaining = identifier_map
                 .entry(child)
-                .or_insert_with(|| nodes[&child].from().len());
+                .or_insert_with(|| nodes[&child].from().iter().len());
             *remaining = remaining.strict_sub(1);
 
-            scratchpad_2.push(child);
+            if *remaining == 0 {
+                scratchpad.push(child);
+            }
         }
-
-        scratchpad_2.reverse();
-        scratchpad.append(scratchpad_2);
     }
 }
 
 #[cfg(feature = "rkyv")]
-#[allow(clippy::too_many_arguments, reason = "Rkyv limitation")]
 fn archived_topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     filter: &impl Fn(&K) -> bool,
-    id: &'a K,
+    subgraph_root: K,
     scratchpad: &mut Vec<K>,
-    scratchpad_2: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
     identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(*id);
+    scratchpad.push(subgraph_root);
 
     while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if !filter(&id)
-            || identifier_set.contains(&id)
-            || identifier_map
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| node.from().iter().filter(|&parent| filter(parent)).count())
-                != 0
-        {
-            continue;
-        }
-
         identifiers.push(id);
-        identifier_set.insert(id);
 
-        for child in node.to().iter().copied() {
+        for child in archived_set_reverse_order(nodes[&id].to()).copied() {
+            if !filter(&child) {
+                continue;
+            }
+
             let remaining = identifier_map.entry(child).or_insert_with(|| {
                 nodes[&child]
                     .from()
@@ -2481,11 +2433,10 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
             });
             *remaining = remaining.strict_sub(1);
 
-            scratchpad_2.push(child);
+            if *remaining == 0 {
+                scratchpad.push(child);
+            }
         }
-
-        scratchpad_2.reverse();
-        scratchpad.append(scratchpad_2);
     }
 }
 
@@ -2680,26 +2631,26 @@ where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
 {
+    if active.is_empty() {
+        return true;
+    }
+
     let mut scratchpad = Vec::with_capacity(nodes.len());
     let mut scratchpad_list = Vec::with_capacity(nodes.len());
     let mut scratchpad_list_2 = Vec::with_capacity(nodes.len());
-    let mut scratchpad_set = HashSet::with_capacity(nodes.len());
     let mut scratchpad_map = HashMap::with_capacity(nodes.len());
 
-    for root in roots {
-        archived_topological_sort(
+    for root in roots.filter(|id| active.contains(*id)).copied() {
+        archived_topological_sort_subgraph(
             nodes,
+            &|id| active.contains(id),
             root,
             &mut scratchpad,
-            &mut scratchpad_list_2,
             &mut scratchpad_list,
-            &mut scratchpad_set,
             &mut scratchpad_map,
         );
     }
 
-    scratchpad_list_2.clear();
-    scratchpad_set.clear();
     scratchpad_map.clear();
 
     archived_longest_candidate_path_to_root(
@@ -2710,8 +2661,6 @@ where
         &mut scratchpad_list_2,
     );
 
-    scratchpad_set.extend(scratchpad_list_2);
-
-    scratchpad_set.len() == active.len()
-        && scratchpad_set.into_iter().all(|id| active.contains(&id))
+    scratchpad_list_2.len() == active.len()
+        && scratchpad_list_2.into_iter().all(|id| active.contains(&id))
 }

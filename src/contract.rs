@@ -11,7 +11,7 @@ use core::{error::Error, fmt};
 
 use hashbrown::{HashMap, HashSet};
 
-use crate::{Node, longest_candidate_path_to_root, topological_sort};
+use crate::{Node, longest_candidate_path_to_root, topological_sort_subgraph};
 
 #[cfg(debug_assertions)]
 pub fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
@@ -101,24 +101,26 @@ where
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
+    if active.is_empty() {
+        return true;
+    }
+
     let mut scratchpad = Vec::with_capacity(nodes.len());
     let mut scratchpad_list = Vec::with_capacity(nodes.len());
     let mut scratchpad_list_2 = Vec::with_capacity(nodes.len());
-    let mut scratchpad_set = HashSet::with_capacity_and_hasher(nodes.len(), S::default());
     let mut scratchpad_map = HashMap::with_capacity_and_hasher(nodes.len(), S::default());
 
-    for root in roots {
-        topological_sort(
+    for root in roots.filter(|id| active.contains(*id)).copied() {
+        topological_sort_subgraph(
             nodes,
+            &|id| active.contains(id),
             root,
             &mut scratchpad,
             &mut scratchpad_list,
-            &mut scratchpad_set,
             &mut scratchpad_map,
         );
     }
 
-    scratchpad_set.clear();
     scratchpad_map.clear();
 
     longest_candidate_path_to_root(
@@ -129,10 +131,8 @@ where
         &mut scratchpad_list_2,
     );
 
-    scratchpad_set.extend(scratchpad_list_2);
-
-    scratchpad_set.len() == active.len()
-        && scratchpad_set.into_iter().all(|id| active.contains(&id))
+    scratchpad_list_2.len() == active.len()
+        && scratchpad_list_2.into_iter().all(|id| active.contains(&id))
 }
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]

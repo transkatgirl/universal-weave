@@ -897,16 +897,9 @@ where
         output.clear();
 
         let mut scratchpad = Vec::with_capacity(self.len());
-        let mut scratchpad_2 = Vec::with_capacity(self.len());
 
         for root in self.roots().iter() {
-            archived_topological_sort(
-                &self.nodes,
-                *root,
-                &mut scratchpad,
-                &mut scratchpad_2,
-                output,
-            );
+            archived_topological_sort(&self.nodes, *root, &mut scratchpad, output);
         }
     }
     fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
@@ -914,9 +907,8 @@ where
 
         if self.nodes.contains_key(id) {
             let mut scratchpad = Vec::with_capacity(self.len());
-            let mut scratchpad_2 = Vec::with_capacity(self.len());
 
-            archived_topological_sort(&self.nodes, *id, &mut scratchpad, &mut scratchpad_2, output);
+            archived_topological_sort(&self.nodes, *id, &mut scratchpad, output);
         }
     }
     fn get_active_path(&self, output: &mut Vec<K::Archived>) {

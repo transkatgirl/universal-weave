@@ -93,6 +93,9 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
+#[cfg(feature = "rkyv")]
+use rkyv::collections::swiss_table::ArchivedIndexSet;
+
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 
 #[cfg(feature = "serde")]
@@ -572,10 +575,9 @@ enum Step<A, B> {
 
 fn topological_sort<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
-    id: &'a K,
+    roots: impl DoubleEndedIterator<Item = K>,
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
     identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -586,31 +588,20 @@ fn topological_sort<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(*id);
+    scratchpad.extend(roots.rev());
 
     while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if identifier_set.contains(&id)
-            || identifier_map
-                .get(&id)
-                .copied()
-                .unwrap_or_else(|| node.from().into_iter().len())
-                != 0
-        {
-            continue;
-        }
-
         identifiers.push(id);
-        identifier_set.insert(id);
 
-        for child in node.to().into_iter().rev().copied() {
+        for child in nodes[&id].to().into_iter().rev().copied() {
             let remaining = identifier_map
                 .entry(child)
                 .or_insert_with(|| nodes[&child].from().into_iter().len());
             *remaining = remaining.strict_sub(1);
 
-            scratchpad.push(child);
+            if *remaining == 0 {
+                scratchpad.push(child);
+            }
         }
     }
 }
@@ -618,10 +609,9 @@ fn topological_sort<'a, K, N, T, S>(
 fn topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     filter: &impl Fn(&K) -> bool,
-    id: &'a K,
+    subgraph_root: K,
     scratchpad: &mut Vec<K>,
     identifiers: &mut Vec<K>,
-    identifier_set: &mut HashSet<K, S>,
     identifier_map: &mut HashMap<K, usize, S>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -632,27 +622,28 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    scratchpad.push(*id);
+    /*if filter(id)
+        && !identifier_map.contains_key(id)
+        && nodes[id]
+            .from()
+            .into_iter()
+            .filter(|&parent| filter(parent))
+            .count()
+            == 0
+    {
+        scratchpad.push(*id);
+    }*/
+
+    scratchpad.push(subgraph_root);
 
     while let Some(id) = scratchpad.pop() {
-        let node = &nodes[&id];
-
-        if !filter(&id)
-            || identifier_set.contains(&id)
-            || identifier_map.get(&id).copied().unwrap_or_else(|| {
-                node.from()
-                    .into_iter()
-                    .filter(|&parent| filter(parent))
-                    .count()
-            }) != 0
-        {
-            continue;
-        }
-
         identifiers.push(id);
-        identifier_set.insert(id);
 
-        for child in node.to().into_iter().rev().copied() {
+        for child in nodes[&id].to().into_iter().rev().copied() {
+            if !filter(&child) {
+                continue;
+            }
+
             let remaining = identifier_map.entry(child).or_insert_with(|| {
                 nodes[&child]
                     .from()
@@ -662,7 +653,9 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
             });
             *remaining = remaining.strict_sub(1);
 
-            scratchpad.push(child);
+            if *remaining == 0 {
+                scratchpad.push(child);
+            }
         }
     }
 }
@@ -862,4 +855,12 @@ fn descendant_subgraph<'a, K, N, T, S>(
             scratchpad.extend(nodes[&id].to().into_iter().rev().copied());
         }
     }
+}
+
+#[cfg(feature = "rkyv")]
+fn archived_set_reverse_order<T>(set: &ArchivedIndexSet<T>) -> impl Iterator<Item = &T> {
+    (0..set.len())
+        .into_iter()
+        .rev()
+        .filter_map(|index| set.get_index(index))
 }
