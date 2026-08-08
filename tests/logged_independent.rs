@@ -13,7 +13,7 @@ use universal_weave::{
     wrappers::{ActionableWeave, LoggedWeave},
 };
 
-const CASES: u32 = 6144;
+const CASES: u32 = 8192;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {

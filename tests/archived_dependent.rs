@@ -14,7 +14,7 @@ use universal_weave::{
     dependent::{DependentNode, DependentWeave},
 };
 
-const CASES: u32 = 2048;
+const CASES: u32 = 3072;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
