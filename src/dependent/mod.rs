@@ -7,7 +7,7 @@ use core::{
     mem,
 };
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
 
 #[cfg(debug_assertions)]
@@ -503,34 +503,42 @@ where
         invariant(self.validate())
     ))]
     fn insert(&mut self, node: DependentNode<K, T, S>) -> bool {
-        if self.nodes.contains_key(&node.id) || !node.validate() || !node.to.is_empty() {
+        if !node.validate() || !node.to.is_empty() {
             return false;
         }
 
-        if let Some(from) = &node.from {
-            match self.nodes.get_mut(from) {
-                Some(parent) => {
-                    parent.to.insert(node.id);
+        match self.nodes.entry(node.id) {
+            Entry::Occupied(_) => return false,
+            Entry::Vacant(entry) => {
+                let (id, from, active, bookmarked) =
+                    (node.id, node.from, node.active, node.bookmarked);
+
+                entry.insert(node);
+
+                if let Some(from) = from {
+                    if let Some(parent) = self.nodes.get_mut(&from) {
+                        parent.to.insert(id);
+                    } else {
+                        self.nodes.remove(&id);
+                        return false;
+                    }
+                } else {
+                    self.roots.insert(id);
                 }
-                None => return false,
+
+                if active {
+                    if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
+                        active.active = false;
+                    }
+
+                    self.active = Some(id);
+                }
+
+                if bookmarked {
+                    self.bookmarked.insert(id);
+                }
             }
-        } else {
-            self.roots.insert(node.id);
         }
-
-        if node.active {
-            if let Some(active) = self.active.and_then(|id| self.nodes.get_mut(&id)) {
-                active.active = false;
-            }
-
-            self.active = Some(node.id);
-        }
-
-        if node.bookmarked {
-            self.bookmarked.insert(node.id);
-        }
-
-        self.nodes.insert(node.id, node);
 
         true
     }

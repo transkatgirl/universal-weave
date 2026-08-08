@@ -6,7 +6,6 @@
 //! - [`IndependentWeave`](independent::IndependentWeave) - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
-//!
 
 #![no_std]
 #![forbid(non_ascii_idents)]
@@ -53,6 +52,20 @@
 #![allow(clippy::missing_docs_in_private_items)] // TODO
 #![allow(clippy::shadow_unrelated)] // TODO
 #![allow(clippy::shadow_reuse)] // TODO
+
+/*
+
+Testing notes:
+- When running multiple tests, use `cargo nextest run` instead of `cargo test`
+- Test building for no_std using `cargo build --target=aarch64-unknown-none --no-default-features --features serde,rkyv,legacy`
+- The following tests continue to function in release mode:
+    - archived_dependent
+    - archived_independent
+    - dependent_behavior_unchanged
+    - independent_behavior_unchanged
+    - independent_extends_dependent
+
+*/
 
 mod contract;
 pub mod dependent;
