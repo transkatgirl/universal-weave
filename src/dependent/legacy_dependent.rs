@@ -60,6 +60,7 @@ where
         value.thread.clear();
 
         Self {
+            scratchpad_2: HashSet::with_capacity_and_hasher(value.thread.len(), S::default()),
             scratchpad: value.thread,
             nodes: value.nodes,
             roots: value.roots,

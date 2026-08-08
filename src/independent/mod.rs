@@ -943,6 +943,11 @@ where
                 active,
                 bookmarked: value.bookmarked,
                 scratchpad: value.scratchpad_stack,
+                scratchpad_2: {
+                    let mut set = value.scratchpad_set;
+                    set.clear();
+                    set
+                },
                 metadata: value.metadata,
             };
 
@@ -1600,9 +1605,10 @@ where
         id: &K,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
     ) -> bool {
-        if let Some(mut node) = self.nodes.remove(id) {
-            node.to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
-            self.nodes.insert(node.id, node);
+        if let Some(node) = self.nodes.get_mut(id) {
+            let mut to = mem::take(&mut node.to);
+            to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+            self.nodes.get_mut(id).unwrap().to = to;
 
             true
         } else {

@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
+    mem,
 };
 
 use hashbrown::{HashMap, HashSet};
@@ -198,6 +199,10 @@ where
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(super) scratchpad: Vec<K>,
 
+    #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(super) scratchpad_2: HashSet<K, S>,
+
     /// The metadata associated with the weave.
     pub metadata: M,
 }
@@ -245,6 +250,7 @@ where
         let proxy = ProxyDependentWeave::deserialize(deserializer)?;
         let weave = Self {
             scratchpad: Vec::default(),
+            scratchpad_2: HashSet::default(),
             nodes: proxy.nodes,
             roots: proxy.roots,
             active: proxy.active,
@@ -315,6 +321,7 @@ where
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             scratchpad: Vec::with_capacity(capacity),
+            scratchpad_2: HashSet::with_capacity_and_hasher(capacity, S::default()),
             metadata,
         }
     }
@@ -339,6 +346,11 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
         self.scratchpad
             .reserve(self.nodes.capacity().saturating_sub(self.scratchpad.len()));
+        self.scratchpad_2.reserve(
+            self.nodes
+                .capacity()
+                .saturating_sub(self.scratchpad_2.len()),
+        );
     }
     /// Shrinks the capacity of the weave with a lower limit.
     #[cfg_attr(debug_assertions, contract(
@@ -353,6 +365,7 @@ where
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
         self.scratchpad.shrink_to(min_capacity);
+        self.scratchpad_2.shrink_to(min_capacity);
     }
 }
 
@@ -571,7 +584,6 @@ where
     fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         let mut removed_node = None;
         let mut removed_active = false;
-        let mut removed_bookmark = false;
 
         self.scratchpad.push(*id);
 
@@ -581,7 +593,7 @@ where
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
-                    removed_bookmark = true;
+                    self.scratchpad_2.insert(id);
                 }
                 if node.active {
                     self.active = None;
@@ -600,8 +612,9 @@ where
             if let Some(parent_node) = removed.from.as_ref().and_then(|id| self.nodes.get_mut(id)) {
                 parent_node.to.shift_remove(id);
             }
-            if removed_bookmark {
-                self.bookmarked.retain(|id| self.nodes.contains_key(id));
+            if !self.scratchpad_2.is_empty() {
+                self.bookmarked.retain(|id| !self.scratchpad_2.contains(id));
+                self.scratchpad_2.clear();
             }
             if removed_active {
                 self.active = removed.from;
@@ -631,9 +644,8 @@ where
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
-        let removed_node_parent = self.nodes.get(id).map(|node| node.from);
+        let mut removed_node_parent = None;
         let mut removed_active = false;
-        let mut removed_bookmark = false;
 
         self.scratchpad.push(*id);
 
@@ -643,7 +655,7 @@ where
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
-                    removed_bookmark = true;
+                    self.scratchpad_2.insert(id);
                 }
                 if node.active {
                     self.active = None;
@@ -651,6 +663,10 @@ where
                 }
 
                 self.scratchpad.extend(node.to.iter().rev().copied());
+
+                if removed_node_parent.is_none() {
+                    removed_node_parent = Some(node.from);
+                }
 
                 on_removal(node);
             }
@@ -660,8 +676,9 @@ where
             if let Some(parent_node) = parent.as_ref().and_then(|id| self.nodes.get_mut(id)) {
                 parent_node.to.shift_remove(id);
             }
-            if removed_bookmark {
-                self.bookmarked.retain(|id| self.nodes.contains_key(id));
+            if !self.scratchpad_2.is_empty() {
+                self.bookmarked.retain(|id| !self.scratchpad_2.contains(id));
+                self.scratchpad_2.clear();
             }
             if removed_active {
                 self.active = parent;
@@ -698,6 +715,7 @@ where
         let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
 
         self.scratchpad.is_empty()
+            && self.scratchpad_2.is_empty()
             && self
                 .roots
                 .iter()
@@ -817,9 +835,10 @@ where
         id: &K,
         mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
-        if let Some(mut node) = self.nodes.remove(id) {
-            node.to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
-            self.nodes.insert(node.id, node);
+        if let Some(node) = self.nodes.get_mut(id) {
+            let mut to = mem::take(&mut node.to);
+            to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+            self.nodes.get_mut(id).unwrap().to = to;
 
             true
         } else {
