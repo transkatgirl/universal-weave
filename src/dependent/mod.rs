@@ -601,7 +601,7 @@ where
                 parent_node.to.shift_remove(id);
             }
             if removed_bookmark {
-                self.bookmarked.retain(|k| self.nodes.contains_key(k));
+                self.bookmarked.retain(|id| self.nodes.contains_key(id));
             }
             if removed_active {
                 self.active = removed.from;
@@ -661,7 +661,7 @@ where
                 parent_node.to.shift_remove(id);
             }
             if removed_bookmark {
-                self.bookmarked.retain(|k| self.nodes.contains_key(k));
+                self.bookmarked.retain(|id| self.nodes.contains_key(id));
             }
             if removed_active {
                 self.active = parent;
