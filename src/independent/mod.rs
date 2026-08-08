@@ -1862,7 +1862,7 @@ where
                                     .is_ok(),
                                 "Should be unreachable"
                             );
-                        } else {
+                        } else if node.bookmarked {
                             self.bookmarked.shift_remove(&node.id);
                         }
 

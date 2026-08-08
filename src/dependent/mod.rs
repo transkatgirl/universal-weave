@@ -600,7 +600,7 @@ where
                     removed_active = true;
                 }
 
-                self.scratchpad.extend(node.to.iter().rev().copied());
+                self.scratchpad.extend(node.to.iter().copied());
 
                 if removed_node.is_none() {
                     removed_node = Some(node);
@@ -1054,7 +1054,7 @@ where
                                     .is_ok(),
                                 "Should be unreachable"
                             );
-                        } else {
+                        } else if node.bookmarked {
                             self.bookmarked.shift_remove(&node.id);
                         }
 
