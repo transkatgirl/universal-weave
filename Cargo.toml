@@ -48,7 +48,7 @@ hashbrown = { version = "0.17.1", features = [
 	"inline-more",
 ], default-features = false }
 indexmap = { version = "2.14.0", default-features = false }
-rkyv = { version = "0.8.17", features = [
+rkyv = { version = "0.8.18", features = [
 	"alloc",
 	"bytecheck",
 	"hashbrown-0_17",
