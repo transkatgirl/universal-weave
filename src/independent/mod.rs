@@ -1328,7 +1328,7 @@ where
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
-                    self.bookmarked.shift_remove(&id);
+                    self.scratchpad_set.insert(id);
                 }
                 if node.active {
                     self.active.remove(&id);
@@ -1357,6 +1357,11 @@ where
         }
 
         if removed_node.is_some() {
+            if !self.scratchpad_set.is_empty() {
+                self.bookmarked
+                    .retain(|id| !self.scratchpad_set.contains(id));
+                self.scratchpad_set.clear();
+            }
             if removed_active {
                 // matches set_active(id, false)
                 self.fix_orphaned_activations();
@@ -1400,7 +1405,7 @@ where
         while let Some(id) = self.scratchpad_stack.pop() {
             if let Some(node) = self.nodes.remove(&id) {
                 if node.bookmarked {
-                    self.bookmarked.shift_remove(&id);
+                    self.scratchpad_set.insert(id);
                 }
                 if node.active {
                     self.active.remove(&id);
@@ -1427,6 +1432,11 @@ where
         }
 
         if had_node {
+            if !self.scratchpad_set.is_empty() {
+                self.bookmarked
+                    .retain(|id| !self.scratchpad_set.contains(id));
+                self.scratchpad_set.clear();
+            }
             if removed_active {
                 self.fix_orphaned_activations();
             }
