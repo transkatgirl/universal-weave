@@ -1011,64 +1011,60 @@ where
         invariant(self.validate())
     ))]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
-        if let Some(mut node) = self.nodes.remove(id) {
-            if let Some(mut parent) = node.from.as_ref().and_then(|id| self.nodes.remove(id)) {
-                if parent.to.len() > 1 {
-                    self.nodes.insert(parent.id, parent);
-                    self.nodes.insert(node.id, node);
-                    return None;
-                }
+        if !self.nodes.get(id).is_some_and(|node| {
+            node.from
+                .as_ref()
+                .is_some_and(|id| self.nodes[id].to.len() == 1)
+        }) {
+            return None;
+        }
 
-                match parent.contents.merge(node.contents) {
-                    DiscreteContentResult::Two(left, right) => {
-                        parent.contents = left;
-                        node.contents = right;
-                        self.nodes.insert(parent.id, parent);
-                        self.nodes.insert(node.id, node);
-                        None
-                    }
-                    DiscreteContentResult::One(content) => {
-                        parent.contents = content;
-                        parent.to = node.to;
+        let mut node = self.nodes.remove(id).unwrap();
+        let mut parent = self.nodes.remove(&node.from.unwrap()).unwrap();
 
-                        for child in &parent.to {
-                            let child = self.nodes.get_mut(child).unwrap();
-                            child.from = Some(parent.id);
-                        }
-
-                        if node.active {
-                            parent.active = true;
-                            self.active = Some(parent.id);
-                        }
-
-                        let parent_id = parent.id;
-
-                        if node.bookmarked && !parent.bookmarked {
-                            parent.bookmarked = true;
-                            assert!(
-                                self.bookmarked
-                                    .replace_index(
-                                        self.bookmarked.get_index_of(&node.id).unwrap(),
-                                        parent.id,
-                                    )
-                                    .is_ok(),
-                                "Should be unreachable"
-                            );
-                        } else {
-                            self.bookmarked.shift_remove(&node.id);
-                        }
-
-                        self.nodes.insert(parent.id, parent);
-
-                        Some(parent_id)
-                    }
-                }
-            } else {
+        match parent.contents.merge(node.contents) {
+            DiscreteContentResult::Two(left, right) => {
+                parent.contents = left;
+                node.contents = right;
+                self.nodes.insert(parent.id, parent);
                 self.nodes.insert(node.id, node);
                 None
             }
-        } else {
-            None
+            DiscreteContentResult::One(content) => {
+                parent.contents = content;
+                parent.to = node.to;
+
+                for child in &parent.to {
+                    let child = self.nodes.get_mut(child).unwrap();
+                    child.from = Some(parent.id);
+                }
+
+                if node.active {
+                    parent.active = true;
+                    self.active = Some(parent.id);
+                }
+
+                let parent_id = parent.id;
+
+                if node.bookmarked && !parent.bookmarked {
+                    parent.bookmarked = true;
+                    assert!(
+                        self.bookmarked
+                            .replace_index(
+                                self.bookmarked.get_index_of(&node.id).unwrap(),
+                                parent.id,
+                            )
+                            .is_ok(),
+                        "Should be unreachable"
+                    );
+                } else {
+                    self.bookmarked.shift_remove(&node.id);
+                }
+
+                self.nodes.insert(parent.id, parent);
+
+                Some(parent_id)
+            }
         }
     }
 }
