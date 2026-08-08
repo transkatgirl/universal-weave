@@ -1814,59 +1814,70 @@ where
         invariant(self.validate())
     ))]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
-        if !self.nodes.get(id).is_some_and(|node| {
-            node.from.len() == 1 && self.nodes[node.from.first().unwrap()].to.len() == 1
-        }) {
-            return None;
-        }
+        if let Some(mut node) = self.nodes.remove(id) {
+            if node.from.len() != 1 {
+                self.nodes.insert(node.id, node);
+                return None;
+            }
 
-        let mut node = self.nodes.remove(id).unwrap();
-        let mut parent = self.nodes.remove(node.from.first().unwrap()).unwrap();
+            if let Some(mut parent) = node.from.first().and_then(|id| self.nodes.remove(id)) {
+                if parent.to.len() > 1 {
+                    self.nodes.insert(parent.id, parent);
+                    self.nodes.insert(node.id, node);
+                    return None;
+                }
 
-        match parent.contents.merge(node.contents) {
-            DiscreteContentResult::Two(left, right) => {
-                parent.contents = left;
-                node.contents = right;
-                self.nodes.insert(parent.id, parent);
+                match parent.contents.merge(node.contents) {
+                    DiscreteContentResult::Two(left, right) => {
+                        parent.contents = left;
+                        node.contents = right;
+                        self.nodes.insert(parent.id, parent);
+                        self.nodes.insert(node.id, node);
+                        None
+                    }
+                    DiscreteContentResult::One(content) => {
+                        parent.contents = content;
+                        parent.to = node.to;
+
+                        for child in &parent.to {
+                            let child = self.nodes.get_mut(child).unwrap();
+                            let index = child.from.get_index_of(&node.id).unwrap();
+
+                            assert!(
+                                child.from.replace_index(index, parent.id).is_ok(),
+                                "Should be unreachable"
+                            );
+                        }
+
+                        let parent_id = parent.id;
+
+                        if node.bookmarked && !parent.bookmarked {
+                            parent.bookmarked = true;
+                            assert!(
+                                self.bookmarked
+                                    .replace_index(
+                                        self.bookmarked.get_index_of(&node.id).unwrap(),
+                                        parent.id,
+                                    )
+                                    .is_ok(),
+                                "Should be unreachable"
+                            );
+                        } else {
+                            self.bookmarked.shift_remove(&node.id);
+                        }
+
+                        self.nodes.insert(parent.id, parent);
+                        self.active.remove(&node.id);
+
+                        Some(parent_id)
+                    }
+                }
+            } else {
                 self.nodes.insert(node.id, node);
                 None
             }
-            DiscreteContentResult::One(content) => {
-                parent.contents = content;
-                parent.to = node.to;
-
-                for child in &parent.to {
-                    let child = self.nodes.get_mut(child).unwrap();
-                    let index = child.from.get_index_of(&node.id).unwrap();
-
-                    assert!(
-                        child.from.replace_index(index, parent.id).is_ok(),
-                        "Should be unreachable"
-                    );
-                }
-
-                let parent_id = parent.id;
-
-                if node.bookmarked && !parent.bookmarked {
-                    parent.bookmarked = true;
-                    assert!(
-                        self.bookmarked
-                            .replace_index(
-                                self.bookmarked.get_index_of(&node.id).unwrap(),
-                                parent.id,
-                            )
-                            .is_ok(),
-                        "Should be unreachable"
-                    );
-                } else {
-                    self.bookmarked.shift_remove(&node.id);
-                }
-
-                self.nodes.insert(parent.id, parent);
-                self.active.remove(&node.id);
-
-                Some(parent_id)
-            }
+        } else {
+            None
         }
     }
 }
