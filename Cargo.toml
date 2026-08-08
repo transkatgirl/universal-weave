@@ -65,6 +65,7 @@ serde = { version = "1.0.229", features = [
 proptest               = "1.11.0"
 proptest-state-machine = "0.8.0"
 proptest-derive        = "0.8.0"
+old_universal_weave    = { package = "universal-weave", version = "=0.4.0" }
 
 [profile.test.build-override]
 opt-level = 2

@@ -1015,6 +1015,7 @@ where
     ))]
     fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
+        output.reserve(self.nodes.len());
 
         for root in &self.roots {
             topological_sort(
@@ -1044,6 +1045,8 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
+            output.reserve(self.nodes.len());
+
             descendant_subgraph(
                 &self.nodes,
                 *id,
@@ -2170,6 +2173,8 @@ where
     }
     fn get_ordered_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        output.reserve(self.nodes.len());
+
         let mut scratchpad = Vec::with_capacity(self.len());
         let mut scratchpad_2 = Vec::with_capacity(self.len());
         let mut identifier_set = HashSet::with_capacity(self.len());
@@ -2191,6 +2196,8 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
+            output.reserve(self.nodes.len());
+
             let mut scratchpad = Vec::with_capacity(self.len());
             let mut scratchpad_2 = Vec::with_capacity(self.len());
             let mut scratchpad_set = HashSet::with_capacity(self.len());

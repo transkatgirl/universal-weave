@@ -415,6 +415,7 @@ where
     ))]
     fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
+        output.reserve(self.nodes.len());
 
         for root in &self.roots {
             topological_sort(&self.nodes, *root, &mut self.scratchpad, output);
@@ -434,6 +435,8 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
+            output.reserve(self.nodes.len());
+
             topological_sort(&self.nodes, *id, &mut self.scratchpad, output);
         }
     }
@@ -568,6 +571,7 @@ where
     fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         let mut removed_node = None;
         let mut removed_active = false;
+        let mut removed_bookmark = false;
 
         self.scratchpad.push(*id);
 
@@ -577,16 +581,13 @@ where
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
-                    self.bookmarked.shift_remove(&id);
+                    removed_bookmark = true;
                 }
                 if node.active {
                     self.active = None;
                     removed_active = true;
                 }
 
-                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                    parent.to.shift_remove(&id);
-                }
                 self.scratchpad.extend(node.to.iter().rev().copied());
 
                 if removed_node.is_none() {
@@ -596,6 +597,12 @@ where
         }
 
         if let Some(removed) = removed_node {
+            if let Some(parent_node) = removed.from.as_ref().and_then(|id| self.nodes.get_mut(id)) {
+                parent_node.to.shift_remove(id);
+            }
+            if removed_bookmark {
+                self.bookmarked.retain(|k| self.nodes.contains_key(k));
+            }
             if removed_active {
                 self.active = removed.from;
 
@@ -626,6 +633,7 @@ where
     ) -> bool {
         let removed_node_parent = self.nodes.get(id).map(|node| node.from);
         let mut removed_active = false;
+        let mut removed_bookmark = false;
 
         self.scratchpad.push(*id);
 
@@ -635,16 +643,13 @@ where
                     self.roots.shift_remove(&id);
                 }
                 if node.bookmarked {
-                    self.bookmarked.shift_remove(&id);
+                    removed_bookmark = true;
                 }
                 if node.active {
                     self.active = None;
                     removed_active = true;
                 }
 
-                if let Some(parent) = node.from.and_then(|id| self.nodes.get_mut(&id)) {
-                    parent.to.shift_remove(&id);
-                }
                 self.scratchpad.extend(node.to.iter().rev().copied());
 
                 on_removal(node);
@@ -652,6 +657,12 @@ where
         }
 
         if let Some(parent) = removed_node_parent {
+            if let Some(parent_node) = parent.as_ref().and_then(|id| self.nodes.get_mut(id)) {
+                parent_node.to.shift_remove(id);
+            }
+            if removed_bookmark {
+                self.bookmarked.retain(|k| self.nodes.contains_key(k));
+            }
             if removed_active {
                 self.active = parent;
 
@@ -1243,6 +1254,7 @@ where
     }
     fn get_ordered_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+        output.reserve(self.nodes.len());
 
         let mut scratchpad = Vec::with_capacity(self.len());
         let mut scratchpad_2 = Vec::with_capacity(self.len());
@@ -1261,6 +1273,8 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
+            output.reserve(self.nodes.len());
+
             let mut scratchpad = Vec::with_capacity(self.len());
             let mut scratchpad_2 = Vec::with_capacity(self.len());
 
