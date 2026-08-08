@@ -589,9 +589,6 @@ where
 
         while let Some(id) = self.scratchpad.pop() {
             if let Some(node) = self.nodes.remove(&id) {
-                if node.from.is_none() {
-                    self.roots.shift_remove(&id);
-                }
                 if node.bookmarked {
                     self.scratchpad_2.insert(id);
                 }
@@ -603,6 +600,9 @@ where
                 self.scratchpad.extend(node.to.iter().copied());
 
                 if removed_node.is_none() {
+                    if node.from.is_none() {
+                        self.roots.shift_remove(&id);
+                    }
                     removed_node = Some(node);
                 }
             }
@@ -651,9 +651,6 @@ where
 
         while let Some(id) = self.scratchpad.pop() {
             if let Some(node) = self.nodes.remove(&id) {
-                if node.from.is_none() {
-                    self.roots.shift_remove(&id);
-                }
                 if node.bookmarked {
                     self.scratchpad_2.insert(id);
                 }
@@ -665,6 +662,9 @@ where
                 self.scratchpad.extend(node.to.iter().rev().copied());
 
                 if removed_node_parent.is_none() {
+                    if node.from.is_none() {
+                        self.roots.shift_remove(&id);
+                    }
                     removed_node_parent = Some(node.from);
                 }
 
