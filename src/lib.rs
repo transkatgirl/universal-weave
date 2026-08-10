@@ -20,6 +20,7 @@
 #![allow(clippy::allow_attributes, reason = "Conflicting lint")]
 #![allow(clippy::pattern_type_mismatch, reason = "Conflicting lint")]
 #![allow(clippy::separated_literal_suffix, reason = "Conflicting lint")]
+#![allow(clippy::semicolon_outside_block, reason = "Conflicting lint")]
 #![allow(
     clippy::field_scoped_visibility_modifiers,
     reason = "Used by IndependentWeave::from()"

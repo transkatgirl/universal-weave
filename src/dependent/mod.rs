@@ -832,9 +832,19 @@ where
         mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) -> bool {
         if let Some(node) = self.nodes.get_mut(id) {
-            let mut to = mem::take(&mut node.to);
-            to.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
-            self.nodes.get_mut(id).unwrap().to = to;
+            let mut set = mem::take(&mut node.to);
+
+            {
+                let guard = self.scratchpad.guard();
+                let mut nodes = guard
+                    .arena()
+                    .alloc_iter_exact(set.drain(..).map(|id| &self.nodes[&id]));
+                nodes.sort_by(|a, b| cmp(*a, *b));
+
+                set.extend(nodes.into_iter().map(|node| node.id));
+            }
+
+            self.nodes.get_mut(id).unwrap().to = set;
 
             true
         } else {
@@ -870,8 +880,15 @@ where
         &mut self,
         mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
-        self.roots
-            .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+        let guard = self.scratchpad.guard();
+
+        let mut nodes = guard
+            .arena()
+            .alloc_iter_exact(self.roots.iter().map(|id| &self.nodes[id]));
+        nodes.sort_by(|a, b| cmp(*a, *b));
+
+        self.roots.clear();
+        self.roots.extend(nodes.into_iter().map(|node| node.id));
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
