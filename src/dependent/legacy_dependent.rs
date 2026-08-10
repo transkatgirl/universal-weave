@@ -8,6 +8,7 @@ use core::{
 
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
+use scratchpads::Scratchpad;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -56,16 +57,13 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
-    fn from(mut value: DependentWeave<K, T, M, S>) -> Self {
-        value.thread.clear();
-
+    fn from(value: DependentWeave<K, T, M, S>) -> Self {
         Self {
-            scratchpad_2: HashSet::with_capacity_and_hasher(value.thread.len(), S::default()),
-            scratchpad: value.thread,
             nodes: value.nodes,
             roots: value.roots,
             active: value.active,
             bookmarked: value.bookmarked,
+            scratchpad: value.scratchpad,
             metadata: value.metadata,
         }
     }
@@ -109,11 +107,12 @@ where
     bookmarked: IndexSet<K, S>,
 
     // Legacy field required for deserialization
+    #[allow(dead_code)]
     thread: Vec<K>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad_step_stack: Vec<Step<K, K>>,
+    scratchpad: Scratchpad,
 
     /// The metadata associated with the weave.
     pub metadata: M,
@@ -162,12 +161,12 @@ where
     {
         let proxy = ProxyDependentWeave::deserialize(deserializer)?;
         let weave = Self {
-            scratchpad_step_stack: Vec::default(),
             nodes: proxy.nodes,
             roots: proxy.roots,
             active: proxy.active,
             bookmarked: proxy.bookmarked,
             thread: proxy.thread,
+            scratchpad: Scratchpad::new(),
             metadata: proxy.metadata,
         };
 
@@ -229,8 +228,8 @@ where
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
-            thread: Vec::with_capacity(capacity),
-            scratchpad_step_stack: Vec::with_capacity(capacity),
+            thread: Vec::new(),
+            scratchpad: Scratchpad::new(),
             metadata,
         }
     }
@@ -246,21 +245,12 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.roots.len()));
         self.bookmarked
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
-        self.thread
-            .reserve(self.nodes.capacity().saturating_sub(self.thread.len()));
-        self.scratchpad_step_stack.reserve(
-            self.nodes
-                .capacity()
-                .saturating_sub(self.scratchpad_step_stack.len()),
-        );
     }
     /// Shrinks the capacity of the weave with a lower limit.
     pub fn shrink_to(&mut self, min_capacity: usize) {
         self.nodes.shrink_to(min_capacity);
         self.roots.shrink_to(min_capacity);
         self.bookmarked.shrink_to(min_capacity);
-        self.thread.shrink_to(min_capacity);
-        self.scratchpad_step_stack.shrink_to(min_capacity);
     }
 }
 
@@ -314,18 +304,20 @@ where
     }
     fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
         output.clear();
-        self.thread.clear();
+
+        let guard = self.scratchpad.guard();
 
         for root in &self.roots {
-            topological_sort(&self.nodes, *root, &mut self.thread, output);
+            topological_sort(&self.nodes, *root, &mut guard.vec(), output);
         }
     }
     fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
 
         if self.nodes.contains_key(id) {
-            self.thread.clear();
-            topological_sort(&self.nodes, *id, &mut self.thread, output);
+            let guard = self.scratchpad.guard();
+
+            topological_sort(&self.nodes, *id, &mut guard.vec(), output);
         }
     }
     fn get_active_path(&mut self, output: &mut Vec<K>) {
@@ -397,9 +389,12 @@ where
         }
     }
     fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
-        self.scratchpad_step_stack.push(Step::Enter(*id));
+        let guard = self.scratchpad.guard();
+        let mut stack = guard.vec();
 
-        while let Some(step) = self.scratchpad_step_stack.pop() {
+        stack.push(Step::Enter(*id));
+
+        while let Some(step) = stack.pop() {
             match step {
                 Step::Enter(id) => {
                     if let Some(node) = self.nodes.get(&id) {
@@ -410,9 +405,8 @@ where
                             self.bookmarked.shift_remove(&id);
                         }
 
-                        self.scratchpad_step_stack.push(Step::Exit(id));
-                        self.scratchpad_step_stack
-                            .extend(node.to.iter().rev().copied().map(Step::Enter));
+                        stack.push(Step::Exit(id));
+                        stack.extend(node.to.iter().rev().copied().map(Step::Enter));
                     }
                 }
                 Step::Exit(id) => {
@@ -427,7 +421,7 @@ where
                             parent.to.shift_remove(&id);
                         }
 
-                        if self.scratchpad_step_stack.is_empty() {
+                        if stack.is_empty() {
                             return Some(node);
                         }
                     }
@@ -442,9 +436,12 @@ where
         id: &K,
         mut on_removal: impl FnMut(DependentNode<K, T, S>),
     ) -> bool {
-        self.scratchpad_step_stack.push(Step::Enter(*id));
+        let guard = self.scratchpad.guard();
+        let mut stack = guard.vec();
 
-        while let Some(step) = self.scratchpad_step_stack.pop() {
+        stack.push(Step::Enter(*id));
+
+        while let Some(step) = stack.pop() {
             match step {
                 Step::Enter(id) => {
                     if let Some(node) = self.nodes.get(&id) {
@@ -455,9 +452,8 @@ where
                             self.bookmarked.shift_remove(&id);
                         }
 
-                        self.scratchpad_step_stack.push(Step::Exit(id));
-                        self.scratchpad_step_stack
-                            .extend(node.to.iter().rev().copied().map(Step::Enter));
+                        stack.push(Step::Exit(id));
+                        stack.extend(node.to.iter().rev().copied().map(Step::Enter));
                     }
                 }
                 Step::Exit(id) => {
@@ -473,7 +469,7 @@ where
                         }
 
                         on_removal(node);
-                        if self.scratchpad_step_stack.is_empty() {
+                        if stack.is_empty() {
                             return true;
                         }
                     }
@@ -498,14 +494,9 @@ where
 {
     /// Validates that the weave is internally consistent.
     pub fn validate(&self) -> bool {
-        let mut scratchpad = Vec::with_capacity(self.nodes.len());
-        let mut scratchpad_set = HashSet::with_capacity_and_hasher(self.nodes.len(), S::default());
-
-        self.scratchpad_step_stack.is_empty()
-            && self
-                .roots
-                .iter()
-                .all(move |value| self.nodes.contains_key(value))
+        self.roots
+            .iter()
+            .all(move |value| self.nodes.contains_key(value))
             && self
                 .active
                 .as_ref()
@@ -533,8 +524,8 @@ where
             && !detect_cycles(
                 &self.nodes,
                 self.roots.iter().copied(),
-                &mut scratchpad,
-                &mut scratchpad_set,
+                &mut Vec::with_capacity(self.roots.len()),
+                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
             )
     }
 }
@@ -777,11 +768,7 @@ where
     M: Archive,
     S: BuildHasher + Default + Clone,
 {
-    #[inline]
     fn validate(&self) -> bool {
-        let mut scratchpad = Vec::with_capacity(self.nodes.len());
-        let mut scratchpad_set = HashSet::with_capacity(self.nodes.len());
-
         self.roots
             .iter()
             .all(move |value| self.nodes.contains_key(value))
@@ -812,8 +799,8 @@ where
             && !archived_detect_cycles(
                 &self.nodes,
                 self.roots.iter().copied(),
-                &mut scratchpad,
-                &mut scratchpad_set,
+                &mut Vec::with_capacity(self.roots.len()),
+                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
             )
     }
 }
@@ -896,9 +883,9 @@ where
     fn get_ordered_identifiers(&self, output: &mut Vec<K::Archived>) {
         output.clear();
 
-        let mut scratchpad = Vec::with_capacity(self.len());
+        let mut scratchpad = Vec::new();
 
-        for root in self.roots().iter() {
+        for root in self.roots.iter() {
             archived_topological_sort(&self.nodes, *root, &mut scratchpad, output);
         }
     }
@@ -906,7 +893,7 @@ where
         output.clear();
 
         if self.nodes.contains_key(id) {
-            let mut scratchpad = Vec::with_capacity(self.len());
+            let mut scratchpad = Vec::new();
 
             archived_topological_sort(&self.nodes, *id, &mut scratchpad, output);
         }

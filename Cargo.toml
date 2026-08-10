@@ -41,6 +41,7 @@ legacy = [  ]
 
 [dependencies]
 contracts = "0.6.10"
+scratchpads = "0.1.0"
 hashbrown = { version = "0.17.1", features = [
 	"allocator-api2",
 	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: Function contracts (only enabled in debug mode) and Archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
@@ -60,6 +61,7 @@ serde = { version = "1.0.229", features = [
 	"alloc",
 	"derive",
 ], default-features = false, optional = true }
+
 
 [dev-dependencies]
 proptest               = "1.11.0"

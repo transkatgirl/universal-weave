@@ -1372,7 +1372,7 @@ where
     /// Creates a [`DeduplicatedWeave`] from a [`Weave`].
     pub fn new(weave: W) -> Self {
         Self {
-            scratchpad: HashSet::with_capacity_and_hasher(weave.len(), S::default()),
+            scratchpad: HashSet::default(),
             weave,
             _phantom_n: PhantomData,
             _phantom_t: PhantomData,

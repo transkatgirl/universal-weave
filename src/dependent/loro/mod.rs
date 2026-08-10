@@ -260,7 +260,7 @@ where
 
         Ok(Self {
             doc,
-            scratchpad: Vec::with_capacity(tree_mapping.capacity()),
+            scratchpad: Vec::new(),
             tree_mapping,
             bookmark_mapping,
             buffer: AlignedVec::with_capacity(4096),
@@ -312,7 +312,7 @@ where
         let mut wrapped = Self {
             bookmark_mapping: Vec::with_capacity(weave.capacity()),
             tree_mapping: HashMap::with_capacity_and_hasher(weave.capacity(), S::default()),
-            scratchpad: Vec::with_capacity(weave.capacity()),
+            scratchpad: Vec::new(),
             buffer,
             weave,
             doc: value,
@@ -965,7 +965,7 @@ where
             if let Some(at_index) = self.weave.roots.get_index(index)
                 && self.tree_mapping.get(at_index) == Some(&root)
             {
-                let mut stack = Vec::with_capacity(self.weave.len());
+                let mut stack = Vec::new();
 
                 stack.push((root, None));
 

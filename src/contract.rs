@@ -9,9 +9,20 @@ use core::ops::Index;
 #[cfg(any(feature = "serde", feature = "rkyv"))]
 use core::{error::Error, fmt};
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
+use indexmap::IndexSet;
+use scratchpads::Scratchpad;
 
-use crate::{Node, longest_candidate_path_to_root, topological_sort_subgraph};
+#[cfg(feature = "rkyv")]
+use hashbrown::DefaultHashBuilder;
+
+#[cfg(feature = "rkyv")]
+use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedHashSet, ArchivedIndexSet};
+
+use crate::{Node, Step, longest_candidate_path_to_root};
+
+#[cfg(feature = "rkyv")]
+use crate::{archived_longest_candidate_path_to_root, archived_set_reverse_order};
 
 #[cfg(debug_assertions)]
 pub fn lacks_duplicates<'a, I, T>(value: &'a I) -> bool
@@ -87,52 +98,155 @@ where
     true
 }
 
-pub fn active_path_is_valid<'a, K, N, T, S>(
+pub fn valid_topology<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
-    roots: impl Iterator<Item = &'a K>,
+    roots: &'a IndexSet<K, S>,
     active: &'a HashSet<K, S>,
 ) -> bool
 where
     K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    N: Node<K, T, From = IndexSet<K, S>, To = IndexSet<K, S>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    if active.is_empty() {
-        return true;
+    let mut topological = Vec::with_capacity(nodes.len());
+    let mut scratchpad = Scratchpad::new();
+
+    {
+        let guard = scratchpad.guard();
+
+        let mut stack = guard.vec_with_capacity(roots.len());
+        let mut scratchpad_map = guard.map_with_capacity(nodes.len(), S::default());
+
+        for root in roots.iter().copied() {
+            if scratchpad_map.contains_key(&root) {
+                continue;
+            }
+
+            stack.push(Step::Enter(root));
+
+            while let Some(step) = stack.pop() {
+                match step {
+                    Step::Enter(id) => match scratchpad_map.entry(id) {
+                        Entry::Occupied(entry) => {
+                            if !entry.get() {
+                                return false;
+                            }
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert_entry(false);
+
+                            stack.push(Step::Exit(id));
+                            stack.extend(
+                                nodes[&id].to().into_iter().copied().rev().map(Step::Enter),
+                            );
+                        }
+                    },
+                    Step::Exit(id) => {
+                        scratchpad_map.insert(id, true);
+                        topological.push(id);
+                    }
+                }
+            }
+        }
+
+        if scratchpad_map.len() != nodes.len() {
+            return false;
+        }
     }
 
-    let mut scratchpad = Vec::with_capacity(nodes.len());
-    let mut scratchpad_list = Vec::with_capacity(nodes.len());
-    let mut scratchpad_list_2 = Vec::with_capacity(nodes.len());
-    let mut scratchpad_map = HashMap::with_capacity_and_hasher(nodes.len(), S::default());
+    topological.reverse();
 
-    for root in roots.filter(|id| active.contains(*id)).copied() {
-        topological_sort_subgraph(
-            nodes,
-            &|id| active.contains(id),
-            root,
-            &mut scratchpad,
-            &mut scratchpad_list,
-            &mut scratchpad_map,
-        );
-    }
+    let guard = scratchpad.guard();
 
-    scratchpad_map.clear();
+    let mut path = guard.vec_with_capacity(active.len());
+    let mut scratchpad_map = guard.map_with_capacity(nodes.len(), S::default());
 
     longest_candidate_path_to_root(
         nodes,
-        &scratchpad_list,
+        &topological,
         &|id| active.contains(id),
         &mut scratchpad_map,
-        &mut scratchpad_list_2,
+        |id| path.push(id),
     );
 
-    scratchpad_list_2.len() == active.len()
-        && scratchpad_list_2.into_iter().all(|id| active.contains(&id))
+    path.len() == active.len() && path.into_iter().all(|id| active.contains(&id))
+}
+
+#[cfg(feature = "rkyv")]
+pub fn archived_valid_topology<'a, K, N, T>(
+    nodes: &'a ArchivedHashMap<K, N>,
+    roots: &'a ArchivedIndexSet<K>,
+    active: &'a ArchivedHashSet<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
+{
+    let mut topological = Vec::with_capacity(nodes.len());
+    let mut scratchpad = Scratchpad::new();
+
+    {
+        let guard = scratchpad.guard();
+
+        let mut stack = guard.vec_with_capacity(roots.len());
+        let mut scratchpad_map =
+            guard.map_with_capacity(nodes.len(), DefaultHashBuilder::default());
+
+        for root in roots.iter().copied() {
+            if scratchpad_map.contains_key(&root) {
+                continue;
+            }
+
+            stack.push(Step::Enter(root));
+
+            while let Some(step) = stack.pop() {
+                match step {
+                    Step::Enter(id) => match scratchpad_map.entry(id) {
+                        Entry::Occupied(entry) => {
+                            if !entry.get() {
+                                return false;
+                            }
+                        }
+                        Entry::Vacant(entry) => {
+                            entry.insert_entry(false);
+
+                            stack.push(Step::Exit(id));
+                            stack.extend(
+                                archived_set_reverse_order(nodes[&id].to())
+                                    .copied()
+                                    .map(Step::Enter),
+                            );
+                        }
+                    },
+                    Step::Exit(id) => {
+                        scratchpad_map.insert(id, true);
+                        topological.push(id);
+                    }
+                }
+            }
+        }
+
+        if scratchpad_map.len() != nodes.len() {
+            return false;
+        }
+    }
+
+    topological.reverse();
+
+    let guard = scratchpad.guard();
+
+    let mut path = guard.vec_with_capacity(active.len());
+    let mut scratchpad_map = guard.map_with_capacity(nodes.len(), DefaultHashBuilder::default());
+
+    archived_longest_candidate_path_to_root(
+        nodes,
+        &topological,
+        &|id| active.contains(id),
+        &mut scratchpad_map,
+        |id| path.push(id),
+    );
+
+    path.len() == active.len() && path.into_iter().all(|id| active.contains(&id))
 }
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
