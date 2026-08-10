@@ -474,7 +474,7 @@ where
             let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
                 guard.map_with_capacity(self.nodes.len(), S::default());
-            let mut scratchpad_set = guard.set_with_capacity(self.nodes.len(), S::default());
+            let mut scratchpad_set = guard.set(S::default());
 
             topological_sort(
                 &self.nodes,
@@ -684,7 +684,7 @@ where
             let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
                 guard.map_with_capacity(self.nodes.len(), S::default());
-            let mut scratchpad_set = guard.set_with_capacity(self.nodes.len(), S::default());
+            let mut scratchpad_set = guard.set(S::default());
 
             topological_sort(
                 &self.nodes,
