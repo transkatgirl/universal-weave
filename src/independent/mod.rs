@@ -1984,7 +1984,7 @@ where
 
         if node.active {
             node.active = false;
-            self.active.remove(&node.id);
+            self.active.remove(id);
             self.update_node_activity_in_place(id, true);
         }
 
