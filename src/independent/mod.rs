@@ -1131,14 +1131,20 @@ where
             None
         };
 
+        let mut detached_root = false;
+
         for child in &node.to {
             let child = &self.nodes[child];
             if child.from.is_empty() {
                 if child.active {
                     node.active = true;
                 }
-                self.roots.shift_remove(&child.id);
+                detached_root = true;
             }
+        }
+
+        if detached_root {
+            self.roots.retain(|id| !node.to.contains(id));
         }
 
         let extends_active = node.active
@@ -1360,6 +1366,7 @@ where
             if removed_active {
                 self.fix_orphaned_activations();
             }
+            on_removal(node);
             return true;
         }
 
