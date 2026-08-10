@@ -1983,7 +1983,8 @@ where
         }
 
         if node.active {
-            node.active = false; // hack
+            node.active = false;
+            self.active.remove(&node.id);
             self.update_node_activity_in_place(id, true);
         }
 
