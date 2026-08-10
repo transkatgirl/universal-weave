@@ -1212,64 +1212,108 @@ where
         invariant(self.validate())
     ))]
     fn remove(&mut self, id: &K) -> Option<IndependentNode<K, T, S>> {
-        let mut removed_node = None;
-        let mut removed_active = false;
+        let node = self.nodes.remove(id)?;
+
+        if node.from.is_empty() {
+            self.roots.shift_remove(id);
+        } else {
+            for parent in &node.from {
+                if let Some(parent) = self.nodes.get_mut(parent) {
+                    parent.to.shift_remove(id);
+                }
+            }
+        }
+
+        let mut removed_active = node.active;
+        let mut removed_bookmark = node.bookmarked;
+
+        if removed_active {
+            self.active.remove(id);
+        }
+
+        if node.to.is_empty() {
+            if removed_bookmark {
+                self.bookmarked.shift_remove(id);
+            }
+            if removed_active {
+                self.fix_orphaned_activations();
+            }
+            return Some(node);
+        }
 
         {
             let guard = self.scratchpad.guard();
             let mut stack = guard.vec();
-            let mut removed_bookmarks = guard.set(S::default());
+            let mut removed = guard.vec();
+            let mut remaining_parents = guard.map_with_capacity(node.to.len(), S::default());
 
-            stack.push(*id);
+            removed.push(*id);
+
+            for child in node.to.iter().rev().copied() {
+                let remaining = remaining_parents
+                    .entry(child)
+                    .or_insert_with(|| self.nodes[&child].from.len());
+                *remaining = remaining.strict_sub(1);
+
+                if *remaining == 0 {
+                    stack.push(child);
+                }
+            }
 
             while let Some(id) = stack.pop() {
-                if let Some(node) = self.nodes.remove(&id) {
-                    if removed_node.is_none() && node.from.is_empty() {
-                        self.roots.shift_remove(&id);
-                    }
-                    if node.bookmarked {
-                        removed_bookmarks.insert(id);
-                    }
-                    if node.active {
-                        self.active.remove(&id);
-                        removed_active = true;
-                    }
+                let node = self.nodes.remove(&id).unwrap();
+                removed.push(id);
 
-                    for parent in &node.from {
-                        if let Some(parent) = self.nodes.get_mut(parent) {
-                            parent.to.shift_remove(&node.id);
-                        }
-                    }
-                    for child in node.to.iter().rev() {
-                        if let Some(child) = self.nodes.get_mut(child) {
-                            child.from.shift_remove(&node.id);
+                removed_bookmark |= node.bookmarked;
+                if node.active {
+                    self.active.remove(&id);
+                    removed_active = true;
+                }
 
-                            if child.from.is_empty() {
-                                stack.push(child.id);
-                            }
-                        }
-                    }
+                for child in node.to.iter().rev().copied() {
+                    let remaining = remaining_parents
+                        .entry(child)
+                        .or_insert_with(|| self.nodes[&child].from.len());
+                    *remaining = remaining.strict_sub(1);
 
-                    if removed_node.is_none() {
-                        removed_node = Some(node);
+                    if *remaining == 0 {
+                        stack.push(child);
                     }
                 }
             }
 
-            if !removed_bookmarks.is_empty() {
-                self.bookmarked.retain(|id| !removed_bookmarks.contains(id));
+            if removed.len() == 1 {
+                for (child, _) in remaining_parents {
+                    if let Some(child) = self.nodes.get_mut(&child) {
+                        child.from.shift_remove(id);
+                    }
+                }
+                if removed_bookmark {
+                    self.bookmarked.shift_remove(id);
+                }
+            } else {
+                let mut removed_set = guard.set_with_capacity(removed.len(), S::default());
+                removed_set.extend(removed);
+
+                for (child, remaining) in remaining_parents {
+                    if remaining > 0
+                        && let Some(child) = self.nodes.get_mut(&child)
+                    {
+                        child.from.retain(|parent| !removed_set.contains(parent));
+                    }
+                }
+
+                if removed_bookmark {
+                    self.bookmarked.retain(|id| !removed_set.contains(id));
+                }
             }
         }
 
-        if removed_node.is_some() {
-            if removed_active {
-                // matches set_active(id, false)
-                self.fix_orphaned_activations();
-            }
-            removed_node
-        } else {
-            None
+        if removed_active {
+            self.fix_orphaned_activations();
         }
+
+        Some(node)
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(!self.nodes.contains_key(id)),
@@ -1288,67 +1332,114 @@ where
         id: &K,
         mut on_removal: impl FnMut(IndependentNode<K, T, S>),
     ) -> bool {
-        let had_node = match self.nodes.get(id) {
-            Some(node) => {
-                if node.from.is_empty() {
-                    self.roots.shift_remove(id);
-                }
-
-                true
-            }
-            None => false,
+        let Some(node) = self.nodes.remove(id) else {
+            return false;
         };
-        let mut removed_active = false;
+
+        if node.from.is_empty() {
+            self.roots.shift_remove(id);
+        } else {
+            for parent in &node.from {
+                if let Some(parent) = self.nodes.get_mut(parent) {
+                    parent.to.shift_remove(id);
+                }
+            }
+        }
+
+        let mut removed_active = node.active;
+        let mut removed_bookmark = node.bookmarked;
+
+        if removed_active {
+            self.active.remove(id);
+        }
+
+        if node.to.is_empty() {
+            if removed_bookmark {
+                self.bookmarked.shift_remove(id);
+            }
+            if removed_active {
+                self.fix_orphaned_activations();
+            }
+            return true;
+        }
 
         {
             let guard = self.scratchpad.guard();
             let mut stack = guard.vec();
-            let mut removed_bookmarks = guard.set(S::default());
+            let mut removed = guard.vec();
+            let mut remaining_parents = guard.map_with_capacity(node.to.len(), S::default());
 
-            stack.push(*id);
+            removed.push(*id);
 
-            while let Some(id) = stack.pop() {
-                if let Some(node) = self.nodes.remove(&id) {
-                    if node.bookmarked {
-                        removed_bookmarks.insert(id);
-                    }
-                    if node.active {
-                        self.active.remove(&id);
-                        removed_active = true;
-                    }
+            for child in node.to.iter().rev().copied() {
+                let remaining = remaining_parents
+                    .entry(child)
+                    .or_insert_with(|| self.nodes[&child].from.len());
+                *remaining = remaining.strict_sub(1);
 
-                    for parent in &node.from {
-                        if let Some(parent) = self.nodes.get_mut(parent) {
-                            parent.to.shift_remove(&node.id);
-                        }
-                    }
-                    for child in node.to.iter().rev() {
-                        if let Some(child) = self.nodes.get_mut(child) {
-                            child.from.shift_remove(&node.id);
-
-                            if child.from.is_empty() {
-                                stack.push(child.id);
-                            }
-                        }
-                    }
-
-                    on_removal(node);
+                if *remaining == 0 {
+                    stack.push(child);
                 }
             }
 
-            if !removed_bookmarks.is_empty() {
-                self.bookmarked.retain(|id| !removed_bookmarks.contains(id));
+            on_removal(node);
+
+            while let Some(id) = stack.pop() {
+                let node = self.nodes.remove(&id).unwrap();
+                removed.push(id);
+
+                removed_bookmark |= node.bookmarked;
+                if node.active {
+                    self.active.remove(&id);
+                    removed_active = true;
+                }
+
+                for child in node.to.iter().rev().copied() {
+                    let remaining = remaining_parents
+                        .entry(child)
+                        .or_insert_with(|| self.nodes[&child].from.len());
+                    *remaining = remaining.strict_sub(1);
+
+                    if *remaining == 0 {
+                        stack.push(child);
+                    }
+                }
+
+                on_removal(node);
+            }
+
+            if removed.len() == 1 {
+                for (child, _) in remaining_parents {
+                    if let Some(child) = self.nodes.get_mut(&child) {
+                        child.from.shift_remove(id);
+                    }
+                }
+                if removed_bookmark {
+                    self.bookmarked.shift_remove(id);
+                }
+            } else {
+                let mut removed_set = guard.set_with_capacity(removed.len(), S::default());
+                removed_set.extend(removed);
+
+                for (child, remaining) in remaining_parents {
+                    if remaining > 0
+                        && let Some(child) = self.nodes.get_mut(&child)
+                    {
+                        child.from.retain(|parent| !removed_set.contains(parent));
+                    }
+                }
+
+                if removed_bookmark {
+                    self.bookmarked.retain(|id| !removed_set.contains(id));
+                }
             }
         }
 
-        if had_node {
-            if removed_active {
-                self.fix_orphaned_activations();
-            }
-            true
-        } else {
-            false
+        if removed_active {
+            self.fix_orphaned_activations();
         }
+
+        true
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(self.nodes.is_empty()),
