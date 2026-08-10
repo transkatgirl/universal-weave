@@ -470,9 +470,7 @@ where
 
         if value {
             let guard = self.scratchpad.guard();
-            let mut stack = guard.vec();
             let mut topological = guard.vec_with_capacity(self.nodes.len());
-            let mut scratchpad_map = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
                 guard.map_with_capacity(self.nodes.len(), S::default());
@@ -481,9 +479,9 @@ where
             topological_sort(
                 &self.nodes,
                 self.roots.iter().copied(),
-                &mut stack,
+                &mut guard.vec_with_capacity(self.roots.len()),
                 |id| topological.push(id),
-                &mut scratchpad_map,
+                &mut guard.map_with_capacity(self.nodes.len(), S::default()),
             );
 
             for id in topological.iter().copied() {
@@ -601,14 +599,13 @@ where
     fn fix_orphaned_activations(&mut self) {
         let guard = self.scratchpad.guard();
 
-        let mut stack = guard.vec();
         let mut topological = guard.vec_with_capacity(self.nodes.len());
         let mut scratchpad_map = guard.map_with_capacity(self.nodes.len(), S::default());
 
         topological_sort(
             &self.nodes,
             self.roots.iter().copied(),
-            &mut stack,
+            &mut guard.vec_with_capacity(self.roots.len()),
             |id| topological.push(id),
             &mut scratchpad_map,
         );
@@ -683,9 +680,7 @@ where
             }
 
             let guard = self.scratchpad.guard();
-            let mut stack = guard.vec();
             let mut topological = guard.vec_with_capacity(self.nodes.len());
-            let mut scratchpad_map = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
             let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
                 guard.map_with_capacity(self.nodes.len(), S::default());
@@ -694,9 +689,9 @@ where
             topological_sort(
                 &self.nodes,
                 self.roots.iter().copied(),
-                &mut stack,
+                &mut guard.vec_with_capacity(self.roots.len()),
                 |id| topological.push(id), // topological order
-                &mut scratchpad_map,
+                &mut guard.map_with_capacity(self.nodes.len(), S::default()),
             );
 
             for id in topological.drain(..) {
