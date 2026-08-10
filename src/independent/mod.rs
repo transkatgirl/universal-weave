@@ -1023,18 +1023,19 @@ where
 
         ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors);
 
-        let mut active_topological_subgraph = guard.vec_with_capacity(self.active.len());
+        let mut active_topological_subgraph =
+            guard.vec_with_capacity(self.active.len().min(ancestors.len()));
         let mut scratchpad_map = guard.map_with_capacity(ancestors.len(), S::default());
 
         for root in self
             .roots
             .iter()
-            .filter(|id| self.active.contains(*id))
+            .filter(|id| self.active.contains(*id) && ancestors.contains(*id))
             .copied()
         {
             topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id),
+                &|id| self.active.contains(id) && ancestors.contains(id),
                 root,
                 &mut stack,
                 |id| active_topological_subgraph.push(id),
@@ -1241,9 +1242,6 @@ where
             if removed_bookmark {
                 self.bookmarked.shift_remove(id);
             }
-            if removed_active {
-                self.fix_orphaned_activations();
-            }
             return Some(node);
         }
 
@@ -1362,9 +1360,6 @@ where
         if node.to.is_empty() {
             if removed_bookmark {
                 self.bookmarked.shift_remove(id);
-            }
-            if removed_active {
-                self.fix_orphaned_activations();
             }
             on_removal(node);
             return true;
@@ -2245,18 +2240,19 @@ where
 
         archived_ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors);
 
-        let mut active_topological_subgraph = guard.vec_with_capacity(self.active.len());
+        let mut active_topological_subgraph =
+            guard.vec_with_capacity(self.active.len().min(ancestors.len()));
         let mut scratchpad_map = guard.map_with_capacity(ancestors.len(), S::default());
 
         for root in self
             .roots
             .iter()
-            .filter(|id| self.active.contains(*id))
+            .filter(|id| self.active.contains(*id) && ancestors.contains(*id))
             .copied()
         {
             archived_topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id),
+                &|id| self.active.contains(id) && ancestors.contains(id),
                 root,
                 &mut stack,
                 |id| active_topological_subgraph.push(id),
