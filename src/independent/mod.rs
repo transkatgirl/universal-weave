@@ -1034,6 +1034,7 @@ where
 
         let guard = self.scratchpad.guard();
 
+        let mut stack = guard.vec();
         let mut topological_subgraph = guard.vec_with_capacity(self.active.len());
         let mut scratchpad_map = guard.map_with_capacity(self.active.len(), S::default());
 
@@ -1047,7 +1048,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 root,
-                &mut guard.vec(),
+                &mut stack,
                 |id| topological_subgraph.push(id),
                 &mut scratchpad_map,
             );
@@ -1175,10 +1176,11 @@ where
 
         if !node.to.is_empty() && !node.from.is_empty() {
             let guard = self.scratchpad.guard();
+            let mut stack = guard.vec();
             let mut ancestors = guard.set_with_capacity(node.from.len(), S::default());
 
             for parent in node.from.iter().copied() {
-                ancestor_subgraph(&self.nodes, parent, &mut guard.vec(), &mut ancestors);
+                ancestor_subgraph(&self.nodes, parent, &mut stack, &mut ancestors);
             }
 
             if node.to.iter().any(|child| ancestors.contains(child)) {
@@ -1989,10 +1991,11 @@ where
             && !new_parents.is_empty()
         {
             let guard = self.scratchpad.guard();
+            let mut stack = guard.vec();
             let mut descendants = guard.set_with_capacity(node.to.len(), S::default());
 
             for child in node.to.iter().copied() {
-                descendant_subgraph(&self.nodes, child, &mut guard.vec(), &mut descendants);
+                descendant_subgraph(&self.nodes, child, &mut stack, &mut descendants);
             }
 
             if new_parents
@@ -2261,6 +2264,7 @@ where
         let mut scratchpad = Scratchpad::new();
         let guard = scratchpad.guard();
 
+        let mut stack = guard.vec();
         let mut topological_subgraph = guard.vec_with_capacity(self.active.len());
         let mut scratchpad_map = guard.map_with_capacity(self.active.len(), S::default());
 
@@ -2274,7 +2278,7 @@ where
                 &self.nodes,
                 &|id| self.active.contains(id),
                 root,
-                &mut guard.vec(),
+                &mut stack,
                 |id| topological_subgraph.push(id),
                 &mut scratchpad_map,
             );
