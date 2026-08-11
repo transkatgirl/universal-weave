@@ -1023,6 +1023,8 @@ where
 
             descendant_subgraph(&self.nodes, *id, &mut stack, &mut descendants);
 
+            output.reserve(descendants.len());
+
             topological_sort_subgraph(
                 &self.nodes,
                 &|id| descendants.contains(id),
@@ -2295,6 +2297,8 @@ where
             let mut descendants = guard.set(S::default());
 
             archived_descendant_subgraph(&self.nodes, *id, &mut stack, &mut descendants);
+
+            output.reserve(descendants.len());
 
             archived_topological_sort_subgraph(
                 &self.nodes,
