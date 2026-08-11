@@ -540,58 +540,68 @@ where
             scratchpad_map_2.clear();
             scratchpad_map_3.clear();
 
-            descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+            if self.active.len() != 1 {
+                descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
 
-            topological_sort_subgraph(
-                &self.nodes,
-                &|id| closure.contains(id),
-                *id,
-                &mut stack,
-                |id| topological.push(id),
-                &mut scratchpad_map,
-            );
-
-            for id in topological.drain(..).rev() {
-                let node = &self.nodes[&id];
-
-                let best_child = node
-                    .to
-                    .iter()
-                    .map(|id| (id, scratchpad_map_3[id])) // score: (connectors, active)
-                    .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-
-                let (child, score) = if let Some((child, mut score)) = best_child {
-                    if node.active {
-                        score.1 = score.1.strict_add(1);
-                    } else {
-                        score.0 = score.0.strict_add(1);
-                    }
-
-                    (Some(child), score)
+                let has_active_descendant = if closure.len() >= self.active.len() {
+                    self.active.iter().any(|a| a != id && closure.contains(a))
                 } else {
-                    (None, if node.active { (0, 1) } else { (1, 0) })
+                    closure.iter().any(|d| d != id && self.active.contains(d))
                 };
 
-                if let Some(child) = child {
-                    scratchpad_map_2.insert(id, *child); // successors
-                }
+                if has_active_descendant {
+                    topological_sort_subgraph(
+                        &self.nodes,
+                        &|id| closure.contains(id),
+                        *id,
+                        &mut stack,
+                        |id| topological.push(id),
+                        &mut scratchpad_map,
+                    );
 
-                scratchpad_map_3.insert(id, score);
+                    for id in topological.drain(..).rev() {
+                        let node = &self.nodes[&id];
+
+                        let best_child = node
+                            .to
+                            .iter()
+                            .map(|id| (id, scratchpad_map_3[id])) // score: (connectors, active)
+                            .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+                        let (child, score) = if let Some((child, mut score)) = best_child {
+                            if node.active {
+                                score.1 = score.1.strict_add(1);
+                            } else {
+                                score.0 = score.0.strict_add(1);
+                            }
+
+                            (Some(child), score)
+                        } else {
+                            (None, if node.active { (0, 1) } else { (1, 0) })
+                        };
+
+                        if let Some(child) = child {
+                            scratchpad_map_2.insert(id, *child); // successors
+                        }
+
+                        scratchpad_map_3.insert(id, score);
+                    }
+
+                    let mut current = Some(id);
+
+                    while let Some(id) = current {
+                        scratchpad_set.insert(*id);
+
+                        current = if scratchpad_map_3[id].1 > usize::from(self.nodes[id].active) {
+                            scratchpad_map_2.get(id)
+                        } else {
+                            None
+                        };
+                    }
+                }
             }
 
             let mut disjoint = topological;
-
-            let mut current = Some(id);
-
-            while let Some(id) = current {
-                scratchpad_set.insert(*id);
-
-                current = if scratchpad_map_3[id].1 > usize::from(self.nodes[id].active) {
-                    scratchpad_map_2.get(id)
-                } else {
-                    None
-                };
-            }
 
             disjoint.extend(
                 self.active
