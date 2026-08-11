@@ -1200,13 +1200,16 @@ where
         let mut detached_root = false;
 
         for child in &node.to {
-            let child = &self.nodes[child];
+            let child = self.nodes.get_mut(child).unwrap();
+
             if child.from.is_empty() {
                 if child.active {
                     node.active = true;
                 }
                 detached_root = true;
             }
+
+            child.from.insert(node.id);
         }
 
         if detached_root {
@@ -1230,11 +1233,6 @@ where
                 let parent = self.nodes.get_mut(parent).unwrap();
                 parent.to.insert(node.id);
             }
-        }
-
-        for child in &node.to {
-            let child = self.nodes.get_mut(child).unwrap();
-            child.from.insert(node.id);
         }
 
         if node.bookmarked {
@@ -1349,6 +1347,14 @@ where
                         stack.push(child);
                     }
                 }
+            }
+
+            if removed_active
+                && !remaining_parents
+                    .iter()
+                    .any(|(child, remaining)| *remaining > 0 && self.active.contains(child))
+            {
+                removed_active = false;
             }
 
             if removed.len() == 1 {
@@ -1473,6 +1479,14 @@ where
                 }
 
                 on_removal(node);
+            }
+
+            if removed_active
+                && !remaining_parents
+                    .iter()
+                    .any(|(child, remaining)| *remaining > 0 && self.active.contains(child))
+            {
+                removed_active = false;
             }
 
             if removed.len() == 1 {
