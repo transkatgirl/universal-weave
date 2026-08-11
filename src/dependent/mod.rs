@@ -311,8 +311,11 @@ where
         ensures(ret.validate())
     ))]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
+        let nodes = HashMap::with_capacity_and_hasher(capacity, S::default());
+        let capacity = nodes.capacity();
+
         Self {
-            nodes: HashMap::with_capacity_and_hasher(capacity, S::default()),
+            nodes,
             roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
             active: None,
             bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
@@ -323,7 +326,10 @@ where
     /// Returns the number of nodes the weave can hold without reallocating.
     #[inline]
     pub fn capacity(&self) -> usize {
-        self.nodes.capacity()
+        self.nodes
+            .capacity()
+            .min(self.roots.capacity())
+            .min(self.bookmarked.capacity())
     }
     /// Reserves capacity for at least `additional` more nodes.
     #[cfg_attr(debug_assertions, contract(
