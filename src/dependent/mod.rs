@@ -99,10 +99,10 @@ where
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
             && self.from == other.from
-            && self.to.len() == other.to.len()
-            && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
             && self.active == other.active
             && self.bookmarked == other.bookmarked
+            && self.to.len() == other.to.len()
+            && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
             && self.contents == other.contents
     }
 }

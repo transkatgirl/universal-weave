@@ -107,10 +107,10 @@ where
         self.id == other.id
             && self.from.len() == other.from.len()
             && self.to.len() == other.to.len()
-            && self.from.iter().zip(other.from.iter()).all(|(a, b)| a == b)
-            && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
             && self.active == other.active
             && self.bookmarked == other.bookmarked
+            && self.from.iter().zip(other.from.iter()).all(|(a, b)| a == b)
+            && self.to.iter().zip(other.to.iter()).all(|(a, b)| a == b)
             && self.contents == other.contents
     }
 }
@@ -2051,6 +2051,10 @@ where
         let Some(node) = self.nodes.get(id) else {
             return false;
         };
+
+        if node.from.iter().eq(new_parents) {
+            return true;
+        }
 
         let new_parents: IndexSet<K, S> = new_parents.iter().copied().collect();
 

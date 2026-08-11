@@ -1092,7 +1092,6 @@ fn archived_descendant_subgraph<'a, K, N, T, S>(
 #[cfg(feature = "rkyv")]
 fn archived_set_reverse_order<T>(set: &ArchivedIndexSet<T>) -> impl Iterator<Item = &T> {
     (0..set.len())
-        .into_iter()
         .rev()
         .filter_map(|index| set.get_index(index))
 }
