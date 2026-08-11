@@ -698,6 +698,10 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "Cannot be split into smaller functions"
+    )]
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
     pub fn set_active_dependent_semantics(&mut self, id: &K, value: bool) -> bool {

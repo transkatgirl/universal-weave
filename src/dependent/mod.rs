@@ -7,12 +7,15 @@ use core::{
     mem,
 };
 
-use hashbrown::{HashMap, HashSet, hash_map::Entry};
+use hashbrown::{HashMap, hash_map::Entry};
 use indexmap::IndexSet;
 use scratchpads::{Scratchpad, ScratchpadVec};
 
 #[cfg(debug_assertions)]
 use contracts::contract;
+
+#[cfg(debug_assertions)]
+use hashbrown::HashSet;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -745,7 +748,6 @@ where
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut Vec::with_capacity(self.roots.len()),
-                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
             )
     }
 }
@@ -1210,7 +1212,6 @@ where
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut Vec::with_capacity(self.roots.len()),
-                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
             )
     }
 }
@@ -1456,49 +1457,48 @@ fn archived_topological_sort<K, N, T>(
     }
 }
 
+#[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
 fn detect_cycles<K, N, T, S>(
     nodes: &HashMap<K, N, S>,
     roots: impl Iterator<Item = K>,
     stack: &mut Vec<K>,
-    scratchpad_set: &mut HashSet<K, S>,
 ) -> bool
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T, From = Option<K>, To = IndexSet<K, S>>,
     S: BuildHasher + Default + Clone,
 {
+    let mut count = 0;
+
     stack.extend(roots);
 
     while let Some(id) = stack.pop() {
-        if !scratchpad_set.insert(id) {
-            return true;
-        }
+        count += 1;
         stack.extend(nodes[&id].to().into_iter().rev().copied());
     }
 
-    scratchpad_set.len() != nodes.len()
+    count != nodes.len()
 }
 
 #[cfg(feature = "rkyv")]
-fn archived_detect_cycles<K, N, T, S>(
+#[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+fn archived_detect_cycles<K, N, T>(
     nodes: &ArchivedHashMap<K, N>,
     roots: impl Iterator<Item = K>,
     stack: &mut Vec<K>,
-    scratchpad_set: &mut HashSet<K, S>,
 ) -> bool
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T, From = ArchivedOption<K>, To = ArchivedIndexSet<K>>,
-    S: BuildHasher + Default + Clone,
 {
+    let mut count = 0;
+
     stack.extend(roots);
 
     while let Some(id) = stack.pop() {
-        if !scratchpad_set.insert(id) {
-            return true;
-        }
-        stack.extend(archived_set_reverse_order(nodes[&id].to()).copied());
+        count += 1;
+        stack.extend(nodes[&id].to().iter().copied());
     }
 
-    scratchpad_set.len() != nodes.len()
+    count != nodes.len()
 }
