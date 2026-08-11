@@ -998,7 +998,8 @@ where
             self.roots.iter().copied(),
             &mut guard.vec_with_capacity(self.roots.len()),
             |id| output.push(id),
-            &mut guard.map_with_capacity(self.nodes.len(), S::default()),
+            &mut guard
+                .map_with_capacity(self.nodes.len().strict_sub(self.roots.len()), S::default()),
         );
     }
     #[cfg_attr(debug_assertions, contract(
@@ -2282,7 +2283,8 @@ where
             &self.roots,
             &mut guard.vec_with_capacity(self.roots.len()),
             |id| output.push(id),
-            &mut guard.map_with_capacity(self.nodes.len(), S::default()),
+            &mut guard
+                .map_with_capacity(self.nodes.len().strict_sub(self.roots.len()), S::default()),
         );
     }
     fn get_ordered_identifiers_from(&self, id: &K::Archived, output: &mut Vec<K::Archived>) {
