@@ -7,15 +7,12 @@ use core::{
     mem,
 };
 
-use hashbrown::{HashMap, hash_map::Entry};
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
 use scratchpads::{Scratchpad, ScratchpadVec};
 
 #[cfg(debug_assertions)]
 use contracts::contract;
-
-#[cfg(debug_assertions)]
-use hashbrown::HashSet;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
