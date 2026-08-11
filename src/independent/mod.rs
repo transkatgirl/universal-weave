@@ -1089,7 +1089,8 @@ where
 
         let mut active_topological_subgraph =
             guard.vec_with_capacity(self.active.len().min(ancestors.len()));
-        let mut scratchpad_map = guard.map_with_capacity(ancestors.len(), S::default());
+        let mut scratchpad_map =
+            guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default());
 
         for root in self
             .roots
@@ -1203,9 +1204,7 @@ where
             let child = self.nodes.get_mut(child).unwrap();
 
             if child.from.is_empty() {
-                if child.active {
-                    node.active = true;
-                }
+                node.active |= child.active;
                 detached_root = true;
             }
 
@@ -1836,6 +1835,8 @@ where
                     node.active = false;
                     node.bookmarked = false;
 
+                    let mut child_active = false;
+
                     for child in &node.to {
                         let child = self.nodes.get_mut(child).unwrap();
                         let index = child.from.get_index_of(&left_node.id).unwrap();
@@ -1845,10 +1846,12 @@ where
                             "Should be unreachable"
                         );
 
-                        if child.active && left_node.active {
-                            node.active = true;
-                            self.active.insert(node.id);
-                        }
+                        child_active |= child.active;
+                    }
+
+                    if left_node.active && child_active {
+                        node.active = true;
+                        self.active.insert(node.id);
                     }
 
                     self.nodes.insert(left_node.id, left_node);
@@ -2319,7 +2322,8 @@ where
 
         let mut active_topological_subgraph =
             guard.vec_with_capacity(self.active.len().min(ancestors.len()));
-        let mut scratchpad_map = guard.map_with_capacity(ancestors.len(), S::default());
+        let mut scratchpad_map =
+            guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default());
 
         for root in self
             .roots
