@@ -470,19 +470,34 @@ where
 
         if value {
             let guard = self.scratchpad.guard();
-            let mut topological = guard.vec_with_capacity(self.nodes.len());
-            let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
+
+            let mut stack = guard.vec();
+            let mut closure = guard.set(S::default());
+
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+
+            let mut topological = guard.vec_with_capacity(closure.len());
+            let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
+            let mut scratchpad_map_2 = guard.map_with_capacity(closure.len(), S::default());
             let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
-                guard.map_with_capacity(self.nodes.len(), S::default());
+                guard.map_with_capacity(closure.len(), S::default());
             let mut scratchpad_set = guard.set(S::default());
 
-            topological_sort(
-                &self.nodes,
-                self.roots.iter().copied(),
-                &mut guard.vec_with_capacity(self.roots.len()),
-                |id| topological.push(id),
-                &mut guard.map_with_capacity(self.nodes.len(), S::default()),
-            );
+            for root in self
+                .roots
+                .iter()
+                .filter(|id| closure.contains(*id))
+                .copied()
+            {
+                topological_sort_subgraph(
+                    &self.nodes,
+                    &|id| closure.contains(id),
+                    root,
+                    &mut stack,
+                    |id| topological.push(id),
+                    &mut scratchpad_map,
+                );
+            }
 
             for id in topological.iter().copied() {
                 let node = &self.nodes[&id];
@@ -519,8 +534,22 @@ where
                 current = scratchpad_map_2.get(id);
             }
 
+            closure.clear();
+            topological.clear();
+            scratchpad_map.clear();
             scratchpad_map_2.clear();
             scratchpad_map_3.clear();
+
+            descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+
+            topological_sort_subgraph(
+                &self.nodes,
+                &|id| closure.contains(id),
+                *id,
+                &mut stack,
+                |id| topological.push(id),
+                &mut scratchpad_map,
+            );
 
             for id in topological.drain(..).rev() {
                 let node = &self.nodes[&id];
@@ -599,16 +628,31 @@ where
     fn fix_orphaned_activations(&mut self) {
         let guard = self.scratchpad.guard();
 
-        let mut topological = guard.vec_with_capacity(self.nodes.len());
-        let mut scratchpad_map = guard.map_with_capacity(self.nodes.len(), S::default());
+        let mut stack = guard.vec();
+        let mut closure = guard.set_with_capacity(self.active.len(), S::default());
 
-        topological_sort(
-            &self.nodes,
-            self.roots.iter().copied(),
-            &mut guard.vec_with_capacity(self.roots.len()),
-            |id| topological.push(id),
-            &mut scratchpad_map,
-        );
+        for id in self.active.iter().copied() {
+            ancestor_subgraph(&self.nodes, id, &mut stack, &mut closure);
+        }
+
+        let mut topological = guard.vec_with_capacity(closure.len());
+        let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
+
+        for root in self
+            .roots
+            .iter()
+            .filter(|id| closure.contains(*id))
+            .copied()
+        {
+            topological_sort_subgraph(
+                &self.nodes,
+                &|id| closure.contains(id),
+                root,
+                &mut stack,
+                |id| topological.push(id),
+                &mut scratchpad_map,
+            );
+        }
 
         scratchpad_map.clear();
 
@@ -625,7 +669,9 @@ where
         topological.clear();
         let mut disjoint = topological;
 
-        let mut candidate_path_set = guard.set_with_capacity(candidate_path.len(), S::default());
+        closure.clear();
+        let mut candidate_path_set = closure;
+
         candidate_path_set.extend(candidate_path.drain(..));
 
         disjoint.extend(
@@ -680,19 +726,33 @@ where
             }
 
             let guard = self.scratchpad.guard();
-            let mut topological = guard.vec_with_capacity(self.nodes.len());
-            let mut scratchpad_map_2 = guard.map_with_capacity(self.nodes.len(), S::default());
-            let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
-                guard.map_with_capacity(self.nodes.len(), S::default());
-            let mut scratchpad_set = guard.set(S::default());
 
-            topological_sort(
-                &self.nodes,
-                self.roots.iter().copied(),
-                &mut guard.vec_with_capacity(self.roots.len()),
-                |id| topological.push(id), // topological order
-                &mut guard.map_with_capacity(self.nodes.len(), S::default()),
-            );
+            let mut stack = guard.vec();
+            let mut closure = guard.set(S::default());
+
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+
+            let mut topological = guard.vec_with_capacity(closure.len());
+            let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
+            let mut scratchpad_map_2 = guard.map_with_capacity(closure.len(), S::default());
+            let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
+                guard.map_with_capacity(closure.len(), S::default());
+
+            for root in self
+                .roots
+                .iter()
+                .filter(|id| closure.contains(*id))
+                .copied()
+            {
+                topological_sort_subgraph(
+                    &self.nodes,
+                    &|id| closure.contains(id),
+                    root,
+                    &mut stack,
+                    |id| topological.push(id), // topological order
+                    &mut scratchpad_map,
+                );
+            }
 
             for id in topological.drain(..) {
                 let node = &self.nodes[&id];
@@ -721,6 +781,9 @@ where
 
                 scratchpad_map_3.insert(id, score);
             }
+
+            closure.clear();
+            let mut scratchpad_set = closure;
 
             let mut disjoint = topological;
 
