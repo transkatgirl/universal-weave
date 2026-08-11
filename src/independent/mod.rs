@@ -469,6 +469,8 @@ where
         }
 
         if value {
+            let has_descendants = !node.to.is_empty();
+
             let guard = self.scratchpad.guard();
 
             let mut stack = guard.vec();
@@ -540,7 +542,7 @@ where
             scratchpad_map_2.clear();
             scratchpad_map_3.clear();
 
-            if self.active.len() != 1 {
+            if self.active.len() != 1 && has_descendants {
                 descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
 
                 let has_active_descendant = if closure.len() >= self.active.len() {
@@ -1134,10 +1136,10 @@ where
             |id| reversed_path.push(id),
         );
 
+        let mut scratchpad_map_2 = guard.map_with_capacity(ancestors.len(), S::default());
+
         ancestors.clear();
         let mut scratchpad_set = ancestors;
-
-        let mut scratchpad_map_2 = guard.map(S::default());
 
         if let Some(target) = reversed_path.first().copied() {
             shortest_path_to_ancestor(
