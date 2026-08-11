@@ -495,7 +495,7 @@ where
         invariant(self.validate())
     ))]
     fn insert(&mut self, node: DependentNode<K, T, S>) -> bool {
-        if !node.validate() || !node.to.is_empty() {
+        if node.from == Some(node.id) || !node.to.is_empty() {
             return false;
         }
 
@@ -1307,7 +1307,7 @@ where
         output.clear();
         output.reserve(self.nodes.len());
 
-        let mut scratchpad = Vec::new();
+        let mut scratchpad = Vec::with_capacity(self.roots.len());
 
         for root in self.roots.iter() {
             archived_topological_sort(&self.nodes, *root, &mut scratchpad, output);
