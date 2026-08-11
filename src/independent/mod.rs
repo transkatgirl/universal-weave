@@ -214,7 +214,9 @@ where
 
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
-/// However, this additional flexibility results in worse performance and memory usage characteristics overall.
+/// However, this additional flexibility results in worse performance and memory usage characteristics. Operations which update node activation can have a worst-case time complexity of O(V + E) rather than [`DependentWeave`]'s O(1), so bulk operations must be done carefully to prevent accidentally quadratic behavior.
+///
+/// For best performance, it is recommended that you use random node identifiers and the [`Hasher`](core::hash::Hasher) implementation from the [nohash-hasher](https://crates.io/crates/nohash-hasher) crate. If your node identifiers end with random data (such as ULIDs in their raw representation), use the [hash_hasher](https://crates.io/crates/hash_hasher) crate instead.
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize))]
@@ -342,6 +344,7 @@ where
     fn eq(&self, other: &Self) -> bool {
         self.roots.len() == other.roots.len()
             && self.bookmarked.len() == other.bookmarked.len()
+            && self.nodes.len() == other.nodes.len()
             && self.active == other.active
             && self
                 .roots
