@@ -323,7 +323,9 @@ where
             metadata,
         }
     }
-    /// Returns the number of nodes the weave can hold without reallocating.
+    /// Returns the worst-case number of nodes that the weave can hold without reallocating.
+    ///
+    /// May be lower than `self.len()`.
     #[inline]
     pub fn capacity(&self) -> usize {
         self.nodes
