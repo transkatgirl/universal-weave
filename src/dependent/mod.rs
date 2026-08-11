@@ -417,7 +417,7 @@ where
         output.reserve(self.nodes.len());
 
         let guard = self.scratchpad.guard();
-        let mut stack = guard.vec_with_capacity(self.roots.len());
+        let mut stack = guard.vec();
 
         for root in &self.roots {
             topological_sort(&self.nodes, *root, &mut stack, output);
@@ -1305,7 +1305,7 @@ where
         output.clear();
         output.reserve(self.nodes.len());
 
-        let mut scratchpad = Vec::with_capacity(self.roots.len());
+        let mut scratchpad = Vec::new();
 
         for root in self.roots.iter() {
             archived_topological_sort(&self.nodes, *root, &mut scratchpad, output);
