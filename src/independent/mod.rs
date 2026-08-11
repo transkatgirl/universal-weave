@@ -1663,7 +1663,7 @@ where
         if let Some(node) = self.nodes.get_mut(id) {
             let mut set = mem::take(&mut node.to);
 
-            {
+            if set.len() > 20 {
                 let guard = self.scratchpad.guard();
                 let mut nodes = guard
                     .arena()
@@ -1671,6 +1671,8 @@ where
                 nodes.sort_by(|a, b| cmp(*a, *b));
 
                 set.extend(nodes.into_iter().map(|node| node.id));
+            } else {
+                set.sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
             }
 
             self.nodes.get_mut(id).unwrap().to = set;
@@ -1709,15 +1711,20 @@ where
         &mut self,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
     ) {
-        let guard = self.scratchpad.guard();
+        if self.roots.len() > 20 {
+            let guard = self.scratchpad.guard();
 
-        let mut nodes = guard
-            .arena()
-            .alloc_iter_exact(self.roots.iter().map(|id| &self.nodes[id]));
-        nodes.sort_by(|a, b| cmp(*a, *b));
+            let mut nodes = guard
+                .arena()
+                .alloc_iter_exact(self.roots.iter().map(|id| &self.nodes[id]));
+            nodes.sort_by(|a, b| cmp(*a, *b));
 
-        self.roots.clear();
-        self.roots.extend(nodes.into_iter().map(|node| node.id));
+            self.roots.clear();
+            self.roots.extend(nodes.into_iter().map(|node| node.id));
+        } else {
+            self.roots
+                .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+        }
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
@@ -1749,16 +1756,21 @@ where
         &mut self,
         mut cmp: impl FnMut(&IndependentNode<K, T, S>, &IndependentNode<K, T, S>) -> Ordering,
     ) {
-        let guard = self.scratchpad.guard();
+        if self.bookmarked.len() > 20 {
+            let guard = self.scratchpad.guard();
 
-        let mut nodes = guard
-            .arena()
-            .alloc_iter_exact(self.bookmarked.iter().map(|id| &self.nodes[id]));
-        nodes.sort_by(|a, b| cmp(*a, *b));
+            let mut nodes = guard
+                .arena()
+                .alloc_iter_exact(self.bookmarked.iter().map(|id| &self.nodes[id]));
+            nodes.sort_by(|a, b| cmp(*a, *b));
 
-        self.bookmarked.clear();
-        self.bookmarked
-            .extend(nodes.into_iter().map(|node| node.id));
+            self.bookmarked.clear();
+            self.bookmarked
+                .extend(nodes.into_iter().map(|node| node.id));
+        } else {
+            self.bookmarked
+                .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+        }
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
