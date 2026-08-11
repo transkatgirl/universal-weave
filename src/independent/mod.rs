@@ -32,11 +32,11 @@ use serde::{
 use crate::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     IndependentContents, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, Weave, ancestor_subgraph,
+    SortableWeave, Weave, ancestor_subgraph, ancestor_subgraph_reaches,
     contract::valid_topology,
     dependent::{DependentNode, DependentWeave},
-    descendant_subgraph, longest_candidate_path_to_root, shortest_path_to_ancestor,
-    topological_sort, topological_sort_subgraph,
+    descendant_subgraph, descendant_subgraph_reaches, longest_candidate_path_to_root,
+    shortest_path_to_ancestor, topological_sort, topological_sort_subgraph,
 };
 
 #[cfg(debug_assertions)]
@@ -1176,14 +1176,14 @@ where
 
         if !node.to.is_empty() && !node.from.is_empty() {
             let guard = self.scratchpad.guard();
-            let mut stack = guard.vec();
-            let mut ancestors = guard.set_with_capacity(node.from.len(), S::default());
 
-            for parent in node.from.iter().copied() {
-                ancestor_subgraph(&self.nodes, parent, &mut stack, &mut ancestors);
-            }
-
-            if node.to.iter().any(|child| ancestors.contains(child)) {
+            if ancestor_subgraph_reaches(
+                &self.nodes,
+                node.from.iter().copied(),
+                &|id| node.to.contains(id),
+                &mut guard.vec_with_capacity(node.from.len()),
+                &mut guard.set_with_capacity(node.from.len(), S::default()),
+            ) {
                 return false;
             }
         }
@@ -1986,30 +1986,28 @@ where
             return false;
         }
 
-        if let Some(node) = self.nodes.get(id)
-            && !node.to.is_empty()
-            && !new_parents.is_empty()
-        {
-            let guard = self.scratchpad.guard();
-            let mut stack = guard.vec();
-            let mut descendants = guard.set_with_capacity(node.to.len(), S::default());
-
-            for child in node.to.iter().copied() {
-                descendant_subgraph(&self.nodes, child, &mut stack, &mut descendants);
-            }
-
-            if new_parents
-                .iter()
-                .any(|new_parent| descendants.contains(new_parent))
-            {
-                return false;
-            }
-        }
+        let Some(node) = self.nodes.get(id) else {
+            return false;
+        };
 
         let new_parents: IndexSet<K, S> = new_parents.iter().copied().collect();
 
         if new_parents.contains(id) {
             return false;
+        }
+
+        if !node.to.is_empty() && !new_parents.is_empty() {
+            let guard = self.scratchpad.guard();
+
+            if descendant_subgraph_reaches(
+                &self.nodes,
+                node.to.iter().copied(),
+                &|id| new_parents.contains(id),
+                &mut guard.vec_with_capacity(node.to.len()),
+                &mut guard.set_with_capacity(node.to.len(), S::default()),
+            ) {
+                return false;
+            }
         }
 
         if let Some(node) = self.nodes.get_mut(id) {
@@ -2030,8 +2028,6 @@ where
                     new_parent.to.insert(*id);
                 }
             }
-        } else {
-            return false;
         }
 
         let node = self.nodes.get_mut(id).unwrap();

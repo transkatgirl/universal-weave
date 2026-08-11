@@ -964,6 +964,37 @@ fn ancestor_subgraph<'a, K, N, T, S>(
     }
 }
 
+fn ancestor_subgraph_reaches<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    ids: impl DoubleEndedIterator<Item = K>,
+    target: &impl Fn(&K) -> bool,
+    stack: &mut ScratchpadVec<'_, K>,
+    identifiers: &mut ScratchpadSet<'_, K, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T>,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    stack.extend(ids.rev());
+
+    while let Some(id) = stack.pop() {
+        if identifiers.insert(id) {
+            if target(&id) {
+                return true;
+            }
+
+            stack.extend(nodes[&id].from().into_iter().rev().copied());
+        }
+    }
+
+    false
+}
+
 #[cfg(feature = "rkyv")]
 fn archived_ancestor_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
@@ -1005,6 +1036,37 @@ fn descendant_subgraph<'a, K, N, T, S>(
             stack.extend(nodes[&id].to().into_iter().rev().copied());
         }
     }
+}
+
+fn descendant_subgraph_reaches<'a, K, N, T, S>(
+    nodes: &'a HashMap<K, N, S>,
+    ids: impl DoubleEndedIterator<Item = K>,
+    target: &impl Fn(&K) -> bool,
+    stack: &mut ScratchpadVec<'_, K>,
+    identifiers: &mut ScratchpadSet<'_, K, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + 'a,
+    N: Node<K, T>,
+    <N as Node<K, T>>::From: 'a,
+    <N as Node<K, T>>::To: 'a,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    S: BuildHasher + Default + Clone,
+{
+    stack.extend(ids.rev());
+
+    while let Some(id) = stack.pop() {
+        if identifiers.insert(id) {
+            if target(&id) {
+                return true;
+            }
+
+            stack.extend(nodes[&id].to().into_iter().rev().copied());
+        }
+    }
+
+    false
 }
 
 #[cfg(feature = "rkyv")]
