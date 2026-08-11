@@ -2389,10 +2389,10 @@ where
             |id| reversed_path.push(id),
         );
 
+        let mut scratchpad_map_2 = guard.map_with_capacity(ancestors.len(), S::default());
+
         ancestors.clear();
         let mut scratchpad_set = ancestors;
-
-        let mut scratchpad_map_2 = guard.map(S::default());
 
         if let Some(target) = reversed_path.first().copied() {
             archived_shortest_path_to_ancestor(
