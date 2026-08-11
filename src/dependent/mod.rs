@@ -417,9 +417,10 @@ where
         output.reserve(self.nodes.len());
 
         let guard = self.scratchpad.guard();
+        let mut stack = guard.vec();
 
         for root in &self.roots {
-            topological_sort(&self.nodes, *root, &mut guard.vec(), output);
+            topological_sort(&self.nodes, *root, &mut stack, output);
         }
     }
     #[cfg_attr(debug_assertions, contract(
@@ -919,8 +920,16 @@ where
         &mut self,
         mut cmp: impl FnMut(&DependentNode<K, T, S>, &DependentNode<K, T, S>) -> Ordering,
     ) {
+        let guard = self.scratchpad.guard();
+
+        let mut nodes = guard
+            .arena()
+            .alloc_iter_exact(self.bookmarked.iter().map(|id| &self.nodes[id]));
+        nodes.sort_by(|a, b| cmp(*a, *b));
+
+        self.bookmarked.clear();
         self.bookmarked
-            .sort_by(|a, b| cmp(&self.nodes[a], &self.nodes[b]));
+            .extend(nodes.into_iter().map(|node| node.id));
     }
     #[cfg_attr(debug_assertions, contract(
         ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
