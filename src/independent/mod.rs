@@ -643,6 +643,10 @@ where
         ensures(self.validate())
     ))]
     fn fix_orphaned_activations(&mut self) {
+        if self.active.is_empty() {
+            return;
+        }
+
         let guard = self.scratchpad.guard();
 
         let mut stack = guard.vec();
@@ -1331,7 +1335,7 @@ where
         {
             let guard = self.scratchpad.guard();
             let mut stack = guard.vec();
-            let mut removed = guard.vec();
+            let mut removed = guard.vec_with_capacity(node.to.len().strict_add(1));
             let mut remaining_parents = guard.map_with_capacity(node.to.len(), S::default());
 
             removed.push(*id);
@@ -1459,7 +1463,7 @@ where
         {
             let guard = self.scratchpad.guard();
             let mut stack = guard.vec();
-            let mut removed = guard.vec();
+            let mut removed = guard.vec_with_capacity(node.to.len().strict_add(1));
             let mut remaining_parents = guard.map_with_capacity(node.to.len(), S::default());
 
             removed.push(*id);
