@@ -577,9 +577,28 @@ impl StateMachineTest for WeaveWrapper {
                 }
             )))
         );
-        assert_eq!(state.n_weave.roots(), state.o_weave.roots());
+        assert_eq!(state.n_weave.roots().len(), state.o_weave.roots().len());
+        assert!(
+            state
+                .n_weave
+                .roots()
+                .iter()
+                .zip(state.o_weave.roots())
+                .all(|(a, b)| a == b)
+        );
         assert_eq!(state.n_weave.metadata(), state.o_weave.metadata());
-        assert_eq!(state.n_weave.bookmarks(), state.o_weave.bookmarks());
+        assert_eq!(
+            state.n_weave.bookmarks().len(),
+            state.o_weave.bookmarks().len()
+        );
+        assert!(
+            state
+                .n_weave
+                .bookmarks()
+                .iter()
+                .zip(state.o_weave.bookmarks())
+                .all(|(a, b)| a == b)
+        );
         assert_eq!(state.n_weave.active(), state.o_weave.active());
         if state.n_weave.nodes().len() > old_node_count {
             state.counter += 1;
