@@ -525,7 +525,6 @@ where
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut Vec::with_capacity(self.roots.len()),
-                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
             )
     }
 }
@@ -800,7 +799,7 @@ where
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut Vec::with_capacity(self.roots.len()),
-                &mut HashSet::with_capacity_and_hasher(self.nodes.len(), S::default()),
+                &mut HashSet::with_capacity(self.nodes.len()),
             )
     }
 }

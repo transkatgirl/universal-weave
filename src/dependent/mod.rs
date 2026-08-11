@@ -1224,6 +1224,7 @@ where
                 &self.nodes,
                 self.roots.iter().copied(),
                 &mut Vec::with_capacity(self.roots.len()),
+                &mut HashSet::with_capacity(self.nodes.len()),
             )
     }
 }
@@ -1493,24 +1494,25 @@ where
 }
 
 #[cfg(feature = "rkyv")]
-#[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-fn archived_detect_cycles<K, N, T>(
+fn archived_detect_cycles<K, N, T, S>(
     nodes: &ArchivedHashMap<K, N>,
     roots: impl Iterator<Item = K>,
     stack: &mut Vec<K>,
+    scratchpad_set: &mut HashSet<K, S>,
 ) -> bool
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T, From = ArchivedOption<K>, To = ArchivedIndexSet<K>>,
+    S: BuildHasher + Default + Clone,
 {
-    let mut count = 0;
-
     stack.extend(roots);
 
     while let Some(id) = stack.pop() {
-        count += 1;
-        stack.extend(nodes[&id].to().iter().copied());
+        if !scratchpad_set.insert(id) {
+            return true;
+        }
+        stack.extend(archived_set_reverse_order(nodes[&id].to()).copied());
     }
 
-    count != nodes.len()
+    scratchpad_set.len() != nodes.len()
 }
