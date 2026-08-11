@@ -489,8 +489,7 @@ where
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
-            let mut scratchpad_map_2 = guard.map_with_capacity(closure.len(), S::default());
-            let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
+            let mut scratchpad_map_2: ScratchpadMap<'_, K, ((usize, usize), Option<K>), S> =
                 guard.map_with_capacity(closure.len(), S::default());
             let mut scratchpad_set = guard.set(S::default());
 
@@ -516,7 +515,7 @@ where
                 let best_parent = node
                     .from
                     .iter()
-                    .map(|id| (id, scratchpad_map_3[id])) // score: (connectors, active)
+                    .map(|id| (id, scratchpad_map_2[id].0)) // score: (connectors, active)
                     .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
@@ -531,25 +530,22 @@ where
                     (None, if node.active { (0, 1) } else { (1, 0) })
                 };
 
-                if let Some(parent) = parent {
-                    scratchpad_map_2.insert(id, *parent); // predecessors
-                }
-
-                scratchpad_map_3.insert(id, score);
+                scratchpad_map_2.insert(id, (score, parent.copied()));
             }
 
             let mut current = Some(id);
 
             while let Some(id) = current {
                 scratchpad_set.insert(*id);
-                current = scratchpad_map_2.get(id);
+                current = scratchpad_map_2
+                    .get(id)
+                    .and_then(|(_, parent)| parent.as_ref());
             }
 
             closure.clear();
             topological.clear();
             scratchpad_map.clear();
             scratchpad_map_2.clear();
-            scratchpad_map_3.clear();
 
             if self.active.len() != 1 && has_descendants {
                 descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
@@ -576,7 +572,7 @@ where
                         let best_child = node
                             .to
                             .iter()
-                            .map(|id| (id, scratchpad_map_3[id])) // score: (connectors, active)
+                            .map(|id| (id, scratchpad_map_2[id].0)) // score: (connectors, active)
                             .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                         let (child, score) = if let Some((child, mut score)) = best_child {
@@ -591,11 +587,7 @@ where
                             (None, if node.active { (0, 1) } else { (1, 0) })
                         };
 
-                        if let Some(child) = child {
-                            scratchpad_map_2.insert(id, *child); // successors
-                        }
-
-                        scratchpad_map_3.insert(id, score);
+                        scratchpad_map_2.insert(id, (score, child.copied()));
                     }
 
                     let mut current = Some(id);
@@ -603,8 +595,9 @@ where
                     while let Some(id) = current {
                         scratchpad_set.insert(*id);
 
-                        current = if scratchpad_map_3[id].1 > usize::from(self.nodes[id].active) {
-                            scratchpad_map_2.get(id)
+                        let (score, successor) = &scratchpad_map_2[id];
+                        current = if score.1 > usize::from(self.nodes[id].active) {
+                            successor.as_ref()
                         } else {
                             None
                         };
@@ -759,8 +752,7 @@ where
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
-            let mut scratchpad_map_2 = guard.map_with_capacity(closure.len(), S::default());
-            let mut scratchpad_map_3: ScratchpadMap<'_, K, (usize, usize), S> =
+            let mut scratchpad_map_2: ScratchpadMap<'_, K, ((usize, usize), Option<K>), S> =
                 guard.map_with_capacity(closure.len(), S::default());
 
             for root in self
@@ -785,7 +777,7 @@ where
                 let best_parent = node
                     .from
                     .iter()
-                    .map(|id| (id, scratchpad_map_3[id])) // score: (connectors, active)
+                    .map(|id| (id, scratchpad_map_2[id].0)) // score: (connectors, active)
                     .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
@@ -800,11 +792,7 @@ where
                     (None, if node.active { (0, 1) } else { (1, 0) })
                 };
 
-                if let Some(parent) = parent {
-                    scratchpad_map_2.insert(id, *parent); // predecessors
-                }
-
-                scratchpad_map_3.insert(id, score);
+                scratchpad_map_2.insert(id, (score, parent.copied()));
             }
 
             closure.clear();
@@ -816,7 +804,9 @@ where
 
             while let Some(id) = current {
                 scratchpad_set.insert(*id);
-                current = scratchpad_map_2.get(id);
+                current = scratchpad_map_2
+                    .get(id)
+                    .and_then(|(_, parent)| parent.as_ref());
             }
 
             disjoint.extend(
