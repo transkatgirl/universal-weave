@@ -11,7 +11,7 @@ use universal_weave::{
     independent::IndependentWeave,
 };
 
-const CASES: u32 = 8192;
+const CASES: u32 = 10240;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {

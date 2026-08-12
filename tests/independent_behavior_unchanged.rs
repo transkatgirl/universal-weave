@@ -20,7 +20,7 @@ use universal_weave::{
     independent::{IndependentNode, IndependentWeave},
 };
 
-const CASES: u32 = 4096;
+const CASES: u32 = 5120;
 const MAX_TRANSITIONS: usize = 512;
 
 prop_state_machine! {
