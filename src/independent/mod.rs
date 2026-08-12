@@ -35,8 +35,9 @@ use crate::{
     SortableWeave, Weave, ancestor_subgraph, ancestor_subgraph_reaches,
     contract::valid_topology,
     dependent::{DependentNode, DependentWeave},
-    descendant_subgraph, descendant_subgraph_reaches, longest_candidate_path_to_root,
-    shortest_path_to_ancestor, topological_sort, topological_sort_subgraph,
+    descendant_subgraph, descendant_subgraph_detect, descendant_subgraph_reaches,
+    longest_candidate_path_to_root, shortest_path_to_ancestor, topological_sort,
+    topological_sort_subgraph,
 };
 
 #[cfg(debug_assertions)]
@@ -551,13 +552,10 @@ where
             scratchpad_map_2.clear();
 
             if self.active.len() != 1 && has_descendants {
-                descendant_subgraph(&self.nodes, *id, &mut stack, &mut closure);
-
-                let has_active_descendant = if closure.len() >= self.active.len() {
-                    self.active.iter().any(|a| a != id && closure.contains(a))
-                } else {
-                    closure.iter().any(|d| d != id && self.active.contains(d))
-                };
+                let has_active_descendant =
+                    descendant_subgraph_detect(&self.nodes, *id, &mut stack, &mut closure, |id| {
+                        self.active.contains(id)
+                    });
 
                 if has_active_descendant {
                     topological_sort_subgraph(
