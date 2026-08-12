@@ -489,8 +489,11 @@ where
 
             let mut stack = guard.vec();
             let mut closure = guard.set(S::default());
+            let mut closure_roots = guard.vec();
 
-            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |_| {});
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |id| {
+                closure_roots.push(id);
+            });
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
@@ -498,12 +501,7 @@ where
                 guard.map_with_capacity(closure.len(), S::default());
             let mut scratchpad_set = guard.set(S::default());
 
-            for root in self
-                .roots
-                .iter()
-                .filter(|id| closure.contains(*id))
-                .copied()
-            {
+            for root in closure_roots.drain(..) {
                 topological_sort_subgraph(
                     &self.nodes,
                     |id| closure.contains(id),
@@ -756,20 +754,18 @@ where
 
             let mut stack = guard.vec();
             let mut closure = guard.set(S::default());
+            let mut closure_roots = guard.vec();
 
-            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |_| {});
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |id| {
+                closure_roots.push(id);
+            });
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
             let mut scratchpad_map_2: ScratchpadMap<'_, K, ((usize, usize), Option<K>), S> =
                 guard.map_with_capacity(closure.len(), S::default());
 
-            for root in self
-                .roots
-                .iter()
-                .filter(|id| closure.contains(*id))
-                .copied()
-            {
+            for root in closure_roots.drain(..) {
                 topological_sort_subgraph(
                     &self.nodes,
                     |id| closure.contains(id),
@@ -1832,10 +1828,9 @@ where
         invariant(self.validate())
     ))]
     fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
-        self.active.iter().for_each(|active| {
-            self.nodes.get_mut(active).unwrap().active = false;
+        self.active.drain().for_each(|active| {
+            self.nodes.get_mut(&active).unwrap().active = false;
         });
-        self.active.clear();
         self.active
             .extend(active.filter(|id| self.nodes.contains_key(id)));
         self.active.iter().for_each(|active| {
