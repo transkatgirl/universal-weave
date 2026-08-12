@@ -5,6 +5,8 @@
 //!     - [`DependentLoroWeave`](dependent::loro::DependentLoroWeave) - A [`DependentWeave`](dependent::DependentWeave) wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
 //! - [`IndependentWeave`](independent::IndependentWeave) - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 //!
+//! Operations on the built-in [`Weave`] implementations always preserve node ordering through the use of [`IndexSet`](indexmap::IndexSet), and (non-tail) insertion and removal operations on ordered sets can have a worst-case time complexity of O(n).
+//!
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 
 #![no_std]
@@ -640,7 +642,7 @@ fn archived_topological_sort<'a, K, N, T, S>(
 
 fn topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
-    filter: &impl Fn(&K) -> bool,
+    filter: impl Fn(&K) -> bool,
     subgraph_root: K,
     stack: &mut ScratchpadVec<'_, K>,
     mut identifier_callback: impl FnMut(K),
@@ -695,7 +697,7 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
 #[cfg(feature = "rkyv")]
 fn archived_topological_sort_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
-    filter: &impl Fn(&K) -> bool,
+    filter: impl Fn(&K) -> bool,
     subgraph_root: K,
     stack: &mut ScratchpadVec<'_, K>,
     mut identifier_callback: impl FnMut(K),
@@ -746,7 +748,7 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
 fn shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     id: &'a K,
-    target: &impl Fn(&'a N) -> bool,
+    target: impl Fn(&'a N) -> bool,
     scratchpad: &mut ScratchpadVec<'_, K>,
     scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
     scratchpad_set: &mut ScratchpadSet<'_, K, S>,
@@ -794,7 +796,7 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
 fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     id: &'a K,
-    target: &impl Fn(&'a N) -> bool,
+    target: impl Fn(&'a N) -> bool,
     scratchpad: &mut ScratchpadVec<'_, K>,
     scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
     scratchpad_set: &mut ScratchpadSet<'_, K, S>,
@@ -837,7 +839,7 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
 fn longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     topological_order: &[K],
-    is_candidate: &impl Fn(&K) -> bool,
+    is_candidate: impl Fn(&K) -> bool,
     scratchpad_map: &mut ScratchpadMap<'_, K, usize, S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
@@ -884,8 +886,14 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
         current = nodes[id]
             .from()
             .into_iter()
-            .filter(|id| scratchpad_map.contains_key(*id))
-            .min_by_key(|id| Reverse(scratchpad_map[*id]));
+            .filter_map(|parent| {
+                scratchpad_map
+                    .get(parent)
+                    .copied()
+                    .map(|distance| (parent, distance))
+            })
+            .min_by_key(|&(_, distance)| Reverse(distance))
+            .map(|(parent, _)| parent);
     }
 }
 
@@ -893,7 +901,7 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
 fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
-    is_candidate: &impl Fn(&K) -> bool,
+    is_candidate: impl Fn(&K) -> bool,
     scratchpad_map: &mut ScratchpadMap<'_, K, usize, S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
@@ -936,8 +944,14 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
         current = nodes[id]
             .from()
             .iter()
-            .filter(|id| scratchpad_map.contains_key(*id))
-            .min_by_key(|id| Reverse(scratchpad_map[*id]));
+            .filter_map(|parent| {
+                scratchpad_map
+                    .get(parent)
+                    .copied()
+                    .map(|distance| (parent, distance))
+            })
+            .min_by_key(|&(_, distance)| Reverse(distance))
+            .map(|(parent, _)| parent);
     }
 }
 
@@ -946,20 +960,31 @@ fn ancestor_subgraph<'a, K, N, T, S>(
     id: K,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
+    mut root_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T>,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    stack.push(id);
+    if identifiers.insert(id) {
+        stack.push(id);
+    }
 
     while let Some(id) = stack.pop() {
-        if identifiers.insert(id) {
-            stack.extend(nodes[&id].from().into_iter().rev().copied());
+        let from = nodes[&id].from().into_iter();
+
+        if from.len() == 0 {
+            root_callback(id);
+        } else {
+            for parent in from.rev().copied() {
+                if identifiers.insert(parent) {
+                    stack.push(parent);
+                }
+            }
         }
     }
 }
@@ -967,7 +992,7 @@ fn ancestor_subgraph<'a, K, N, T, S>(
 fn ancestor_subgraph_reaches<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl DoubleEndedIterator<Item = K>,
-    target: &impl Fn(&K) -> bool,
+    target: impl Fn(&K) -> bool,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
 ) -> bool
@@ -980,15 +1005,25 @@ where
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    stack.extend(ids.rev());
-
-    while let Some(id) = stack.pop() {
+    for id in ids.rev() {
         if identifiers.insert(id) {
             if target(&id) {
                 return true;
             }
 
-            stack.extend(nodes[&id].from().into_iter().rev().copied());
+            stack.push(id);
+        }
+    }
+
+    while let Some(id) = stack.pop() {
+        for parent in nodes[&id].from().into_iter().rev().copied() {
+            if identifiers.insert(parent) {
+                if target(&parent) {
+                    return true;
+                }
+
+                stack.push(parent);
+            }
         }
     }
 
@@ -1001,16 +1036,27 @@ fn archived_ancestor_subgraph<'a, K, N, T, S>(
     id: K,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
+    mut root_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T, From = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    stack.push(id);
+    if identifiers.insert(id) {
+        stack.push(id);
+    }
 
     while let Some(id) = stack.pop() {
-        if identifiers.insert(id) {
-            stack.extend(archived_set_reverse_order(nodes[&id].from()).copied());
+        let from = nodes[&id].from();
+
+        if from.is_empty() {
+            root_callback(id);
+        } else {
+            for parent in archived_set_reverse_order(from).copied() {
+                if identifiers.insert(parent) {
+                    stack.push(parent);
+                }
+            }
         }
     }
 }
@@ -1029,11 +1075,15 @@ fn descendant_subgraph<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    stack.push(id);
+    if identifiers.insert(id) {
+        stack.push(id);
+    }
 
     while let Some(id) = stack.pop() {
-        if identifiers.insert(id) {
-            stack.extend(nodes[&id].to().into_iter().rev().copied());
+        for child in nodes[&id].to().into_iter().rev().copied() {
+            if identifiers.insert(child) {
+                stack.push(child);
+            }
         }
     }
 }
@@ -1041,7 +1091,7 @@ fn descendant_subgraph<'a, K, N, T, S>(
 fn descendant_subgraph_reaches<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl DoubleEndedIterator<Item = K>,
-    target: &impl Fn(&K) -> bool,
+    target: impl Fn(&K) -> bool,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
 ) -> bool
@@ -1054,15 +1104,25 @@ where
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
-    stack.extend(ids.rev());
-
-    while let Some(id) = stack.pop() {
+    for id in ids.rev() {
         if identifiers.insert(id) {
             if target(&id) {
                 return true;
             }
 
-            stack.extend(nodes[&id].to().into_iter().rev().copied());
+            stack.push(id);
+        }
+    }
+
+    while let Some(id) = stack.pop() {
+        for child in nodes[&id].to().into_iter().rev().copied() {
+            if identifiers.insert(child) {
+                if target(&child) {
+                    return true;
+                }
+
+                stack.push(child);
+            }
         }
     }
 
@@ -1080,11 +1140,15 @@ fn archived_descendant_subgraph<'a, K, N, T, S>(
     N: Node<K, T, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
-    stack.push(id);
+    if identifiers.insert(id) {
+        stack.push(id);
+    }
 
     while let Some(id) = stack.pop() {
-        if identifiers.insert(id) {
-            stack.extend(archived_set_reverse_order(nodes[&id].to()).copied());
+        for child in archived_set_reverse_order(nodes[&id].to()).copied() {
+            if identifiers.insert(child) {
+                stack.push(child);
+            }
         }
     }
 }

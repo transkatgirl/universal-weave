@@ -214,7 +214,9 @@ where
 
 /// A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
 ///
-/// However, this additional flexibility results in worse performance and memory usage characteristics. Operations which update node activation can have a worst-case time complexity of O(V + E) rather than [`DependentWeave`]'s O(1), so bulk operations must be done carefully to prevent accidentally quadratic behavior.
+/// However, this additional flexibility results in worse performance and memory usage characteristics:
+/// - Memory overhead is approximately doubled.
+/// - Updating node activation has a worst-case time complexity of O(V + E) rather than [`DependentWeave`]'s O(1), so bulk operations must be done carefully to prevent accidentally quadratic behavior.
 ///
 /// For best performance, it is recommended that you use random node identifiers and the [`Hasher`](core::hash::Hasher) implementation from the [nohash-hasher](https://crates.io/crates/nohash-hasher) crate. If your node identifiers end with random data (such as ULIDs in their raw representation), use the [hash_hasher](https://crates.io/crates/hash_hasher) crate instead.
 #[derive(Default, Debug, Clone)]
@@ -488,7 +490,7 @@ where
             let mut stack = guard.vec();
             let mut closure = guard.set(S::default());
 
-            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |_| {});
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
@@ -504,7 +506,7 @@ where
             {
                 topological_sort_subgraph(
                     &self.nodes,
-                    &|id| closure.contains(id),
+                    |id| closure.contains(id),
                     root,
                     &mut stack,
                     |id| topological.push(id),
@@ -562,7 +564,7 @@ where
                 if has_active_descendant {
                     topological_sort_subgraph(
                         &self.nodes,
-                        &|id| closure.contains(id),
+                        |id| closure.contains(id),
                         *id,
                         &mut stack,
                         |id| topological.push(id),
@@ -653,7 +655,7 @@ where
         let mut closure = guard.set_with_capacity(self.active.len(), S::default());
 
         for id in self.active.iter().copied() {
-            ancestor_subgraph(&self.nodes, id, &mut stack, &mut closure);
+            ancestor_subgraph(&self.nodes, id, &mut stack, &mut closure, |_| {});
         }
 
         let mut topological = guard.vec_with_capacity(closure.len());
@@ -667,7 +669,7 @@ where
         {
             topological_sort_subgraph(
                 &self.nodes,
-                &|id| closure.contains(id),
+                |id| closure.contains(id),
                 root,
                 &mut stack,
                 |id| topological.push(id),
@@ -682,7 +684,7 @@ where
         longest_candidate_path_to_root(
             &self.nodes,
             &topological,
-            &|id| self.active.contains(id),
+            |id| self.active.contains(id),
             &mut scratchpad_map,
             |id| candidate_path.push(id),
         );
@@ -755,7 +757,7 @@ where
             let mut stack = guard.vec();
             let mut closure = guard.set(S::default());
 
-            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure);
+            ancestor_subgraph(&self.nodes, *id, &mut stack, &mut closure, |_| {});
 
             let mut topological = guard.vec_with_capacity(closure.len());
             let mut scratchpad_map = guard.map_with_capacity(closure.len(), S::default());
@@ -770,7 +772,7 @@ where
             {
                 topological_sort_subgraph(
                     &self.nodes,
-                    &|id| closure.contains(id),
+                    |id| closure.contains(id),
                     root,
                     &mut stack,
                     |id| topological.push(id), // topological order
@@ -1034,7 +1036,7 @@ where
 
             topological_sort_subgraph(
                 &self.nodes,
-                &|id| descendants.contains(id),
+                |id| descendants.contains(id),
                 *id,
                 &mut stack,
                 |id| output.push(id),
@@ -1055,6 +1057,11 @@ where
     ))]
     fn get_active_path(&mut self, output: &mut Vec<K>) {
         output.clear();
+
+        if self.active.is_empty() {
+            return;
+        }
+
         output.reserve(self.active.len());
 
         let guard = self.scratchpad.guard();
@@ -1071,7 +1078,7 @@ where
         {
             topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id),
+                |id| self.active.contains(id),
                 root,
                 &mut stack,
                 |id| topological_subgraph.push(id),
@@ -1084,7 +1091,7 @@ where
         longest_candidate_path_to_root(
             &self.nodes,
             &topological_subgraph,
-            &|id| self.active.contains(id),
+            |id| self.active.contains(id),
             &mut scratchpad_map,
             |id| output.push(id),
         );
@@ -1109,23 +1116,24 @@ where
         let guard = self.scratchpad.guard();
         let mut stack = guard.vec();
         let mut ancestors = guard.set(S::default());
+        let mut root_ancestors = guard.vec();
 
-        ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors);
+        ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors, |id| {
+            root_ancestors.push(id);
+        });
 
         let mut active_topological_subgraph =
             guard.vec_with_capacity(self.active.len().min(ancestors.len()));
         let mut scratchpad_map =
             guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default());
 
-        for root in self
-            .roots
-            .iter()
-            .filter(|id| self.active.contains(*id) && ancestors.contains(*id))
-            .copied()
+        for root in root_ancestors
+            .drain(..)
+            .filter(|id| self.active.contains(id))
         {
             topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id) && ancestors.contains(id),
+                |id| self.active.contains(id) && ancestors.contains(id),
                 root,
                 &mut stack,
                 |id| active_topological_subgraph.push(id),
@@ -1140,7 +1148,7 @@ where
         longest_candidate_path_to_root(
             &self.nodes,
             &active_topological_subgraph,
-            &|id| self.active.contains(id) && ancestors.contains(id),
+            |id| self.active.contains(id) && ancestors.contains(id),
             &mut scratchpad_map,
             |id| reversed_path.push(id),
         );
@@ -1154,7 +1162,7 @@ where
             shortest_path_to_ancestor(
                 &self.nodes,
                 id,
-                &|node| node.id == target,
+                |node| node.id == target,
                 &mut stack,
                 &mut scratchpad_map_2,
                 &mut scratchpad_set,
@@ -1168,7 +1176,7 @@ where
             shortest_path_to_ancestor(
                 &self.nodes,
                 id,
-                &|node| node.from.is_empty(),
+                |node| node.from.is_empty(),
                 &mut stack,
                 &mut scratchpad_map_2,
                 &mut scratchpad_set,
@@ -1206,7 +1214,7 @@ where
             if ancestor_subgraph_reaches(
                 &self.nodes,
                 node.from.iter().copied(),
-                &|id| node.to.contains(id),
+                |id| node.to.contains(id),
                 &mut guard.vec_with_capacity(node.from.len()),
                 &mut guard.set_with_capacity(node.from.len(), S::default()),
             ) {
@@ -2068,7 +2076,7 @@ where
             if descendant_subgraph_reaches(
                 &self.nodes,
                 node.to.iter().copied(),
-                &|id| new_parents.contains(id),
+                |id| new_parents.contains(id),
                 &mut guard.vec_with_capacity(node.to.len()),
                 &mut guard.set_with_capacity(node.to.len(), S::default()),
             ) {
@@ -2314,7 +2322,7 @@ where
 
             archived_topological_sort_subgraph(
                 &self.nodes,
-                &|id| descendants.contains(id),
+                |id| descendants.contains(id),
                 *id,
                 &mut stack,
                 |id| output.push(id),
@@ -2324,6 +2332,11 @@ where
     }
     fn get_active_path(&self, output: &mut Vec<K::Archived>) {
         output.clear();
+
+        if self.active.is_empty() {
+            return;
+        }
+
         output.reserve(self.active.len());
 
         let mut scratchpad = Scratchpad::new();
@@ -2341,7 +2354,7 @@ where
         {
             archived_topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id),
+                |id| self.active.contains(id),
                 root,
                 &mut stack,
                 |id| topological_subgraph.push(id),
@@ -2354,7 +2367,7 @@ where
         archived_longest_candidate_path_to_root(
             &self.nodes,
             &topological_subgraph,
-            &|id| self.active.contains(id),
+            |id| self.active.contains(id),
             &mut scratchpad_map,
             |id| output.push(id),
         );
@@ -2369,23 +2382,24 @@ where
         let guard = scratchpad.guard();
         let mut stack = guard.vec();
         let mut ancestors = guard.set(S::default());
+        let mut root_ancestors = guard.vec();
 
-        archived_ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors);
+        archived_ancestor_subgraph(&self.nodes, *id, &mut stack, &mut ancestors, |id| {
+            root_ancestors.push(id);
+        });
 
         let mut active_topological_subgraph =
             guard.vec_with_capacity(self.active.len().min(ancestors.len()));
         let mut scratchpad_map =
             guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default());
 
-        for root in self
-            .roots
-            .iter()
-            .filter(|id| self.active.contains(*id) && ancestors.contains(*id))
-            .copied()
+        for root in root_ancestors
+            .drain(..)
+            .filter(|id| self.active.contains(id))
         {
             archived_topological_sort_subgraph(
                 &self.nodes,
-                &|id| self.active.contains(id) && ancestors.contains(id),
+                |id| self.active.contains(id) && ancestors.contains(id),
                 root,
                 &mut stack,
                 |id| active_topological_subgraph.push(id),
@@ -2400,7 +2414,7 @@ where
         archived_longest_candidate_path_to_root(
             &self.nodes,
             &active_topological_subgraph,
-            &|id| self.active.contains(id) && ancestors.contains(id),
+            |id| self.active.contains(id) && ancestors.contains(id),
             &mut scratchpad_map,
             |id| reversed_path.push(id),
         );
@@ -2414,7 +2428,7 @@ where
             archived_shortest_path_to_ancestor(
                 &self.nodes,
                 id,
-                &|node| node.id == target,
+                |node| node.id == target,
                 &mut stack,
                 &mut scratchpad_map_2,
                 &mut scratchpad_set,
@@ -2428,7 +2442,7 @@ where
             archived_shortest_path_to_ancestor(
                 &self.nodes,
                 id,
-                &|node| node.from.is_empty(),
+                |node| node.from.is_empty(),
                 &mut stack,
                 &mut scratchpad_map_2,
                 &mut scratchpad_set,

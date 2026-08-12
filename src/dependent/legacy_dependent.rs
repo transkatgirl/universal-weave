@@ -6,9 +6,12 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 use indexmap::IndexSet;
 use scratchpads::Scratchpad;
+
+#[cfg(feature = "rkyv")]
+use hashbrown::HashSet;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{

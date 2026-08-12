@@ -164,7 +164,7 @@ where
     longest_candidate_path_to_root(
         nodes,
         &topological,
-        &|id| active.contains(id),
+        |id| active.contains(id),
         &mut scratchpad_map,
         |id| path.push(id),
     );
@@ -241,7 +241,7 @@ where
     archived_longest_candidate_path_to_root(
         nodes,
         &topological,
-        &|id| active.contains(id),
+        |id| active.contains(id),
         &mut scratchpad_map,
         |id| path.push(id),
     );
