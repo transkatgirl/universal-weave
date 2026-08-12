@@ -1088,44 +1088,6 @@ fn descendant_subgraph<'a, K, N, T, S>(
     }
 }
 
-fn descendant_subgraph_detect<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: K,
-    stack: &mut ScratchpadVec<'_, K>,
-    identifiers: &mut ScratchpadSet<'_, K, S>,
-    detect: impl Fn(&K) -> bool,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T>,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let mut detected = false;
-
-    if identifiers.insert(id) {
-        detected = detect(&id);
-        stack.push(id);
-    }
-
-    while let Some(id) = stack.pop() {
-        for child in nodes[&id].to().into_iter().rev().copied() {
-            if identifiers.insert(child) {
-                if !detected {
-                    detected = detect(&child);
-                }
-
-                stack.push(child);
-            }
-        }
-    }
-
-    detected
-}
-
 fn descendant_subgraph_reaches<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     ids: impl DoubleEndedIterator<Item = K>,
