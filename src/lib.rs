@@ -111,9 +111,9 @@ pub trait Node<K, T>
 where
     K: Hash + Copy + Eq + Ord,
 {
-    /// Identifiers corresponding to the node's parents.
+    /// Identifiers corresponding to the node's parents without duplicates.
     type From;
-    /// Identifiers corresponding to the node's children.
+    /// Identifiers corresponding to the node's children without duplicates.
     type To;
 
     /// Returns the node's unique identifier.
@@ -185,7 +185,7 @@ where
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
-    /// Identifiers of root nodes (nodes which do not have any parents).
+    /// Identifiers of root nodes (nodes which do not have any parents) without duplicates.
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
@@ -458,6 +458,40 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
+/// An algorithm for arranging a [`Weave`]'s content for graphical rendering.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
+pub trait Layouter<W, K, N, T>
+where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+{
+    /// The dimensions of a [`Node`].
+    type Size;
+    /// An arrangement of a [`Weave`]'s content.
+    type Layout;
+    /// The type returned if a [`Weave`]'s content could not be arranged.
+    type Error;
+
+    /// Arranges a [`Weave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the [`Weave`]'s content could not be arranged, such as due to a numerical overflow or other unsatisfiable constraint.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `map` panics or if the underlying [`Weave`] is improperly implemented.
+    fn layout(
+        &mut self,
+        weave: &mut W,
+        map: impl FnMut(&N) -> Self::Size,
+    ) -> Result<Self::Layout, Self::Error>;
+}
+
 /// A read-only [`Weave`].
 #[must_use]
 pub trait ImmutableWeave<K, N, T>
@@ -569,6 +603,40 @@ where
     /// Returns a reference to the identifiers of active nodes.
     #[must_use]
     fn active(&self) -> &Self::Active;
+}
+
+/// An algorithm for arranging a [`ImmutableWeave`]'s content for graphical rendering.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
+pub trait ImmutableLayouter<W, K, N, T>
+where
+    W: ImmutableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+{
+    /// The dimensions of a [`Node`].
+    type Size;
+    /// An arrangement of a [`ImmutableWeave`]'s content.
+    type Layout;
+    /// The type returned if a [`ImmutableWeave`]'s content could not be arranged.
+    type Error;
+
+    /// Arranges a [`ImmutableWeave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` if the [`ImmutableWeave`]'s content could not be arranged, such as due to a numerical overflow or other unsatisfiable constraint.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `map` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
+    fn layout(
+        &mut self,
+        weave: &W,
+        map: impl FnMut(&N) -> Self::Size,
+    ) -> Result<Self::Layout, Self::Error>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
