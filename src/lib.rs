@@ -462,7 +462,7 @@ where
 ///
 /// # Panics
 ///
-/// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
+/// All panics should be assumed to leave the Layouter and Weave in a malformed state unless otherwise specified by the implementation.
 pub trait Layouter<W, K, N, T>
 where
     W: Weave<K, N, T>,
@@ -501,7 +501,7 @@ where
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
-    /// Identifiers of root nodes (nodes which do not have any parents).
+    /// Identifiers of root nodes (nodes which do not have any parents) without duplicates.
     type Roots;
 
     /// Returns the number of nodes stored within the Weave.
