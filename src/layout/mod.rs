@@ -78,9 +78,7 @@ where
     S: BuildHasher + Default + Clone + 'static,
 {
     fn layout(&mut self, weave: &mut DependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
-        let scratchpad = &mut weave.scratchpad;
-
-        todo!()
+        self.layout.layout_dependent(weave, sizes, &self.spacing);
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
@@ -131,9 +129,7 @@ where
     S: BuildHasher + Default + Clone + 'static,
 {
     fn layout(&mut self, weave: &mut IndependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
-        let scratchpad = &mut weave.scratchpad;
-
-        todo!()
+        self.layout.layout_independent(weave, sizes, &self.spacing);
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
@@ -200,7 +196,8 @@ where
     S: BuildHasher + Default + Clone + 'static,
 {
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> Vec2) {
-        todo!()
+        self.layout
+            .layout_weave(weave, sizes, &self.spacing, &mut self.scratchpad);
     }
     fn size(&self) -> Vec2 {
         self.layout.size()

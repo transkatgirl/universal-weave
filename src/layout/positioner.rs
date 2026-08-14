@@ -4,8 +4,12 @@ use core::{
 };
 
 use glam::Vec2;
+use scratchpads::Scratchpad;
 
-use crate::LayoutItem;
+use crate::{
+    IndependentContents, LayoutItem, Node, Weave, dependent::DependentWeave,
+    independent::IndependentWeave, layout::Spacing,
+};
 
 #[derive(Debug, Clone)]
 #[must_use]
@@ -36,6 +40,37 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    pub fn layout_dependent<T, M>(
+        &mut self,
+        weave: &DependentWeave<K, T, M, S>,
+        sizes: impl FnMut(&K) -> Vec2,
+        spacing: &Spacing,
+    ) {
+        todo!()
+    }
+    pub fn layout_independent<T, M>(
+        &mut self,
+        weave: &IndependentWeave<K, T, M, S>,
+        sizes: impl FnMut(&K) -> Vec2,
+        spacing: &Spacing,
+    ) where
+        T: IndependentContents,
+    {
+        todo!()
+    }
+    pub fn layout_weave<W, N, T>(
+        &mut self,
+        weave: &W,
+        sizes: impl FnMut(&K) -> Vec2,
+        spacing: &Spacing,
+        scratchpad: &mut Scratchpad,
+    ) where
+        W: Weave<K, N, T>,
+        K: Hash + Copy + Eq + Ord + 'static,
+        N: Node<K, T>,
+    {
+        todo!()
+    }
     pub fn size(&self) -> Vec2 {
         todo!()
     }
