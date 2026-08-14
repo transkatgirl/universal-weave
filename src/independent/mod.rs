@@ -265,7 +265,7 @@ where
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]
-    scratchpad: Scratchpad,
+    pub(super) scratchpad: Scratchpad,
 
     /// The metadata associated with the weave.
     pub metadata: M,

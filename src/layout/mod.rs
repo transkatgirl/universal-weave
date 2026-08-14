@@ -7,8 +7,8 @@
 
 use core::hash::{BuildHasher, Hash};
 
-use alloc::vec::Vec;
 use glam::Vec2;
+use scratchpads::Scratchpad;
 
 use crate::{
     IndependentContents, Layouter, Node, Weave,
@@ -133,28 +133,38 @@ where
 /// A 2D [`Layouter`] which orders nodes using [`Weave::get_ordered_identifiers()`].
 ///
 /// However, this additional flexibility may result in worse performance and memory usage characteristics compared to [`DependentLayouter`] or [`IndependentLayouter`].
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[must_use]
-pub struct TopologicalLayouter<K> {
+pub struct TopologicalLayouter {
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
     layout: Layout2D,
-    topological: Vec<K>,
+    scratchpad: Scratchpad,
 }
 
-impl<K> TopologicalLayouter<K> {
+impl Default for TopologicalLayouter {
+    fn default() -> Self {
+        Self {
+            spacing: Spacing::default(),
+            layout: Layout2D::default(),
+            scratchpad: Scratchpad::new(),
+        }
+    }
+}
+
+impl TopologicalLayouter {
     /// Creates a new [`TopologicalLayouter`] with the specified spacing.
     pub fn new(spacing: Spacing) -> Self {
         Self {
             spacing,
             layout: Layout2D::default(),
-            topological: Vec::new(),
+            scratchpad: Scratchpad::new(),
         }
     }
 }
 
-impl<'a, W, K, N, T> Layouter<'a, W, K, N, T> for TopologicalLayouter<K>
+impl<'a, W, K, N, T> Layouter<'a, W, K, N, T> for TopologicalLayouter
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
