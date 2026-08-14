@@ -464,7 +464,7 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
-/// An item within a graphical arrangement of a [`Weave`]'s content.
+/// A geometric item within an arrangement of a Weave's content.
 pub enum LayoutItem<K, V, P>
 where
     P: Iterator<Item = V>,
@@ -507,7 +507,7 @@ where
     /// Panics if the [`Weave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
     ///
     /// May panic if `map` panics or if the underlying [`Weave`] is improperly implemented.
-    fn layout(&mut self, weave: &mut W, map: impl FnMut(&N) -> V);
+    fn layout(&mut self, weave: &mut W, map: impl FnMut(&K) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
@@ -647,7 +647,7 @@ where
     /// Panics if the [`ImmutableWeave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
     ///
     /// May panic if `map` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
-    fn layout(&mut self, weave: &W, map: impl FnMut(&N) -> V);
+    fn layout(&mut self, weave: &W, map: impl FnMut(&K) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
