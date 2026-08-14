@@ -20,7 +20,13 @@ repository = "https://github.com/transkatgirl/universal-weave"
 edition = "2024"
 
 [features]
-default = [ "rkyv" ]
+default = [
+	"layout",
+	"rkyv",
+]
+layout = [
+	"dep:glam",
+]
 rkyv = [
 	"dep:rkyv",
 ]
@@ -47,6 +53,9 @@ hashbrown = { version = "0.17.1", features = [
 	"inline-more",
 ], default-features = false }
 indexmap = { version = "2.14.0", default-features = false }
+glam = { version = "0.33.3", features = [
+	"libm",
+], default-features = false, optional = true }
 rkyv = { version = "0.8.18", features = [
 	"alloc",
 	"bytecheck",

@@ -75,12 +75,18 @@ pub mod dependent;
 pub mod independent;
 pub mod wrappers;
 
+#[cfg(feature = "layout")]
+pub mod layout;
+
 #[cfg(feature = "rkyv")]
 pub mod versioning;
 
 pub use contracts;
 pub use hashbrown;
 pub use indexmap;
+
+#[cfg(feature = "layout")]
+pub use glam;
 
 #[cfg(feature = "rkyv")]
 pub use rkyv;
@@ -463,7 +469,7 @@ where
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter and Weave in a malformed state unless otherwise specified by the implementation.
-pub trait Layouter<W, K, N, T>
+pub trait Layouter<'a, W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
@@ -486,7 +492,7 @@ where
     ///
     /// May panic if `map` panics or if the underlying [`Weave`] is improperly implemented.
     fn layout(
-        &mut self,
+        &'a mut self,
         weave: &mut W,
         map: impl FnMut(&N) -> Self::Size,
     ) -> Result<Self::Layout, Self::Error>;
@@ -610,7 +616,7 @@ where
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
-pub trait ImmutableLayouter<W, K, N, T>
+pub trait ImmutableLayouter<'a, W, K, N, T>
 where
     W: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
@@ -633,7 +639,7 @@ where
     ///
     /// May panic if `map` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
     fn layout(
-        &mut self,
+        &'a mut self,
         weave: &W,
         map: impl FnMut(&N) -> Self::Size,
     ) -> Result<Self::Layout, Self::Error>;
