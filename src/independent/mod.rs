@@ -522,10 +522,11 @@ where
                     .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
                     if node.active {
-                        score.1 = score.1.strict_add(1);
+                        score.1 += 1;
                     } else {
-                        score.0 = score.0.strict_add(1);
+                        score.0 += 1;
                     }
 
                     (Some(parent), score)
@@ -579,10 +580,11 @@ where
                             .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                         let (child, score) = if let Some((child, mut score)) = best_child {
+                            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
                             if node.active {
-                                score.1 = score.1.strict_add(1);
+                                score.1 += 1;
                             } else {
-                                score.0 = score.0.strict_add(1);
+                                score.0 += 1;
                             }
 
                             (Some(child), score)
@@ -786,10 +788,11 @@ where
                     .min_by(|(_, a), (_, b)| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
                     if node.active {
-                        score.1 = score.1.strict_add(1);
+                        score.1 += 1;
                     } else {
-                        score.0 = score.0.strict_add(1);
+                        score.0 += 1;
                     }
 
                     (Some(parent), score)

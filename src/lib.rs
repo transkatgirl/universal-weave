@@ -854,7 +854,10 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
 
     while head < scratchpad.len() {
         let id = scratchpad[head];
-        head = head.strict_add(1);
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            head += 1;
+        }
 
         let node = &nodes[&id];
 
@@ -898,7 +901,10 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
 
     while head < scratchpad.len() {
         let id = scratchpad[head];
-        head = head.strict_add(1);
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            head += 1;
+        }
 
         let node = &nodes[&id];
 
@@ -947,11 +953,12 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
         let distance = if node.from().into_iter().next().is_none() {
             Some(0)
         } else {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             node.from()
                 .into_iter()
                 .filter_map(|parent| scratchpad_map.get(parent).copied())
                 .max()
-                .map(|l| l.strict_add(1))
+                .map(|l| l + 1)
         };
 
         if let Some(distance) = distance {
@@ -1005,11 +1012,12 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
         let distance = if node.from().is_empty() {
             Some(0)
         } else {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             node.from()
                 .iter()
                 .filter_map(|parent| scratchpad_map.get(parent).copied())
                 .max()
-                .map(|l| l.strict_add(1))
+                .map(|l| l + 1)
         };
 
         if let Some(distance) = distance {
