@@ -5,18 +5,16 @@
 //! - [`IndependentLayouter`] - Takes an [`IndependentWeave`] as an input.
 //! - [`TopologicalLayouter`] - Takes any [`Weave`] as an input.
 
-use core::{
-    hash::{BuildHasher, Hash},
-    marker::PhantomData,
-};
+use core::hash::{BuildHasher, Hash};
 
 use glam::Vec2;
 use scratchpads::Scratchpad;
 
 use crate::{
-    IndependentContents, Layouter, Node, Weave,
+    IndependentContents, LayoutItem, Layouter, Node, Weave,
     dependent::{DependentNode, DependentWeave},
     independent::{IndependentNode, IndependentWeave},
+    layout::positioner::Layout2D,
 };
 
 mod positioner;
@@ -42,34 +40,6 @@ impl Default for Spacing {
         }
     }
 }
-
-/// A 2D arrangement of a [`Weave`]'s content.
-#[derive(Debug, Clone)]
-#[must_use]
-pub struct Layout2D<K, S>
-where
-    K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
-{
-    _k: PhantomData<K>,
-    _s: PhantomData<S>,
-}
-
-impl<K, S> Default for Layout2D<K, S>
-where
-    K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
-{
-    fn default() -> Self {
-        Self {
-            _k: PhantomData,
-            _s: PhantomData,
-        }
-    }
-}
-
-/// An error which occured while attempting to build a [`Layout2D`].
-pub enum LayoutError {}
 
 /// A 2D [`Layouter`] which takes a [`DependentWeave`] as input.
 ///
@@ -101,24 +71,25 @@ where
     }
 }
 
-impl<'a, K, T, M, S> Layouter<'a, DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T>
+impl<K, T, M, S> Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2>
     for DependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     S: BuildHasher + Default + Clone + 'static,
 {
-    type Size = Vec2;
-    type Layout = &'a Layout2D<K, S>;
-    type Error = LayoutError;
-
-    fn layout(
-        &'a mut self,
-        weave: &mut DependentWeave<K, T, M, S>,
-        map: impl FnMut(&DependentNode<K, T, S>) -> Self::Size,
-    ) -> Result<Self::Layout, Self::Error> {
+    fn layout(&mut self, weave: &mut DependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
         let scratchpad = &mut weave.scratchpad;
 
         todo!()
+    }
+    fn size(&self) -> Vec2 {
+        self.layout.size()
+    }
+    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
+    where
+        P: Iterator<Item = Vec2>,
+    {
+        self.layout.view(bounds, callback);
     }
 }
 
@@ -152,25 +123,26 @@ where
     }
 }
 
-impl<'a, K, T, M, S> Layouter<'a, IndependentWeave<K, T, M, S>, K, IndependentNode<K, T, S>, T>
+impl<K, T, M, S> Layouter<IndependentWeave<K, T, M, S>, K, IndependentNode<K, T, S>, T, Vec2>
     for IndependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     T: IndependentContents,
     S: BuildHasher + Default + Clone + 'static,
 {
-    type Size = Vec2;
-    type Layout = &'a Layout2D<K, S>;
-    type Error = LayoutError;
-
-    fn layout(
-        &'a mut self,
-        weave: &mut IndependentWeave<K, T, M, S>,
-        map: impl FnMut(&IndependentNode<K, T, S>) -> Self::Size,
-    ) -> Result<Self::Layout, Self::Error> {
+    fn layout(&mut self, weave: &mut IndependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
         let scratchpad = &mut weave.scratchpad;
 
         todo!()
+    }
+    fn size(&self) -> Vec2 {
+        self.layout.size()
+    }
+    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
+    where
+        P: Iterator<Item = Vec2>,
+    {
+        self.layout.view(bounds, callback);
     }
 }
 
@@ -220,22 +192,23 @@ where
     }
 }
 
-impl<'a, W, K, N, T, S> Layouter<'a, W, K, N, T> for TopologicalLayouter<K, S>
+impl<W, K, N, T, S> Layouter<W, K, N, T, Vec2> for TopologicalLayouter<K, S>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + 'static,
     N: Node<K, T>,
     S: BuildHasher + Default + Clone + 'static,
 {
-    type Size = Vec2;
-    type Layout = &'a Layout2D<K, S>;
-    type Error = LayoutError;
-
-    fn layout(
-        &'a mut self,
-        weave: &mut W,
-        map: impl FnMut(&N) -> Self::Size,
-    ) -> Result<Self::Layout, Self::Error> {
+    fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> Vec2) {
         todo!()
+    }
+    fn size(&self) -> Vec2 {
+        self.layout.size()
+    }
+    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
+    where
+        P: Iterator<Item = Vec2>,
+    {
+        self.layout.view(bounds, callback);
     }
 }
