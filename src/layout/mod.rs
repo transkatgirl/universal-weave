@@ -7,6 +7,7 @@
 
 use core::hash::{BuildHasher, Hash};
 
+use alloc::vec::Vec;
 use glam::Vec2;
 use scratchpads::Scratchpad;
 
@@ -16,6 +17,17 @@ use crate::{
     independent::{IndependentNode, IndependentWeave},
     layout::positioner::Layout2D,
 };
+
+/*
+
+Tests to write:
+- DependentLayouter parity with TopologicalLayouter
+- IndependentLayouter parity with TopologicalLayouter
+- TopologicalLayouter property testing w/ function contracts
+
+Need to add curve fitting convenience functions
+
+*/
 
 mod positioner;
 
@@ -156,6 +168,7 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K, S>,
+    topological: Vec<K>,
     scratchpad: Scratchpad,
 }
 
@@ -165,11 +178,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn default() -> Self {
-        Self {
-            spacing: Spacing::default(),
-            layout: Layout2D::default(),
-            scratchpad: Scratchpad::new(),
-        }
+        Self::new(Spacing::default())
     }
 }
 
@@ -183,6 +192,7 @@ where
         Self {
             spacing,
             layout: Layout2D::default(),
+            topological: Vec::new(),
             scratchpad: Scratchpad::new(),
         }
     }
@@ -194,10 +204,17 @@ where
     K: Hash + Copy + Eq + Ord + 'static,
     N: Node<K, T>,
     S: BuildHasher + Default + Clone + 'static,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> Vec2) {
-        self.layout
-            .layout_weave(weave, sizes, &self.spacing, &mut self.scratchpad);
+        weave.get_ordered_identifiers(&mut self.topological);
+        self.layout.layout_topological(
+            weave,
+            sizes,
+            &self.spacing,
+            &mut self.scratchpad,
+            &mut self.topological,
+        );
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
