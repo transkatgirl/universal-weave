@@ -75,8 +75,8 @@ pub mod dependent;
 pub mod independent;
 pub mod wrappers;
 
-#[cfg(feature = "layout")]
-pub mod layout;
+//#[cfg(feature = "layout")]
+//pub mod layout;
 
 #[cfg(feature = "rkyv")]
 pub mod versioning;
@@ -464,38 +464,56 @@ where
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
 }
 
-/// An algorithm for arranging a [`Weave`]'s content for graphical rendering.
+/// An item within a graphical arrangement of a [`Weave`]'s content.
+pub enum LayoutItem<K, V, P>
+where
+    P: Iterator<Item = V>,
+{
+    /// Computed geometry for a [`Node`].
+    Node {
+        /// Node identifier.
+        id: K,
+        /// Node center position.
+        center: V,
+        /// Node size.
+        size: V,
+    },
+    /// Computed geometry for a connection between [`Node`]s.
+    Polyline {
+        /// Parent node where the connection starts.
+        from: K,
+        /// Child node where the connection ends.
+        to: K,
+        /// Points for a polyline routed between the two nodes.
+        points: P,
+    },
+}
+
+/// An algorithm which arranges a [`Weave`]'s content for graphical rendering in an efficiently accessible form.
 ///
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter and Weave in a malformed state unless otherwise specified by the implementation.
-pub trait Layouter<'a, W, K, N, T>
+pub trait Layouter<W, K, N, T, V>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
-    /// The dimensions of a [`Node`].
-    type Size;
-    /// An arrangement of a [`Weave`]'s content.
-    type Layout;
-    /// The type returned if a [`Weave`]'s content could not be arranged.
-    type Error;
-
     /// Arranges a [`Weave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err` if the [`Weave`]'s content could not be arranged, such as due to a numerical overflow or other unsatisfiable constraint.
     ///
     /// # Panics
     ///
+    /// Panics if the [`Weave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
+    ///
     /// May panic if `map` panics or if the underlying [`Weave`] is improperly implemented.
-    fn layout(
-        &'a mut self,
-        weave: &mut W,
-        map: impl FnMut(&N) -> Self::Size,
-    ) -> Result<Self::Layout, Self::Error>;
+    fn layout(&mut self, weave: &mut W, map: impl FnMut(&N) -> V);
+    /// Returns the size of the bounding box enclosing the arrangement's content.
+    fn size(&self) -> V;
+    /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
+    fn view<P>(&self, bounds: V, callback: impl FnMut(LayoutItem<K, V, P>))
+    where
+        P: Iterator<Item = V>;
 }
 
 /// A read-only [`Weave`].
@@ -611,38 +629,31 @@ where
     fn active(&self) -> &Self::Active;
 }
 
-/// An algorithm for arranging a [`ImmutableWeave`]'s content for graphical rendering.
+/// An algorithm which arranges an [`ImmutableWeave`]'s content for graphical rendering in an efficiently accessible form.
 ///
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
-pub trait ImmutableLayouter<'a, W, K, N, T>
+pub trait ImmutableLayouter<W, K, N, T, V>
 where
     W: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
-    /// The dimensions of a [`Node`].
-    type Size;
-    /// An arrangement of a [`ImmutableWeave`]'s content.
-    type Layout;
-    /// The type returned if a [`ImmutableWeave`]'s content could not be arranged.
-    type Error;
-
-    /// Arranges a [`ImmutableWeave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err` if the [`ImmutableWeave`]'s content could not be arranged, such as due to a numerical overflow or other unsatisfiable constraint.
+    /// Arranges an [`ImmutableWeave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///
     /// # Panics
     ///
+    /// Panics if the [`ImmutableWeave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
+    ///
     /// May panic if `map` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
-    fn layout(
-        &'a mut self,
-        weave: &W,
-        map: impl FnMut(&N) -> Self::Size,
-    ) -> Result<Self::Layout, Self::Error>;
+    fn layout(&mut self, weave: &W, map: impl FnMut(&N) -> V);
+    /// Returns the size of the bounding box enclosing the arrangement's content.
+    fn size(&self) -> V;
+    /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
+    fn view<P>(&self, bounds: V, callback: impl FnMut(LayoutItem<K, V, P>))
+    where
+        P: Iterator<Item = V>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
