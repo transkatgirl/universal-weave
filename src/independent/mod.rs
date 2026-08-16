@@ -677,15 +677,13 @@ where
             );
         }
 
-        scratchpad_map.clear();
-
         let mut candidate_path = guard.vec_with_capacity(self.active.len());
 
         longest_candidate_path_to_root(
             &self.nodes,
             &topological,
             |id| self.active.contains(id),
-            &mut scratchpad_map,
+            &mut guard.map_with_capacity(self.active.len(), S::default()),
             |id| candidate_path.push(id),
         );
 
@@ -1085,13 +1083,11 @@ where
             );
         }
 
-        scratchpad_map.clear();
-
         longest_candidate_path_to_root(
             &self.nodes,
             &topological_subgraph,
             |id| self.active.contains(id),
-            &mut scratchpad_map,
+            &mut guard.map_with_capacity(self.active.len(), S::default()),
             |id| output.push(id),
         );
     }
@@ -1140,22 +1136,17 @@ where
             );
         }
 
-        scratchpad_map.clear();
-
         let mut reversed_path = guard.vec();
 
         longest_candidate_path_to_root(
             &self.nodes,
             &active_topological_subgraph,
             |id| self.active.contains(id) && ancestors.contains(id),
-            &mut scratchpad_map,
+            &mut guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default()),
             |id| reversed_path.push(id),
         );
 
         let mut scratchpad_map_2 = guard.map_with_capacity(ancestors.len(), S::default());
-
-        ancestors.clear();
-        let mut scratchpad_set = ancestors;
 
         if let Some(target) = reversed_path.first().copied() {
             shortest_path_to_ancestor(
@@ -1164,7 +1155,6 @@ where
                 |node| node.id == target,
                 &mut stack,
                 &mut scratchpad_map_2,
-                &mut scratchpad_set,
                 output,
             );
 
@@ -1178,7 +1168,6 @@ where
                 |node| node.from.is_empty(),
                 &mut stack,
                 &mut scratchpad_map_2,
-                &mut scratchpad_set,
                 output,
             );
 
@@ -2360,13 +2349,11 @@ where
             );
         }
 
-        scratchpad_map.clear();
-
         archived_longest_candidate_path_to_root(
             &self.nodes,
             &topological_subgraph,
             |id| self.active.contains(id),
-            &mut scratchpad_map,
+            &mut guard.map_with_capacity(self.active.len(), S::default()),
             |id| output.push(id),
         );
     }
@@ -2405,22 +2392,17 @@ where
             );
         }
 
-        scratchpad_map.clear();
-
         let mut reversed_path = guard.vec();
 
         archived_longest_candidate_path_to_root(
             &self.nodes,
             &active_topological_subgraph,
             |id| self.active.contains(id) && ancestors.contains(id),
-            &mut scratchpad_map,
+            &mut guard.map_with_capacity(self.active.len().min(ancestors.len()), S::default()),
             |id| reversed_path.push(id),
         );
 
         let mut scratchpad_map_2 = guard.map_with_capacity(ancestors.len(), S::default());
-
-        ancestors.clear();
-        let mut scratchpad_set = ancestors;
 
         if let Some(target) = reversed_path.first().copied() {
             archived_shortest_path_to_ancestor(
@@ -2429,7 +2411,6 @@ where
                 |node| node.id == target,
                 &mut stack,
                 &mut scratchpad_map_2,
-                &mut scratchpad_set,
                 output,
             );
 
@@ -2443,7 +2424,6 @@ where
                 |node| node.from.is_empty(),
                 &mut stack,
                 &mut scratchpad_map_2,
-                &mut scratchpad_set,
                 output,
             );
 

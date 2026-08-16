@@ -105,7 +105,7 @@ use core::{
     hash::{BuildHasher, Hash},
 };
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, hash_map::Entry};
 use scratchpads::{ScratchpadMap, ScratchpadSet, ScratchpadVec};
 
 #[cfg(feature = "rkyv")]
@@ -677,15 +677,15 @@ fn topological_sort<'a, K, N, T, S>(
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
+    identifier_map.extend(nodes.iter().map(|(&k, n)| (k, n.from().into_iter().len())));
+
     stack.extend(roots.rev());
 
     while let Some(id) = stack.pop() {
         identifier_callback(id);
 
         for child in nodes[&id].to().into_iter().rev().copied() {
-            let remaining = identifier_map
-                .entry(child)
-                .or_insert_with(|| nodes[&child].from().into_iter().len());
+            let remaining = identifier_map.get_mut(&child).unwrap();
             *remaining = remaining.strict_sub(1);
 
             if *remaining == 0 {
@@ -707,15 +707,15 @@ fn archived_topological_sort<'a, K, N, T, S>(
     N: Node<K, T, From = ArchivedIndexSet<K>, To = ArchivedIndexSet<K>> + 'a,
     S: BuildHasher + Default + Clone,
 {
+    identifier_map.extend(nodes.iter().map(|(&k, n)| (k, n.from().len())));
+
     stack.extend(archived_set_reverse_order(roots));
 
     while let Some(id) = stack.pop() {
         identifier_callback(id);
 
         for child in archived_set_reverse_order(nodes[&id].to()).copied() {
-            let remaining = identifier_map
-                .entry(child)
-                .or_insert_with(|| nodes[&child].from().iter().len());
+            let remaining = identifier_map.get_mut(&child).unwrap();
             *remaining = remaining.strict_sub(1);
 
             if *remaining == 0 {
@@ -836,7 +836,6 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     target: impl Fn(&'a N) -> bool,
     scratchpad: &mut ScratchpadVec<'_, K>,
     scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
-    scratchpad_set: &mut ScratchpadSet<'_, K, S>,
     path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -848,7 +847,7 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     scratchpad.push(*id);
-    scratchpad_set.insert(*id);
+    scratchpad_map.insert(*id, *id);
 
     let mut head = 0;
 
@@ -863,20 +862,21 @@ fn shortest_path_to_ancestor<'a, K, N, T, S>(
 
         if target(node) {
             path.push(id);
-
-            while let Some(child) = scratchpad_map.remove(path.last().unwrap()) {
-                path.push(child);
-            }
-
-            return;
+            break;
         }
 
         for parent in node.from().into_iter().copied() {
-            if scratchpad_set.insert(parent) {
+            if let Entry::Vacant(entry) = scratchpad_map.entry(parent) {
+                entry.insert(id);
                 scratchpad.push(parent);
-                scratchpad_map.insert(parent, id);
             }
         }
+    }
+
+    while let Some(last) = path.last()
+        && last != id
+    {
+        path.push(scratchpad_map[last]);
     }
 }
 
@@ -887,7 +887,6 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     target: impl Fn(&'a N) -> bool,
     scratchpad: &mut ScratchpadVec<'_, K>,
     scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
-    scratchpad_set: &mut ScratchpadSet<'_, K, S>,
     path: &mut Vec<K>,
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -895,7 +894,7 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     S: BuildHasher + Default + Clone,
 {
     scratchpad.push(*id);
-    scratchpad_set.insert(*id);
+    scratchpad_map.insert(*id, *id);
 
     let mut head = 0;
 
@@ -910,20 +909,21 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
 
         if target(node) {
             path.push(id);
-
-            while let Some(child) = scratchpad_map.remove(path.last().unwrap()) {
-                path.push(child);
-            }
-
-            return;
+            break;
         }
 
         for parent in node.from().iter().copied() {
-            if scratchpad_set.insert(parent) {
+            if let Entry::Vacant(entry) = scratchpad_map.entry(parent) {
+                entry.insert(id);
                 scratchpad.push(parent);
-                scratchpad_map.insert(parent, id);
             }
         }
+    }
+
+    while let Some(last) = path.last()
+        && last != id
+    {
+        path.push(scratchpad_map[last]);
     }
 }
 
@@ -931,14 +931,14 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     topological_order: &[K],
     is_candidate: impl Fn(&K) -> bool,
-    scratchpad_map: &mut ScratchpadMap<'_, K, usize, S>,
+    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, Option<K>), S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
     N: Node<K, T> + 'a,
     <N as Node<K, T>>::From: 'a,
     <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
+    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
     &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
     S: BuildHasher + Default + Clone,
 {
@@ -949,23 +949,30 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
             continue;
         }
 
-        let node = &nodes[id];
-        let distance = if node.from().into_iter().next().is_none() {
-            Some(0)
-        } else {
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-            node.from()
-                .into_iter()
-                .filter_map(|parent| scratchpad_map.get(parent).copied())
-                .max()
-                .map(|l| l + 1)
+        let from = nodes[id].from().into_iter();
+
+        let has_parents = from.len() != 0;
+        let best_parent = from
+            .filter_map(|id| scratchpad_map.get(id).map(|v| (v.0, id)))
+            .min_by_key(|&(v, _)| Reverse(v));
+
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        let distance = match best_parent {
+            Some((parent_distance, parent)) => Some((parent_distance + 1, Some(*parent))),
+            None => {
+                if has_parents {
+                    None
+                } else {
+                    Some((0, None))
+                }
+            }
         };
 
-        if let Some(distance) = distance {
-            scratchpad_map.insert(*id, distance);
+        if let Some((distance, parent)) = distance {
+            scratchpad_map.insert(*id, (distance, parent));
 
             if longest_distance.is_none_or(|(value, _)| distance > value) {
-                longest_distance = Some((distance, id));
+                longest_distance = Some((distance, *id));
             }
         }
     }
@@ -973,19 +980,8 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
     let mut current = longest_distance.map(|(_, id)| id);
 
     while let Some(id) = current {
-        reversed_path_callback(*id);
-
-        current = nodes[id]
-            .from()
-            .into_iter()
-            .filter_map(|parent| {
-                scratchpad_map
-                    .get(parent)
-                    .copied()
-                    .map(|distance| (parent, distance))
-            })
-            .min_by_key(|&(_, distance)| Reverse(distance))
-            .map(|(parent, _)| parent);
+        reversed_path_callback(id);
+        current = scratchpad_map[&id].1;
     }
 }
 
@@ -994,7 +990,7 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
     is_candidate: impl Fn(&K) -> bool,
-    scratchpad_map: &mut ScratchpadMap<'_, K, usize, S>,
+    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, Option<K>), S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -1008,23 +1004,31 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
             continue;
         }
 
-        let node = &nodes[id];
-        let distance = if node.from().is_empty() {
-            Some(0)
-        } else {
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-            node.from()
-                .iter()
-                .filter_map(|parent| scratchpad_map.get(parent).copied())
-                .max()
-                .map(|l| l + 1)
+        let from = nodes[id].from();
+
+        let has_parents = !from.is_empty();
+        let best_parent = from
+            .iter()
+            .filter_map(|id| scratchpad_map.get(id).map(|v| (v.0, id)))
+            .min_by_key(|&(v, _)| Reverse(v));
+
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        let distance = match best_parent {
+            Some((parent_distance, parent)) => Some((parent_distance + 1, Some(*parent))),
+            None => {
+                if has_parents {
+                    None
+                } else {
+                    Some((0, None))
+                }
+            }
         };
 
-        if let Some(distance) = distance {
-            scratchpad_map.insert(*id, distance);
+        if let Some((distance, parent)) = distance {
+            scratchpad_map.insert(*id, (distance, parent));
 
             if longest_distance.is_none_or(|(value, _)| distance > value) {
-                longest_distance = Some((distance, id));
+                longest_distance = Some((distance, *id));
             }
         }
     }
@@ -1032,19 +1036,8 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     let mut current = longest_distance.map(|(_, id)| id);
 
     while let Some(id) = current {
-        reversed_path_callback(*id);
-
-        current = nodes[id]
-            .from()
-            .iter()
-            .filter_map(|parent| {
-                scratchpad_map
-                    .get(parent)
-                    .copied()
-                    .map(|distance| (parent, distance))
-            })
-            .min_by_key(|&(_, distance)| Reverse(distance))
-            .map(|(parent, _)| parent);
+        reversed_path_callback(id);
+        current = scratchpad_map[&id].1;
     }
 }
 
