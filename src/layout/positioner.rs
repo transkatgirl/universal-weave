@@ -20,11 +20,11 @@ where
     vertices: Vec<Vertex<K>>,
     top: Vec<usize>,
     bottom: Vec<usize>,
-    reals_at: Vec<Vec<usize>>,
-    seg_tops_at: Vec<Vec<usize>>,
-    seg_bottoms_at: Vec<Vec<usize>>,
-    merged_tops_at: Vec<Vec<usize>>,
-    merged_bottoms_at: Vec<Vec<usize>>,
+    reals: Vec<Vec<usize>>,
+    seg_tops: Vec<Vec<usize>>,
+    seg_bottoms: Vec<Vec<usize>>,
+    merged_tops: Vec<Vec<usize>>,
+    merged_bottoms: Vec<Vec<usize>>,
     up: Vec<Vec<(usize, usize)>>,
     down: Vec<Vec<(usize, usize)>>,
     edges: usize,
@@ -47,11 +47,11 @@ where
             vertices: Vec::new(),
             top: Vec::new(),
             bottom: Vec::new(),
-            reals_at: Vec::new(),
-            seg_tops_at: Vec::new(),
-            seg_bottoms_at: Vec::new(),
-            merged_tops_at: Vec::new(),
-            merged_bottoms_at: Vec::new(),
+            reals: Vec::new(),
+            seg_tops: Vec::new(),
+            seg_bottoms: Vec::new(),
+            merged_tops: Vec::new(),
+            merged_bottoms: Vec::new(),
             up: Vec::new(),
             down: Vec::new(),
             edges: 0,
@@ -93,13 +93,13 @@ where
         self.bottom.reserve(reserved_nodes);
 
         for list in self
-            .reals_at
+            .reals
             .iter_mut()
             .take(ranks)
-            .chain(self.seg_tops_at.iter_mut().take(ranks))
-            .chain(self.seg_bottoms_at.iter_mut().take(ranks))
-            .chain(self.merged_tops_at.iter_mut().take(ranks))
-            .chain(self.merged_bottoms_at.iter_mut().take(ranks))
+            .chain(self.seg_tops.iter_mut().take(ranks))
+            .chain(self.seg_bottoms.iter_mut().take(ranks))
+            .chain(self.merged_tops.iter_mut().take(ranks))
+            .chain(self.merged_bottoms.iter_mut().take(ranks))
         {
             list.clear();
         }
@@ -111,6 +111,12 @@ where
             .chain(self.down.iter_mut().take(items))
         {
             list.clear();
+        }
+
+        if reserved_nodes > self.up.len() {
+            self.up.reserve(reserved_nodes.strict_sub(self.up.len()));
+            self.down
+                .reserve(reserved_nodes.strict_sub(self.down.len()));
         }
 
         self.edges = 0;
@@ -125,10 +131,78 @@ where
         self.layer_bounds.clear();
     }
     fn push_item(&mut self, vertex: Vertex<K>, top: usize, bottom: usize) -> usize {
-        todo!()
+        let index = self.vertices.len();
+
+        self.vertices.push(vertex);
+        self.top.push(top);
+        self.bottom.push(bottom);
+
+        if index == self.up.len() {
+            self.up.push(Vec::new());
+            self.down.push(Vec::new());
+        }
+
+        if bottom >= self.reals.len() {
+            let len = bottom.strict_add(1);
+
+            self.reals.resize_with(len, Vec::new);
+            self.seg_tops.resize_with(len, Vec::new);
+            self.seg_bottoms.resize_with(len, Vec::new);
+        }
+
+        match self.vertices[index] {
+            Vertex::Real(_) => self.reals[top].push(index),
+            Vertex::Segment { .. } => {
+                self.seg_tops[top].push(index);
+                self.seg_bottoms[bottom].push(index);
+            }
+        }
+
+        index
     }
     fn link(&mut self, from: usize, to: usize) {
-        todo!()
+        self.down[from].push((to, self.edges));
+        self.edges = self.edges.strict_add(1);
+    }
+    fn prepare_structure(&mut self) {
+        self.height = self
+            .bottom
+            .iter()
+            .copied()
+            .max()
+            .map_or(0, |rank| rank.strict_add(1));
+
+        if self.height > self.merged_tops.len() {
+            self.merged_tops.resize_with(self.height, Vec::new);
+            self.merged_bottoms.resize_with(self.height, Vec::new);
+        }
+
+        for ((reals, (seg_tops, seg_bottoms)), (merged_tops, merged_bottoms)) in self
+            .reals
+            .iter()
+            .zip(self.seg_tops.iter().zip(self.seg_bottoms.iter()))
+            .zip(
+                self.merged_tops
+                    .iter_mut()
+                    .zip(self.merged_bottoms.iter_mut()),
+            )
+        {
+            if !seg_tops.is_empty() {
+                merge_sorted(reals, seg_tops, merged_tops);
+            }
+            let sources = if seg_bottoms.is_empty() {
+                reals
+            } else {
+                merge_sorted(reals, seg_bottoms, merged_bottoms);
+                merged_bottoms
+            };
+
+            for &source in sources {
+                for &(target, edge) in &self.down[source] {
+                    self.up[target].push((source, edge));
+                }
+            }
+        }
     }
 }
 
@@ -225,6 +299,8 @@ where
 
         debug_assert_eq!(weave.nodes.len(), self.indices.len(), "Malformed weave");
 
+        self.prepare_structure();
+
         todo!()
     }
     pub fn layout_topological<W, N, T, F>(
@@ -290,8 +366,17 @@ where
             "Malformed topological order"
         );
 
+        self.prepare_structure();
+
         todo!()
     }
+}
+
+impl<K, S> Layout2D<K, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
+{
 }
 
 impl<K, S> Layout2D<K, S>
@@ -309,4 +394,28 @@ where
     {
         todo!()
     }
+}
+
+fn merge_sorted(a: &[usize], b: &[usize], out: &mut Vec<usize>) {
+    out.clear();
+    out.reserve(a.len().strict_add(b.len()));
+
+    let mut i = 0_usize;
+    let mut j = 0_usize;
+
+    while let Some(ai) = a.get(i)
+        && let Some(bj) = b.get(j)
+    {
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        if ai < bj {
+            out.push(*ai);
+            i += 1;
+        } else {
+            out.push(*bj);
+            j += 1;
+        }
+    }
+
+    out.extend_from_slice(&a[i..]);
+    out.extend_from_slice(&b[j..]);
 }
