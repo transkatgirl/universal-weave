@@ -237,7 +237,7 @@ where
             deserialize = "HashMap<K, IndependentNode<K, T, S>, S>: SerdeDeserialize<'de>"
         ))
     )]
-    nodes: HashMap<K, IndependentNode<K, T, S>, S>,
+    pub(super) nodes: HashMap<K, IndependentNode<K, T, S>, S>,
     #[cfg_attr(
         feature = "serde",
         serde(bound(
@@ -245,7 +245,7 @@ where
             deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
         ))
     )]
-    roots: IndexSet<K, S>,
+    pub(super) roots: IndexSet<K, S>,
     #[cfg_attr(
         feature = "serde",
         serde(bound(
@@ -253,7 +253,7 @@ where
             deserialize = "HashSet<K, S>: SerdeDeserialize<'de>"
         ))
     )]
-    active: HashSet<K, S>,
+    pub(super) active: HashSet<K, S>,
     #[cfg_attr(
         feature = "serde",
         serde(bound(
@@ -261,7 +261,7 @@ where
             deserialize = "IndexSet<K, S>: SerdeDeserialize<'de>"
         ))
     )]
-    bookmarked: IndexSet<K, S>,
+    pub(super) bookmarked: IndexSet<K, S>,
 
     #[cfg_attr(feature = "rkyv", rkyv(with = Skip))]
     #[cfg_attr(feature = "serde", serde(skip))]

@@ -208,6 +208,13 @@ where
 {
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> Vec2) {
         weave.get_ordered_identifiers(&mut self.topological);
+
+        assert_eq!(
+            weave.len(),
+            self.topological.len(),
+            "Malformed topological order"
+        );
+
         self.layout.layout_topological(
             weave,
             sizes,
