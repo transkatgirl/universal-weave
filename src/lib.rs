@@ -686,7 +686,10 @@ fn topological_sort<'a, K, N, T, S>(
 
         for child in nodes[&id].to().into_iter().rev().copied() {
             let remaining = identifier_map.get_mut(&child).unwrap();
-            *remaining = remaining.strict_sub(1);
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                *remaining -= 1;
+            }
 
             if *remaining == 0 {
                 stack.push(child);
@@ -716,7 +719,10 @@ fn archived_topological_sort<'a, K, N, T, S>(
 
         for child in archived_set_reverse_order(nodes[&id].to()).copied() {
             let remaining = identifier_map.get_mut(&child).unwrap();
-            *remaining = remaining.strict_sub(1);
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                *remaining -= 1;
+            }
 
             if *remaining == 0 {
                 stack.push(child);
@@ -770,7 +776,10 @@ fn topological_sort_subgraph<'a, K, N, T, S>(
                     .filter(|&parent| filter(parent))
                     .count()
             });
-            *remaining = remaining.strict_sub(1);
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                *remaining -= 1;
+            }
 
             if *remaining == 0 {
                 stack.push(child);
@@ -821,7 +830,10 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
                     .filter(|&parent| filter(parent))
                     .count()
             });
-            *remaining = remaining.strict_sub(1);
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                *remaining -= 1;
+            }
 
             if *remaining == 0 {
                 stack.push(child);

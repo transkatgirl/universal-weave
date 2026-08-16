@@ -1340,7 +1340,10 @@ where
                 let remaining = remaining_parents
                     .entry(child)
                     .or_insert_with(|| self.nodes[&child].from.len());
-                *remaining = remaining.strict_sub(1);
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                {
+                    *remaining -= 1;
+                }
 
                 if *remaining == 0 {
                     stack.push(child);
@@ -1361,7 +1364,10 @@ where
                     let remaining = remaining_parents
                         .entry(child)
                         .or_insert_with(|| self.nodes[&child].from.len());
-                    *remaining = remaining.strict_sub(1);
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                    {
+                        *remaining -= 1;
+                    }
 
                     if *remaining == 0 {
                         stack.push(child);
@@ -1468,7 +1474,10 @@ where
                 let remaining = remaining_parents
                     .entry(child)
                     .or_insert_with(|| self.nodes[&child].from.len());
-                *remaining = remaining.strict_sub(1);
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                {
+                    *remaining -= 1;
+                }
 
                 if *remaining == 0 {
                     stack.push(child);
@@ -1491,7 +1500,10 @@ where
                     let remaining = remaining_parents
                         .entry(child)
                         .or_insert_with(|| self.nodes[&child].from.len());
-                    *remaining = remaining.strict_sub(1);
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                    {
+                        *remaining -= 1;
+                    }
 
                     if *remaining == 0 {
                         stack.push(child);
