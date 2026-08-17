@@ -5,7 +5,10 @@
 //! - [`IndependentLayouter`] - Takes an [`IndependentWeave`] as an input.
 //! - [`TopologicalLayouter`] - Takes any [`Weave`] as an input.
 
-use core::hash::{BuildHasher, Hash};
+use core::{
+    hash::{BuildHasher, Hash},
+    num::FpCategory,
+};
 
 use alloc::vec::Vec;
 use glam::Vec2;
@@ -50,6 +53,14 @@ impl Default for Spacing {
             layer: 16.0,
             edge: 8.0,
         }
+    }
+}
+
+impl Spacing {
+    /// Validates that all spacing values are finite, positive, and normal.
+    #[must_use]
+    pub const fn validate(&self) -> bool {
+        validate_float(self.node) && validate_float(self.layer) && validate_float(self.edge)
     }
 }
 
@@ -231,5 +242,14 @@ where
         P: Iterator<Item = Vec2>,
     {
         self.layout.view(bounds, callback);
+    }
+}
+
+#[must_use]
+const fn validate_float(value: f32) -> bool {
+    match value.classify() {
+        FpCategory::Normal => value.is_sign_positive(),
+        FpCategory::Zero => true,
+        _ => false,
     }
 }
