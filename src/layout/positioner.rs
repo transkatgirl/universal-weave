@@ -81,8 +81,9 @@ where
         let ranks = self
             .bottom
             .iter()
+            .copied()
             .max()
-            .map_or(0, |&deepest| deepest.strict_add(1));
+            .map_or(0, |rank| rank.strict_add(1));
         let items = self.vertices.len();
 
         self.vertices.clear();
@@ -165,12 +166,10 @@ where
         self.edges = self.edges.strict_add(1);
     }
     fn prepare_structure(&mut self) {
-        self.height = self
-            .bottom
-            .iter()
-            .copied()
-            .max()
-            .map_or(0, |rank| rank.strict_add(1));
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            self.height = self.bottom.iter().copied().max().map_or(0, |rank| rank + 1);
+        }
 
         if self.height > self.merged_tops.len() {
             self.merged_tops.resize_with(self.height, Vec::new);
@@ -245,7 +244,7 @@ where
 
         identifier_map.extend(weave.nodes.iter().map(|(&k, n)| (k, n.from.len())));
 
-        stack.extend(weave.roots.iter().copied());
+        stack.extend(weave.roots.iter().rev().copied());
 
         while let Some(id) = stack.pop() {
             let node = &weave.nodes[&id];
@@ -267,16 +266,16 @@ where
             self.indices.insert(id, index);
 
             for (from, from_index, from_rank) in parents.drain(..) {
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                #[allow(
+                    clippy::arithmetic_side_effects,
+                    reason = "Can never overflow or underflow"
+                )]
                 if from_rank + 1 == rank {
                     self.link(from_index, index);
                     self.routes.insert((from, id), None);
                 } else {
-                    let segment = self.push_item(
-                        Vertex::Segment { from, to: id },
-                        from_rank.strict_add(1),
-                        rank.strict_sub(1),
-                    );
+                    let segment =
+                        self.push_item(Vertex::Segment { from, to: id }, from_rank + 1, rank - 1);
 
                     self.link(from_index, segment);
                     self.link(segment, index);
@@ -342,16 +341,16 @@ where
             self.indices.insert(id, index);
 
             for (from, from_index, from_rank) in parents.drain(..) {
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                #[allow(
+                    clippy::arithmetic_side_effects,
+                    reason = "Can never overflow or underflow"
+                )]
                 if from_rank + 1 == rank {
                     self.link(from_index, index);
                     self.routes.insert((from, id), None);
                 } else {
-                    let segment = self.push_item(
-                        Vertex::Segment { from, to: id },
-                        from_rank.strict_add(1),
-                        rank.strict_sub(1),
-                    );
+                    let segment =
+                        self.push_item(Vertex::Segment { from, to: id }, from_rank + 1, rank - 1);
 
                     self.link(from_index, segment);
                     self.link(segment, index);
