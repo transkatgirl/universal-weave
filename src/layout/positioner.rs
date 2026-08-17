@@ -395,6 +395,8 @@ where
     S: BuildHasher + Default + Clone,
 {
     fn assign_dag_coordinates(&mut self, scratchpad: &mut Scratchpad, spacing: &Spacing) {
+        assert!(spacing.validate(), "Invalid spacing");
+
         let guard = scratchpad.guard();
 
         todo!()

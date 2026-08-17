@@ -35,6 +35,8 @@ Need to add curve fitting convenience functions
 mod positioner;
 
 /// Minimum gaps in a [`Weave`] layout.
+///
+/// All values must be normal numbers >= 0.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[must_use]
 pub struct Spacing {
@@ -57,7 +59,7 @@ impl Default for Spacing {
 }
 
 impl Spacing {
-    /// Validates that all spacing values are finite, positive, and normal.
+    /// Validates that all spacing values are normal numbers >= 0.
     #[must_use]
     pub const fn validate(&self) -> bool {
         validate_float(self.node) && validate_float(self.layer) && validate_float(self.edge)
@@ -249,7 +251,7 @@ where
 const fn validate_float(value: f32) -> bool {
     match value.classify() {
         FpCategory::Normal => value.is_sign_positive(),
-        FpCategory::Zero => true,
+        FpCategory::Zero => true, // Division must be handled carefully due to the possibility of -0
         _ => false,
     }
 }
