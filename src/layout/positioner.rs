@@ -31,6 +31,7 @@ where
     height: usize,
 
     indices: HashMap<K, usize, S>,
+    sizes: HashMap<K, Vec2, S>,
     routes: HashMap<(K, K), Option<usize>, S>,
     coordinates: Vec<Vec2>,
     layer_y: Vec<f32>,
@@ -58,6 +59,7 @@ where
             height: 0,
 
             indices: HashMap::default(),
+            sizes: HashMap::default(),
             routes: HashMap::default(),
             coordinates: Vec::new(),
             layer_y: Vec::new(),
@@ -125,6 +127,8 @@ where
 
         self.indices.clear();
         self.indices.reserve(reserved_nodes);
+        self.sizes.clear();
+        self.sizes.reserve(reserved_nodes);
         self.routes.clear();
 
         self.coordinates.clear();
@@ -227,7 +231,7 @@ where
     pub fn layout_independent<T, M, F>(
         &mut self,
         weave: &mut IndependentWeave<K, T, M, S>,
-        sizes: F,
+        mut sizes: F,
         spacing: &Spacing,
     ) where
         T: IndependentContents,
@@ -235,77 +239,84 @@ where
     {
         self.clear(weave.nodes.len());
 
-        let guard = weave.scratchpad.guard();
+        {
+            let guard = weave.scratchpad.guard();
 
-        let mut stack = guard.vec();
-        let mut identifier_map = guard.map_with_capacity(weave.nodes.len(), S::default());
-        let mut parents: ScratchpadVec<'_, (K, usize, usize)> =
-            guard.vec_with_capacity(weave.nodes.len());
+            let mut stack = guard.vec();
+            let mut identifier_map = guard.map_with_capacity(weave.nodes.len(), S::default());
+            let mut parents: ScratchpadVec<'_, (K, usize, usize)> =
+                guard.vec_with_capacity(weave.nodes.len());
 
-        identifier_map.extend(weave.nodes.iter().map(|(&k, n)| (k, n.from.len())));
+            identifier_map.extend(weave.nodes.iter().map(|(&k, n)| (k, n.from.len())));
 
-        stack.extend(weave.roots.iter().rev().copied());
+            stack.extend(weave.roots.iter().rev().copied());
 
-        while let Some(id) = stack.pop() {
-            let node = &weave.nodes[&id];
+            while let Some(id) = stack.pop() {
+                let node = &weave.nodes[&id];
 
-            parents.extend(node.from.iter().map(|&id| {
-                let index = self.indices[&id];
-                (id, index, self.top[index])
-            }));
+                parents.extend(node.from.iter().map(|&id| {
+                    let index = self.indices[&id];
+                    (id, index, self.top[index])
+                }));
 
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-            let rank = parents
-                .iter()
-                .map(|&(_, _, rank)| rank)
-                .max()
-                .map_or(0, |rank| rank + 1);
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                let rank = parents
+                    .iter()
+                    .map(|&(_, _, rank)| rank)
+                    .max()
+                    .map_or(0, |rank| rank + 1);
 
-            let index = self.push_item(Vertex::Real(id), rank, rank);
+                let index = self.push_item(Vertex::Real(id), rank, rank);
 
-            self.indices.insert(id, index);
+                self.indices.insert(id, index);
 
-            for (from, from_index, from_rank) in parents.drain(..) {
-                #[allow(
-                    clippy::arithmetic_side_effects,
-                    reason = "Can never overflow or underflow"
-                )]
-                if from_rank + 1 == rank {
-                    self.link(from_index, index);
-                    self.routes.insert((from, id), None);
-                } else {
-                    let segment =
-                        self.push_item(Vertex::Segment { from, to: id }, from_rank + 1, rank - 1);
+                for (from, from_index, from_rank) in parents.drain(..) {
+                    #[allow(
+                        clippy::arithmetic_side_effects,
+                        reason = "Can never overflow or underflow"
+                    )]
+                    if from_rank + 1 == rank {
+                        self.link(from_index, index);
+                        self.routes.insert((from, id), None);
+                    } else {
+                        let segment = self.push_item(
+                            Vertex::Segment { from, to: id },
+                            from_rank + 1,
+                            rank - 1,
+                        );
 
-                    self.link(from_index, segment);
-                    self.link(segment, index);
-                    self.routes.insert((from, id), Some(segment));
-                }
-            }
-
-            for child in node.to.iter().rev().copied() {
-                let remaining = identifier_map.get_mut(&child).unwrap();
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                {
-                    *remaining -= 1;
+                        self.link(from_index, segment);
+                        self.link(segment, index);
+                        self.routes.insert((from, id), Some(segment));
+                    }
                 }
 
-                if *remaining == 0 {
-                    stack.push(child);
+                for child in node.to.iter().rev().copied() {
+                    let remaining = identifier_map.get_mut(&child).unwrap();
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                    {
+                        *remaining -= 1;
+                    }
+
+                    if *remaining == 0 {
+                        stack.push(child);
+                    }
                 }
             }
         }
 
         debug_assert_eq!(weave.nodes.len(), self.indices.len(), "Malformed weave");
 
-        self.prepare_structure();
+        self.sizes
+            .extend(weave.nodes.keys().copied().map(|id| (id, sizes(&id))));
 
-        todo!()
+        self.prepare_structure();
+        self.assign_dag_coordinates(&mut weave.scratchpad, spacing);
     }
     pub fn layout_topological<W, N, T, F>(
         &mut self,
         weave: &W,
-        sizes: F,
+        mut sizes: F,
         spacing: &Spacing,
         scratchpad: &mut Scratchpad,
         topological: &mut Vec<K>,
@@ -318,43 +329,48 @@ where
     {
         self.clear(weave.len());
 
-        let guard = scratchpad.guard();
+        {
+            let guard = scratchpad.guard();
 
-        let mut parents: ScratchpadVec<'_, (K, usize, usize)> =
-            guard.vec_with_capacity(weave.len());
+            let mut parents: ScratchpadVec<'_, (K, usize, usize)> =
+                guard.vec_with_capacity(weave.len());
 
-        for id in topological.drain(..) {
-            parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|&id| {
-                let index = self.indices[&id];
-                (id, index, self.top[index])
-            }));
+            for id in topological.drain(..) {
+                parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|&id| {
+                    let index = self.indices[&id];
+                    (id, index, self.top[index])
+                }));
 
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-            let rank = parents
-                .iter()
-                .map(|&(_, _, rank)| rank)
-                .max()
-                .map_or(0, |rank| rank + 1);
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                let rank = parents
+                    .iter()
+                    .map(|&(_, _, rank)| rank)
+                    .max()
+                    .map_or(0, |rank| rank + 1);
 
-            let index = self.push_item(Vertex::Real(id), rank, rank);
+                let index = self.push_item(Vertex::Real(id), rank, rank);
 
-            self.indices.insert(id, index);
+                self.indices.insert(id, index);
 
-            for (from, from_index, from_rank) in parents.drain(..) {
-                #[allow(
-                    clippy::arithmetic_side_effects,
-                    reason = "Can never overflow or underflow"
-                )]
-                if from_rank + 1 == rank {
-                    self.link(from_index, index);
-                    self.routes.insert((from, id), None);
-                } else {
-                    let segment =
-                        self.push_item(Vertex::Segment { from, to: id }, from_rank + 1, rank - 1);
+                for (from, from_index, from_rank) in parents.drain(..) {
+                    #[allow(
+                        clippy::arithmetic_side_effects,
+                        reason = "Can never overflow or underflow"
+                    )]
+                    if from_rank + 1 == rank {
+                        self.link(from_index, index);
+                        self.routes.insert((from, id), None);
+                    } else {
+                        let segment = self.push_item(
+                            Vertex::Segment { from, to: id },
+                            from_rank + 1,
+                            rank - 1,
+                        );
 
-                    self.link(from_index, segment);
-                    self.link(segment, index);
-                    self.routes.insert((from, id), Some(segment));
+                        self.link(from_index, segment);
+                        self.link(segment, index);
+                        self.routes.insert((from, id), Some(segment));
+                    }
                 }
             }
         }
@@ -365,9 +381,11 @@ where
             "Malformed topological order"
         );
 
-        self.prepare_structure();
+        self.sizes
+            .extend(topological.iter().copied().map(|id| (id, sizes(&id))));
 
-        todo!()
+        self.prepare_structure();
+        self.assign_dag_coordinates(scratchpad, spacing);
     }
 }
 
@@ -376,6 +394,11 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    fn assign_dag_coordinates(&mut self, scratchpad: &mut Scratchpad, spacing: &Spacing) {
+        let guard = scratchpad.guard();
+
+        todo!()
+    }
 }
 
 impl<K, S> Layout2D<K, S>
