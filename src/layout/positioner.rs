@@ -6,8 +6,10 @@ use hashbrown::HashMap;
 use scratchpads::{Scratchpad, ScratchpadVec};
 
 use crate::{
-    IndependentContents, LayoutItem, Node, Weave, dependent::DependentWeave,
-    independent::IndependentWeave, layout::Spacing,
+    IndependentContents, LayoutItem, Node, Weave,
+    dependent::DependentWeave,
+    independent::IndependentWeave,
+    layout::{Spacing, validate_float, validate_vec2},
 };
 
 #[derive(Debug, Clone)]
@@ -307,8 +309,13 @@ where
 
         debug_assert_eq!(weave.nodes.len(), self.indices.len(), "Malformed weave");
 
-        self.sizes
-            .extend(weave.nodes.keys().copied().map(|id| (id, sizes(&id))));
+        self.sizes.extend(weave.nodes.keys().copied().map(|id| {
+            (id, {
+                let size = sizes(&id);
+                assert!(validate_vec2(size), "Invalid size");
+                size
+            })
+        }));
 
         self.prepare_structure();
         self.assign_dag_coordinates(&mut weave.scratchpad, spacing);
@@ -381,8 +388,13 @@ where
             "Malformed topological order"
         );
 
-        self.sizes
-            .extend(topological.iter().copied().map(|id| (id, sizes(&id))));
+        self.sizes.extend(topological.iter().copied().map(|id| {
+            (id, {
+                let size = sizes(&id);
+                assert!(validate_vec2(size), "Invalid size");
+                size
+            })
+        }));
 
         self.prepare_structure();
         self.assign_dag_coordinates(scratchpad, spacing);
@@ -394,8 +406,15 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn assign_dag_coordinates(&mut self, scratchpad: &mut Scratchpad, spacing: &Spacing) {
         assert!(spacing.validate(), "Invalid spacing");
+
+        let count = self.vertices.len();
+
+        if count == 0 {
+            return;
+        }
 
         let guard = scratchpad.guard();
 
@@ -411,11 +430,7 @@ where
     pub fn size(&self) -> Vec2 {
         todo!()
     }
-    pub fn view<P, F>(&self, bounds: Vec2, callback: F)
-    where
-        P: Iterator<Item = Vec2>,
-        F: FnMut(LayoutItem<K, Vec2, P>),
-    {
+    pub fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
         todo!()
     }
 }

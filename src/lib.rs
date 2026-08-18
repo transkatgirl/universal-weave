@@ -465,10 +465,7 @@ where
 }
 
 /// A geometric item within an arrangement of a Weave's content.
-pub enum LayoutItem<K, V, P>
-where
-    P: Iterator<Item = V>,
-{
+pub enum LayoutItem<'a, K, V> {
     /// Computed geometry for a [`Node`].
     Node {
         /// Node identifier.
@@ -485,7 +482,7 @@ where
         /// Child node where the connection ends.
         to: K,
         /// Points for a polyline routed between the two nodes.
-        points: P,
+        points: &'a [V],
     },
 }
 
@@ -499,6 +496,7 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
+    V: 'static,
 {
     /// Arranges a [`Weave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///
@@ -511,9 +509,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<P>(&self, bounds: V, callback: impl FnMut(LayoutItem<K, V, P>))
-    where
-        P: Iterator<Item = V>;
+    fn view<'a>(&'a self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
 }
 
 /// A read-only [`Weave`].
@@ -639,6 +635,7 @@ where
     W: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
+    V: 'static,
 {
     /// Arranges an [`ImmutableWeave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///
@@ -651,9 +648,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<P>(&self, bounds: V, callback: impl FnMut(LayoutItem<K, V, P>))
-    where
-        P: Iterator<Item = V>;
+    fn view<'a>(&'a self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

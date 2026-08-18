@@ -44,7 +44,9 @@ pub struct Spacing {
     pub node: f32,
     /// Gap between layers of nodes.
     pub layer: f32,
-    /// Gap between node connections.
+    /// Gap between edges.
+    pub corridor: f32,
+    /// Gap between an edge and a node.
     pub edge: f32,
 }
 
@@ -53,7 +55,8 @@ impl Default for Spacing {
         Self {
             node: 16.0,
             layer: 16.0,
-            edge: 8.0,
+            corridor: 8.0,
+            edge: 4.0,
         }
     }
 }
@@ -62,7 +65,10 @@ impl Spacing {
     /// Validates that all spacing values are normal numbers >= 0.
     #[must_use]
     pub const fn validate(&self) -> bool {
-        validate_float(self.node) && validate_float(self.layer) && validate_float(self.edge)
+        validate_float(self.node)
+            && validate_float(self.layer)
+            && validate_float(self.corridor)
+            && validate_float(self.edge)
     }
 }
 
@@ -108,11 +114,8 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
-    where
-        P: Iterator<Item = Vec2>,
-    {
-        self.layout.view(bounds, callback);
+    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+        self.layout.view(min, max, callback);
     }
 }
 
@@ -159,11 +162,8 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
-    where
-        P: Iterator<Item = Vec2>,
-    {
-        self.layout.view(bounds, callback);
+    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+        self.layout.view(min, max, callback);
     }
 }
 
@@ -239,19 +239,20 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<P>(&self, bounds: Vec2, callback: impl FnMut(LayoutItem<K, Vec2, P>))
-    where
-        P: Iterator<Item = Vec2>,
-    {
-        self.layout.view(bounds, callback);
+    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+        self.layout.view(min, max, callback);
     }
 }
 
 #[must_use]
 const fn validate_float(value: f32) -> bool {
-    match value.classify() {
-        FpCategory::Normal => value.is_sign_positive(),
-        FpCategory::Zero => true, // Division must be handled carefully due to the possibility of -0
-        _ => false,
-    }
+    matches!(
+        value.classify(),
+        FpCategory::Normal | FpCategory::Zero | FpCategory::Subnormal
+    ) && value.is_sign_positive()
+}
+
+#[must_use]
+const fn validate_vec2(value: Vec2) -> bool {
+    validate_float(value.x) && validate_float(value.y)
 }
