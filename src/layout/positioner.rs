@@ -234,7 +234,12 @@ where
         self.merged_top_offsets.resize(ranks, 0);
         self.merged_bottom_offsets.resize(ranks, 0);
 
-        for ((vertex, &top), &bottom) in self.vertices.iter().zip(&self.top).zip(&self.bottom) {
+        for ((vertex, top), bottom) in self
+            .vertices
+            .iter()
+            .zip(self.top.iter().copied())
+            .zip(self.bottom.iter().copied())
+        {
             match vertex {
                 Vertex::Real(_) => {
                     self.real_offsets[top] = self.real_offsets[top].strict_add(1);
@@ -262,11 +267,11 @@ where
         self.merged_top_flat.resize(count, 0);
         self.merged_bottom_flat.resize(count, 0);
 
-        for (index, ((vertex, &top), &bottom)) in self
+        for (index, ((vertex, top), bottom)) in self
             .vertices
             .iter()
-            .zip(&self.top)
-            .zip(&self.bottom)
+            .zip(self.top.iter().copied())
+            .zip(self.bottom.iter().copied())
             .enumerate()
         {
             match vertex {
@@ -336,7 +341,7 @@ where
 
         self.down_flat.resize(edges, (0, 0));
 
-        for (edge, &(source, target)) in self.edge_list.iter().enumerate() {
+        for (edge, (source, target)) in self.edge_list.iter().copied().enumerate() {
             let cursor = self.down_offsets[source];
 
             self.down_flat[cursor] = (target, edge);
@@ -652,11 +657,11 @@ where
             candidate.resize(count, 0.0_f32);
         }
 
-        for (((((vertex, &size), &rank), extent), margin), segment) in self
+        for (((((vertex, size), rank), extent), margin), segment) in self
             .vertices
             .iter()
-            .zip(&self.sizes)
-            .zip(&self.top)
+            .zip(self.sizes.iter().copied())
+            .zip(self.top.iter().copied())
             .zip(extent.iter_mut())
             .zip(margin.iter_mut())
             .zip(segment.iter_mut())
@@ -929,14 +934,14 @@ where
 
         let [first, second, third, fourth] = &candidates;
 
-        for (((((coordinate, &a), &b), &c), &d), &extent) in self
+        for (((((coordinate, a), b), c), d), extent) in self
             .coordinates
             .iter_mut()
-            .zip(first.iter())
-            .zip(second.iter())
-            .zip(third.iter())
-            .zip(fourth.iter())
-            .zip(extent.iter())
+            .zip(first.iter().copied())
+            .zip(second.iter().copied())
+            .zip(third.iter().copied())
+            .zip(fourth.iter().copied())
+            .zip(extent.iter().copied())
         {
             let (a, b, c, d) = (
                 a + offsets[0],
@@ -1324,7 +1329,11 @@ where
         let mut minimum = f32::INFINITY;
         let mut maximum = f32::NEG_INFINITY;
 
-        for ((x, &sink), &extent) in x.iter_mut().zip(sink.iter()).zip(extent.iter()) {
+        for ((x, sink), extent) in x
+            .iter_mut()
+            .zip(sink.iter().copied())
+            .zip(extent.iter().copied())
+        {
             *x += shift[sink];
 
             if !LEFTWARD {
@@ -1488,11 +1497,11 @@ where
             .layer_bounds
             .partition_point(|&(start, _)| start <= max.y);
 
-        for ((lines, &(rank_min, rank_max)), &(left_reach, right_reach)) in self
+        for ((lines, (rank_min, rank_max)), (left_reach, right_reach)) in self
             .polylines
             .iter()
-            .zip(&self.polyline_bounds)
-            .zip(&self.polyline_reach)
+            .zip(self.polyline_bounds.iter().copied())
+            .zip(self.polyline_reach.iter().copied())
             .skip(first_reaching)
             .take(last.saturating_sub(first_reaching))
         {
@@ -1526,8 +1535,8 @@ where
             }
         }
 
-        for ((start, end), &half_width) in spans(&self.real_offsets)
-            .zip(&self.rank_half_width)
+        for ((start, end), half_width) in spans(&self.real_offsets)
+            .zip(self.rank_half_width.iter().copied())
             .skip(first)
             .take(last.saturating_sub(first))
         {
@@ -1578,7 +1587,7 @@ fn spans(offsets: &[usize]) -> impl Iterator<Item = (usize, usize)> {
     offsets
         .iter()
         .zip(offsets.iter().skip(1))
-        .map(|(&start, &end)| (start, end))
+        .map(|(start, end)| (*start, *end))
 }
 
 #[inline]
