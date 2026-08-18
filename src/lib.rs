@@ -509,7 +509,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<'a>(&'a self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
+    fn view<'a>(&'a mut self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
 }
 
 /// A read-only [`Weave`].
@@ -648,7 +648,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<'a>(&'a self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
+    fn view<'a>(&'a mut self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

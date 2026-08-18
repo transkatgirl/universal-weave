@@ -114,7 +114,7 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
         self.layout.view(min, max, callback);
     }
 }
@@ -162,7 +162,7 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
         self.layout.view(min, max, callback);
     }
 }
@@ -239,7 +239,7 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
         self.layout.view(min, max, callback);
     }
 }
