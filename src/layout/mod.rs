@@ -33,6 +33,7 @@ Need to add curve fitting convenience functions
 */
 
 mod positioner;
+mod slotset;
 
 /// Minimum gaps in a [`Weave`] layout.
 ///
