@@ -37,7 +37,7 @@ mod slotset;
 
 /// Minimum gaps in a [`Weave`] layout.
 ///
-/// All values must be normal numbers >= 0.
+/// All values must be finite numbers >= 0.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[must_use]
 pub struct Spacing {
@@ -63,7 +63,7 @@ impl Default for Spacing {
 }
 
 impl Spacing {
-    /// Validates that all spacing values are normal numbers >= 0.
+    /// Validates that all spacing values are finite numbers >= 0.
     #[must_use]
     pub const fn validate(&self) -> bool {
         validate_float(self.node)
