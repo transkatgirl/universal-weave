@@ -48,7 +48,7 @@ where
     up_offsets: Vec<u32>,
     up_flat: Vec<(u32, u32)>,
     down_offsets: Vec<u32>,
-    down_flat: Vec<(u32, u32)>,
+    down_flat: Vec<u32>,
     edge_list: Vec<(u32, u32)>,
     height: u32,
     indices: HashMap<K, u32, S>,
@@ -334,14 +334,13 @@ where
             up_total = up_total.strict_add(up_len);
         }
 
-        self.down_flat.resize(edges, (0, 0));
+        self.down_flat.resize(edges, 0);
 
-        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
-        for (edge, (source, target)) in self.edge_list.iter().copied().enumerate() {
+        for (source, target) in self.edge_list.iter().copied() {
             let source = source as usize;
             let cursor = self.down_offsets[source];
 
-            self.down_flat[cursor as usize] = (target, edge as u32);
+            self.down_flat[cursor as usize] = target;
             self.down_offsets[source] = cursor.strict_add(1);
         }
 
@@ -350,11 +349,16 @@ where
 
         self.up_flat.resize(edges, (0, 0));
 
+        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
         for source in self.merged_bottom_flat.iter().copied() {
-            for (target, edge) in bucket(&self.down_flat, &self.down_offsets, source as usize)
+            let base = self.down_offsets[source as usize];
+
+            for (offset, target) in bucket(&self.down_flat, &self.down_offsets, source as usize)
                 .iter()
                 .copied()
+                .enumerate()
             {
+                let edge = base.strict_add(offset as u32);
                 let target = target as usize;
                 let cursor = self.up_offsets[target];
 
@@ -377,7 +381,7 @@ where
             .zip(&mut self.deepest)
         {
             for source in self.real_flat[start as usize..end as usize].iter().copied() {
-                for (target, _) in bucket(&self.down_flat, &self.down_offsets, source as usize)
+                for target in bucket(&self.down_flat, &self.down_offsets, source as usize)
                     .iter()
                     .copied()
                 {
@@ -444,32 +448,35 @@ where
 
             let mut identifier_map = guard.map_with_capacity(count, S::default());
             let mut keys: ScratchpadVec<'_, K> = guard.vec_with_capacity(count);
-            let mut remaining: ScratchpadVec<'_, usize> = guard.vec_with_capacity(count);
-            let mut parent_offsets: ScratchpadVec<'_, usize> =
+            let mut remaining: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
+            let mut parent_offsets: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(count.strict_add(1));
-            let mut child_offsets: ScratchpadVec<'_, usize> =
+            let mut child_offsets: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(count.strict_add(1));
 
-            let mut parent_total = 0_usize;
-            let mut child_total = 0_usize;
+            let mut parent_total = 0_u32;
+            let mut child_total = 0_u32;
 
             parent_offsets.push(0);
             child_offsets.push(0);
 
+            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             for (dense, (&id, node)) in weave.nodes.iter().enumerate() {
-                identifier_map.insert(id, dense);
+                identifier_map.insert(id, dense as u32);
                 keys.push(id);
-                remaining.push(node.from.len());
+                remaining.push(node.from.len() as u32);
 
-                parent_total = parent_total.strict_add(node.from.len());
-                child_total = child_total.strict_add(node.to.len());
+                parent_total = parent_total.strict_add(node.from.len() as u32);
+                child_total = child_total.strict_add(node.to.len() as u32);
 
                 parent_offsets.push(parent_total);
                 child_offsets.push(child_total);
             }
 
-            let mut parent_flat: ScratchpadVec<'_, usize> = guard.vec_with_capacity(parent_total);
-            let mut child_flat: ScratchpadVec<'_, usize> = guard.vec_with_capacity(child_total);
+            let mut parent_flat: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(parent_total as usize);
+            let mut child_flat: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(child_total as usize);
 
             for node in weave.nodes.values() {
                 parent_flat.extend(node.from.iter().map(|id| identifier_map[id]));
@@ -477,7 +484,7 @@ where
             }
 
             let mut vertex_of: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
-            let mut stack: ScratchpadVec<'_, usize> = guard.vec();
+            let mut stack: ScratchpadVec<'_, u32> = guard.vec();
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(count);
 
             vertex_of.resize(count, u32::MAX);
@@ -485,14 +492,11 @@ where
             stack.extend(weave.roots.iter().rev().map(|id| identifier_map[id]));
 
             while let Some(dense) = stack.pop() {
+                let dense = dense as usize;
                 let mut rank = 0_u32;
 
-                for parent in parent_flat
-                    [parent_offsets[dense]..parent_offsets[dense.strict_add(1)]]
-                    .iter()
-                    .copied()
-                {
-                    let index = vertex_of[parent];
+                for parent in bucket(&parent_flat, &parent_offsets, dense).iter().copied() {
+                    let index = vertex_of[parent as usize];
                     let top = self.top[index as usize];
 
                     #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -533,17 +537,15 @@ where
                     }
                 }
 
-                for child in child_flat[child_offsets[dense]..child_offsets[dense.strict_add(1)]]
-                    .iter()
-                    .rev()
-                    .copied()
-                {
+                for child in bucket(&child_flat, &child_offsets, dense).iter().rev().copied() {
+                    let index = child as usize;
+
                     #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                     {
-                        remaining[child] -= 1;
+                        remaining[index] -= 1;
                     }
 
-                    if remaining[child] == 0 {
+                    if remaining[index] == 0 {
                         stack.push(child);
                     }
                 }
@@ -642,17 +644,17 @@ struct PassScratch<'a, 'g> {
     marked: &'a [bool],
     extent: &'a [f32],
     segment: &'a [bool],
-    leftmost_at: &'a [usize],
-    rightmost_at: &'a [usize],
-    left_offsets: &'a [usize],
-    left_runs: &'a [(usize, usize, usize)],
-    right_offsets: &'a [usize],
-    right_runs: &'a [(usize, usize, usize)],
-    root: &'a mut [usize],
-    align: &'a mut [usize],
-    sink: &'a mut [usize],
+    leftmost_at: &'a [u32],
+    rightmost_at: &'a [u32],
+    left_offsets: &'a [u32],
+    left_runs: &'a [(u32, u32, u32)],
+    right_offsets: &'a [u32],
+    right_runs: &'a [(u32, u32, u32)],
+    root: &'a mut [u32],
+    align: &'a mut [u32],
+    sink: &'a mut [u32],
     shift: &'a mut [f32],
-    stack: &'a mut ScratchpadVec<'g, (usize, usize, usize, bool)>,
+    stack: &'a mut ScratchpadVec<'g, (u32, u32, u32, bool)>,
 }
 
 impl<K, S> Layout2D<K, S>
@@ -675,7 +677,9 @@ where
 
         let height_usize = self.height as usize;
 
-        self.x_coordinates.resize(count, 0.0_f32);
+        let mut fourth = core::mem::take(&mut self.x_coordinates);
+
+        fourth.resize(count, 0.0_f32);
         self.rank_half_width.clear();
         self.rank_half_width.resize(height_usize, 0.0_f32);
 
@@ -685,7 +689,6 @@ where
         let mut segment = guard.vec_with_capacity(count);
         let mut rank_tallest = guard.vec_with_capacity(height_usize);
         let mut candidates = [
-            guard.vec_with_capacity(count),
             guard.vec_with_capacity(count),
             guard.vec_with_capacity(count),
             guard.vec_with_capacity(count),
@@ -731,9 +734,9 @@ where
         let mut rightmost_at = guard.vec_with_capacity(height_usize);
 
         marked.resize(self.down_flat.len(), false);
-        open_run_start.resize(count, 0_usize);
-        leftmost_at.resize(height_usize, 0_usize);
-        rightmost_at.resize(height_usize, 0_usize);
+        open_run_start.resize(count, 0_u32);
+        leftmost_at.resize(height_usize, 0_u32);
+        rightmost_at.resize(height_usize, 0_u32);
 
         let mut active = SlotSet::new(&guard);
         let mut spanning = SlotSet::new(&guard);
@@ -743,6 +746,7 @@ where
 
         let mut closed_runs = guard.vec_with_capacity(count.strict_mul(3));
 
+        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
         for rank in 0..=height_usize {
             if let Some(previous) = rank.checked_sub(1) {
                 for item in bucket(
@@ -759,14 +763,14 @@ where
 
                     active.remove(item);
 
-                    let end = rank.strict_sub(1);
+                    let end = previous as u32;
 
                     if let Some(left) = before {
                         let start = open_run_start[left];
                         let right = item;
 
                         if end >= start {
-                            closed_runs.push((left, right, start, end));
+                            closed_runs.push((left as u32, right as u32, start, end));
                         }
                     }
                     if let Some(right) = after {
@@ -774,11 +778,11 @@ where
                         let start = open_run_start[item];
 
                         if end >= start {
-                            closed_runs.push((left, right, start, end));
+                            closed_runs.push((left as u32, right as u32, start, end));
                         }
                     }
                     if let (Some(left), Some(_)) = (before, after) {
-                        open_run_start[left] = rank;
+                        open_run_start[left] = rank as u32;
                     }
                 }
             }
@@ -797,24 +801,25 @@ where
 
                 if let (Some(left), Some(right), Some(end)) = (before, after, rank.checked_sub(1)) {
                     let start = open_run_start[left];
+                    let end = end as u32;
 
                     if end >= start {
-                        closed_runs.push((left, right, start, end));
+                        closed_runs.push((left as u32, right as u32, start, end));
                     }
                 }
 
                 if let Some(left) = before {
-                    open_run_start[left] = rank;
+                    open_run_start[left] = rank as u32;
                 }
                 if after.is_some() {
-                    open_run_start[item] = rank;
+                    open_run_start[item] = rank as u32;
                 }
 
                 active.insert(item);
             }
 
-            leftmost_at[rank] = active.first().unwrap();
-            rightmost_at[rank] = active.last().unwrap();
+            leftmost_at[rank] = active.first().unwrap() as u32;
+            rightmost_at[rank] = active.last().unwrap() as u32;
 
             if rank.strict_add(1) >= height_usize {
                 continue;
@@ -842,12 +847,14 @@ where
                 .copied()
             {
                 let source = source as usize;
+                let base = self.down_offsets[source] as usize;
                 let mut before: Option<Option<usize>> = None;
                 let mut after: Option<Option<usize>> = None;
 
-                for (target, edge) in bucket(&self.down_flat, &self.down_offsets, source)
+                for (offset, target) in bucket(&self.down_flat, &self.down_offsets, source)
                     .iter()
                     .copied()
+                    .enumerate()
                 {
                     let target = target as usize;
                     let crossed = if target > source {
@@ -861,7 +868,7 @@ where
                     };
 
                     if crossed {
-                        marked[edge as usize] = true;
+                        marked[base.strict_add(offset)] = true;
                     }
                 }
             }
@@ -872,19 +879,19 @@ where
         let mut left_offsets = guard.vec_with_capacity(count.strict_add(1));
         let mut right_offsets = guard.vec_with_capacity(count.strict_add(1));
 
-        left_offsets.resize(count.strict_add(1), 0_usize);
-        right_offsets.resize(count.strict_add(1), 0_usize);
+        left_offsets.resize(count.strict_add(1), 0_u32);
+        right_offsets.resize(count.strict_add(1), 0_u32);
 
         for (left, right, _, _) in closed_runs.iter().copied() {
-            let after_left = left.strict_add(1);
-            let after_right = right.strict_add(1);
+            let after_left = (left as usize).strict_add(1);
+            let after_right = (right as usize).strict_add(1);
 
             right_offsets[after_left] = right_offsets[after_left].strict_add(1);
             left_offsets[after_right] = left_offsets[after_right].strict_add(1);
         }
 
-        let mut left_total = 0_usize;
-        let mut right_total = 0_usize;
+        let mut left_total = 0_u32;
+        let mut right_total = 0_u32;
 
         for (left_offset, right_offset) in left_offsets.iter_mut().zip(right_offsets.iter_mut()) {
             left_total = left_total.strict_add(*left_offset);
@@ -897,8 +904,8 @@ where
         let mut left_runs = guard.vec_with_capacity(total_runs);
         let mut right_runs = guard.vec_with_capacity(total_runs);
 
-        left_runs.resize(total_runs, (0_usize, 0_usize, 0_usize));
-        right_runs.resize(total_runs, (0_usize, 0_usize, 0_usize));
+        left_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
+        right_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
 
         let mut left_cursors = guard.vec_with_capacity(count);
         let mut right_cursors = guard.vec_with_capacity(count);
@@ -907,11 +914,15 @@ where
         right_cursors.extend_from_slice(&right_offsets[..count]);
 
         for (left, right, start, end) in closed_runs.iter().copied() {
-            right_runs[right_cursors[left]] = (right, start, end);
-            right_cursors[left] = right_cursors[left].strict_add(1);
+            let cursor = right_cursors[left as usize];
 
-            left_runs[left_cursors[right]] = (left, start, end);
-            left_cursors[right] = left_cursors[right].strict_add(1);
+            right_runs[cursor as usize] = (right, start, end);
+            right_cursors[left as usize] = cursor.strict_add(1);
+
+            let cursor = left_cursors[right as usize];
+
+            left_runs[cursor as usize] = (left, start, end);
+            left_cursors[right as usize] = cursor.strict_add(1);
         }
 
         let mut root = guard.vec_with_capacity(count);
@@ -919,9 +930,9 @@ where
         let mut sink = guard.vec_with_capacity(count);
         let mut shift = guard.vec_with_capacity(count);
 
-        root.resize(count, 0_usize);
-        align.resize(count, 0_usize);
-        sink.resize(count, 0_usize);
+        root.resize(count, 0_u32);
+        align.resize(count, 0_u32);
+        sink.resize(count, 0_u32);
         shift.resize(count, 0.0_f32);
 
         let mut stack = guard.vec();
@@ -943,13 +954,13 @@ where
             stack: &mut stack,
         };
 
-        let [first, second, third, fourth] = &mut candidates;
+        let [first, second, third] = &mut candidates;
 
         let extents = [
             self.coordinate_pass::<true, true>(&mut scratch, spacing, first),
             self.coordinate_pass::<true, false>(&mut scratch, spacing, second),
             self.coordinate_pass::<false, true>(&mut scratch, spacing, third),
-            self.coordinate_pass::<false, false>(&mut scratch, spacing, fourth),
+            self.coordinate_pass::<false, false>(&mut scratch, spacing, &mut fourth),
         ];
 
         let mut best = 0_usize;
@@ -973,22 +984,20 @@ where
         let mut left = f32::INFINITY;
         let mut right = f32::NEG_INFINITY;
 
-        let [first, second, third, fourth] = &candidates;
+        let [first, second, third] = &candidates;
 
-        for (((((coordinate, a), b), c), d), extent) in self
-            .x_coordinates
+        for ((((coordinate, a), b), c), extent) in fourth
             .iter_mut()
             .zip(first.iter().copied())
             .zip(second.iter().copied())
             .zip(third.iter().copied())
-            .zip(fourth.iter().copied())
             .zip(extent.iter().copied())
         {
             let (a, b, c, d) = (
                 a + offsets[0],
                 b + offsets[1],
                 c + offsets[2],
-                d + offsets[3],
+                *coordinate + offsets[3],
             );
 
             let low = a.min(b).max(c.min(d));
@@ -999,6 +1008,8 @@ where
             left = left.min(combined - extent);
             right = right.max(combined + extent);
         }
+
+        self.x_coordinates = fourth;
 
         let mut valid = true;
 
@@ -1064,6 +1075,7 @@ where
         clippy::integer_division_remainder_used,
         reason = "Coordinate calculation"
     )]
+    #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool>(
         &self,
         scratch: &mut PassScratch<'_, '_>,
@@ -1104,10 +1116,19 @@ where
         } else {
             (&self.merged_bottom_flat, &self.merged_bottom_offsets)
         };
-        let (neighbour_flat, neighbour_offsets) = if DOWNWARD {
-            (&self.up_flat, &self.up_offsets)
+        let neighbour_offsets = if DOWNWARD {
+            &self.up_offsets
         } else {
-            (&self.down_flat, &self.down_offsets)
+            &self.down_offsets
+        };
+        let neighbour_at = |vertex: usize, index: usize| -> (u32, u32) {
+            let position = (neighbour_offsets[vertex] as usize).strict_add(index);
+
+            if DOWNWARD {
+                self.up_flat[position]
+            } else {
+                (self.down_flat[position], position as u32)
+            }
         };
         let (runs_flat, runs_offsets) = if LEFTWARD {
             (*left_runs, *left_offsets)
@@ -1120,11 +1141,8 @@ where
             (*left_runs, *left_offsets)
         };
 
-        let runs_of =
-            |vertex: usize| &runs_flat[runs_offsets[vertex]..runs_offsets[vertex.strict_add(1)]];
-        let across_runs_of = |vertex: usize| {
-            &across_flat[across_offsets[vertex]..across_offsets[vertex.strict_add(1)]]
-        };
+        let runs_of = |vertex: usize| bucket(runs_flat, runs_offsets, vertex);
+        let across_runs_of = |vertex: usize| bucket(across_flat, across_offsets, vertex);
 
         for (vertex, ((root, align), sink)) in root
             .iter_mut()
@@ -1132,6 +1150,8 @@ where
             .zip(sink.iter_mut())
             .enumerate()
         {
+            let vertex = vertex as u32;
+
             *root = vertex;
             *align = vertex;
             *sink = vertex;
@@ -1146,8 +1166,9 @@ where
 
             let mut last: Option<usize> = None;
             let mut process = |vertex: usize| {
-                let neighbours = bucket(neighbour_flat, neighbour_offsets, vertex);
-                let degree = neighbours.len();
+                let degree =
+                    neighbour_offsets[vertex.strict_add(1)].strict_sub(neighbour_offsets[vertex])
+                        as usize;
 
                 if degree == 0 {
                     return;
@@ -1158,7 +1179,7 @@ where
                     reflect(degree / 2, degree, LEFTWARD),
                 ];
 
-                let is_segment = |median: usize| segment[neighbours[median].0 as usize];
+                let is_segment = |median: usize| segment[neighbour_at(vertex, median).0 as usize];
 
                 let distinct = if medians[0] == medians[1] {
                     1
@@ -1171,11 +1192,11 @@ where
                 };
 
                 for median in medians[..distinct].iter().copied() {
-                    if align[vertex] != vertex {
+                    if align[vertex] as usize != vertex {
                         continue;
                     }
 
-                    let (neighbour, edge) = neighbours[median];
+                    let (neighbour, edge) = neighbour_at(vertex, median);
                     let (neighbour, edge) = (neighbour as usize, edge as usize);
 
                     let admissible = last.is_none_or(|last| {
@@ -1187,7 +1208,7 @@ where
                     });
 
                     if !marked[edge] && admissible {
-                        align[neighbour] = vertex;
+                        align[neighbour] = vertex as u32;
                         root[vertex] = root[neighbour];
                         align[vertex] = root[vertex];
 
@@ -1210,43 +1231,49 @@ where
         stack.clear();
 
         let mut place = |start: usize| {
-            if root[start] != start || !x[start].is_nan() {
+            if root[start] as usize != start || !x[start].is_nan() {
                 return;
             }
 
-            stack.push((start, start, 0, false));
+            let narrowed = start as u32;
+
+            stack.push((narrowed, narrowed, 0, false));
 
             while let Some((root_val, member, runs_applied, started)) = stack.last().copied() {
+                let (root_index, member_index) = (root_val as usize, member as usize);
+
                 if !started {
-                    x[root_val] = 0.0_f32;
+                    x[root_index] = 0.0_f32;
                     stack.last_mut().unwrap().3 = true;
                 }
 
-                let runs = runs_of(member);
+                let runs = runs_of(member_index);
 
-                let mut applied = runs_applied;
+                let mut applied = runs_applied as usize;
                 let mut nested = false;
 
                 while applied < runs.len() {
                     let run = reflect(applied, runs.len(), DOWNWARD);
                     let (neighbour, _, _) = runs[run];
-                    let neighbour_root = root[neighbour];
+                    let neighbour_root = root[neighbour as usize];
 
-                    if x[neighbour_root].is_nan() {
-                        stack.last_mut().unwrap().2 = applied;
+                    if x[neighbour_root as usize].is_nan() {
+                        stack.last_mut().unwrap().2 = applied as u32;
                         stack.push((neighbour_root, neighbour_root, 0, false));
 
                         nested = true;
                         break;
                     }
 
-                    if sink[root_val] == root_val {
-                        sink[root_val] = sink[neighbour_root];
+                    if sink[root_index] == root_val {
+                        sink[root_index] = sink[neighbour_root as usize];
                     }
 
-                    if sink[root_val] == sink[neighbour_root] {
-                        x[root_val] =
-                            x[root_val].max(x[neighbour_root] + separation(neighbour, member));
+                    if sink[root_index] == sink[neighbour_root as usize] {
+                        x[root_index] = x[root_index].max(
+                            x[neighbour_root as usize]
+                                + separation(neighbour as usize, member_index),
+                        );
                     }
 
                     applied = applied.strict_add(1);
@@ -1256,16 +1283,16 @@ where
                     continue;
                 }
 
-                let next = align[member];
+                let next = align[member_index];
 
                 if next == root_val {
-                    let mut member = root_val;
+                    let mut member = root_index;
 
                     while align[member] != root_val {
-                        member = align[member];
+                        member = align[member] as usize;
 
-                        x[member] = x[root_val];
-                        sink[member] = sink[root_val];
+                        x[member] = x[root_index];
+                        sink[member] = sink[root_index];
                     }
 
                     stack.pop();
@@ -1305,8 +1332,9 @@ where
             } else {
                 rightmost_at[rank]
             };
+            let entry = entry as usize;
 
-            if sink[entry] != entry {
+            if sink[entry] as usize != entry {
                 continue;
             }
 
@@ -1329,28 +1357,34 @@ where
 
             loop {
                 for (neighbour, start, end) in runs_of(vertex).iter().copied() {
-                    let forward = if DOWNWARD { end > from } else { start < from };
+                    let forward = if DOWNWARD {
+                        end as usize > from
+                    } else {
+                        (start as usize) < from
+                    };
 
                     if !forward {
                         continue;
                     }
 
-                    let neighbour_sink = sink[neighbour];
+                    let neighbour = neighbour as usize;
+                    let neighbour_sink = sink[neighbour] as usize;
 
                     shift[neighbour_sink] = shift[neighbour_sink].min(
-                        shift[sink[vertex]] + x[vertex]
+                        shift[sink[vertex] as usize] + x[vertex]
                             - (x[neighbour] + separation(neighbour, vertex)),
                     );
                 }
 
                 while align[vertex] != root[vertex] {
-                    vertex = align[vertex];
+                    vertex = align[vertex] as usize;
 
                     for (neighbour, _, _) in runs_of(vertex).iter().copied() {
-                        let neighbour_sink = sink[neighbour];
+                        let neighbour = neighbour as usize;
+                        let neighbour_sink = sink[neighbour] as usize;
 
                         shift[neighbour_sink] = shift[neighbour_sink].min(
-                            shift[sink[vertex]] + x[vertex]
+                            shift[sink[vertex] as usize] + x[vertex]
                                 - (x[neighbour] + separation(neighbour, vertex)),
                         );
                     }
@@ -1365,15 +1399,17 @@ where
                 let runs = across_runs_of(vertex);
                 let next = if DOWNWARD {
                     runs.last()
-                        .and_then(|&(neighbour, _, end)| (end == across).then_some(neighbour))
+                        .and_then(|&(neighbour, _, end)| (end as usize == across).then_some(neighbour))
                 } else {
-                    runs.first()
-                        .and_then(|&(neighbour, start, _)| (start == across).then_some(neighbour))
+                    runs.first().and_then(|&(neighbour, start, _)| {
+                        (start as usize == across).then_some(neighbour)
+                    })
                 };
 
                 let Some(next) = next else {
                     break;
                 };
+                let next = next as usize;
 
                 if sink[next] != sink[vertex] {
                     break;
@@ -1392,7 +1428,7 @@ where
             .zip(sink.iter().copied())
             .zip(extent.iter().copied())
         {
-            *x += shift[sink];
+            *x += shift[sink as usize];
 
             if !LEFTWARD {
                 *x = -*x;
@@ -1449,7 +1485,7 @@ where
                 let source_border = self.layer_center(rank) + self.sizes[source].y * 0.5_f32;
                 let source_band_end = self.layer_bounds[rank].1;
 
-                for (target, _) in bucket(&self.down_flat, &self.down_offsets, source)
+                for target in bucket(&self.down_flat, &self.down_offsets, source)
                     .iter()
                     .copied()
                 {
@@ -1458,7 +1494,7 @@ where
                         Vertex::Real(to) => (to, target),
                         Vertex::Segment(to) => (
                             to,
-                            self.down_flat[self.down_offsets[target] as usize].0 as usize,
+                            self.down_flat[self.down_offsets[target] as usize] as usize,
                         ),
                     };
 
