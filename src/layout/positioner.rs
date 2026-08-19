@@ -7,10 +7,7 @@
 
 // TODO: Substantial clean-up work, further optimizations
 
-use core::{
-    hash::{BuildHasher, Hash},
-    iter,
-};
+use core::hash::{BuildHasher, Hash};
 
 use alloc::vec::Vec;
 use glam::Vec2;
@@ -351,7 +348,13 @@ where
 
         self.deepest.extend(0..self.height);
 
-        for ((start, end), deepest) in spans(&self.real_offsets).zip(&mut self.deepest) {
+        for ((start, end), deepest) in self
+            .real_offsets
+            .iter()
+            .copied()
+            .zip(self.real_offsets.iter().copied().skip(1))
+            .zip(&mut self.deepest)
+        {
             for source in self.real_flat[start..end].iter().copied() {
                 for (target, _) in self.down_flat
                     [self.down_offsets[source]..self.down_offsets[source.strict_add(1)]]
@@ -449,21 +452,23 @@ where
             stack.extend(weave.roots.iter().rev().map(|id| identifier_map[id]));
 
             while let Some(dense) = stack.pop() {
-                parents.extend(
-                    parent_flat[parent_offsets[dense]..parent_offsets[dense.strict_add(1)]]
-                        .iter()
-                        .map(|&parent| {
-                            let index = vertex_of[parent];
-                            (index, self.top[index])
-                        }),
-                );
+                let mut rank = 0_usize;
 
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                let rank = parents
+                for parent in parent_flat
+                    [parent_offsets[dense]..parent_offsets[dense.strict_add(1)]]
                     .iter()
-                    .map(|&(_, rank)| rank)
-                    .max()
-                    .map_or(0, |rank| rank + 1);
+                    .copied()
+                {
+                    let index = vertex_of[parent];
+                    let top = self.top[index];
+
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                    {
+                        rank = rank.max(top + 1);
+                    }
+
+                    parents.push((index, top));
+                }
 
                 let id = keys[dense];
                 let size = sizes(&id);
@@ -541,17 +546,19 @@ where
                 guard.vec_with_capacity(weave.len());
 
             for id in topological.drain(..) {
-                parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|&id| {
-                    let index = self.indices[&id];
-                    (index, self.top[index])
-                }));
+                let mut rank = 0_usize;
 
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                let rank = parents
-                    .iter()
-                    .map(|&(_, rank)| rank)
-                    .max()
-                    .map_or(0, |rank| rank + 1);
+                for parent in weave.get_parents(&id).unwrap() {
+                    let index = self.indices[parent];
+                    let top = self.top[index];
+
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                    {
+                        rank = rank.max(top + 1);
+                    }
+
+                    parents.push((index, top));
+                }
 
                 let size = sizes(&id);
 
@@ -597,7 +604,6 @@ where
 struct PassScratch<'a, 'g> {
     marked: &'a [bool],
     extent: &'a [f32],
-    margin: &'a [f32],
     segment: &'a [bool],
     leftmost_at: &'a [usize],
     rightmost_at: &'a [usize],
@@ -637,7 +643,6 @@ where
         let guard = scratchpad.guard();
 
         let mut extent = guard.vec_with_capacity(count);
-        let mut margin = guard.vec_with_capacity(count);
         let mut segment = guard.vec_with_capacity(count);
         let mut rank_tallest = guard.vec_with_capacity(self.height);
         let mut candidates = [
@@ -648,20 +653,18 @@ where
         ];
 
         extent.resize(count, 0.0_f32);
-        margin.resize(count, 0.0_f32);
         segment.resize(count, false);
         rank_tallest.resize(self.height, 0.0_f32);
         for candidate in &mut candidates {
             candidate.resize(count, 0.0_f32);
         }
 
-        for (((((vertex, size), rank), extent), margin), segment) in self
+        for ((((vertex, size), rank), extent), segment) in self
             .vertices
             .iter()
             .zip(self.sizes.iter().copied())
             .zip(self.top.iter().copied())
             .zip(extent.iter_mut())
-            .zip(margin.iter_mut())
             .zip(segment.iter_mut())
         {
             match vertex {
@@ -669,7 +672,6 @@ where
                     let half_width = size.x * 0.5_f32;
 
                     *extent = half_width;
-                    *margin = spacing.node;
                     *segment = false;
 
                     rank_tallest[rank] = rank_tallest[rank].max(size.y);
@@ -677,7 +679,6 @@ where
                 }
                 Vertex::Segment(_) => {
                     *extent = spacing.corridor * 0.5_f32;
-                    *margin = spacing.edge;
                     *segment = true;
                 }
             }
@@ -885,7 +886,6 @@ where
         let mut scratch = PassScratch {
             marked: &marked,
             extent: &extent,
-            margin: &margin,
             segment: &segment,
             leftmost_at: &leftmost_at,
             rightmost_at: &rightmost_at,
@@ -959,12 +959,6 @@ where
 
         let mut valid = true;
 
-        for coordinate in &mut self.coordinates {
-            coordinate.x -= left;
-
-            valid &= validate_float(coordinate.x);
-        }
-
         self.layer_y.clear();
         self.layer_y.resize(self.height, 0.0_f32);
         self.layer_bounds.clear();
@@ -976,7 +970,12 @@ where
             .iter()
             .zip(&mut self.layer_y)
             .zip(&mut self.layer_bounds)
-            .zip(spans(&self.merged_top_offsets))
+            .zip(
+                self.merged_top_offsets
+                    .iter()
+                    .copied()
+                    .zip(self.merged_top_offsets.iter().copied().skip(1)),
+            )
             .enumerate()
         {
             let start = if rank == 0 {
@@ -993,7 +992,11 @@ where
             valid &= validate_float(start) && validate_float(end) && validate_float(y);
 
             for vertex in self.merged_top_flat[top_start..top_end].iter().copied() {
-                self.coordinates[vertex].y = y;
+                let coordinate = &mut self.coordinates[vertex];
+
+                coordinate.x -= left;
+                valid &= validate_float(coordinate.x);
+                coordinate.y = y;
             }
 
             cursor = end;
@@ -1030,7 +1033,6 @@ where
         let PassScratch {
             marked,
             extent,
-            margin,
             segment,
             leftmost_at,
             rightmost_at,
@@ -1047,15 +1049,44 @@ where
 
         let height = self.height;
 
-        let edge_le_node = spacing.edge <= spacing.node;
+        // The margin between two adjacent items is `spacing.node` only when both are real
+        // vertices; any pair involving a segment resolves to `spacing.edge` regardless of
+        // which of the two margins is larger.
         let separation = |a: usize, b: usize| {
             extent[a]
                 + extent[b]
-                + if edge_le_node {
-                    margin[a].min(margin[b])
+                + if segment[a] || segment[b] {
+                    spacing.edge
                 } else {
-                    margin[a].max(margin[b])
+                    spacing.node
                 }
+        };
+
+        let (layer_flat, layer_offsets) = if DOWNWARD {
+            (&self.merged_top_flat, &self.merged_top_offsets)
+        } else {
+            (&self.merged_bottom_flat, &self.merged_bottom_offsets)
+        };
+        let (neighbour_flat, neighbour_offsets) = if DOWNWARD {
+            (&self.up_flat, &self.up_offsets)
+        } else {
+            (&self.down_flat, &self.down_offsets)
+        };
+        let (runs_flat, runs_offsets) = if LEFTWARD {
+            (*left_runs, *left_offsets)
+        } else {
+            (*right_runs, *right_offsets)
+        };
+        let (across_flat, across_offsets) = if LEFTWARD {
+            (*right_runs, *right_offsets)
+        } else {
+            (*left_runs, *left_offsets)
+        };
+
+        let runs_of =
+            |vertex: usize| &runs_flat[runs_offsets[vertex]..runs_offsets[vertex.strict_add(1)]];
+        let across_runs_of = |vertex: usize| {
+            &across_flat[across_offsets[vertex]..across_offsets[vertex.strict_add(1)]]
         };
 
         for (vertex, ((root, align), sink)) in root
@@ -1074,28 +1105,16 @@ where
 
         for step in 0..height {
             let rank = reflect(step, height, DOWNWARD);
-
-            let layer = if DOWNWARD {
-                &self.merged_top_flat
-                    [self.merged_top_offsets[rank]..self.merged_top_offsets[rank.strict_add(1)]]
-            } else {
-                &self.merged_bottom_flat[self.merged_bottom_offsets[rank]
-                    ..self.merged_bottom_offsets[rank.strict_add(1)]]
-            };
+            let layer = &layer_flat[layer_offsets[rank]..layer_offsets[rank.strict_add(1)]];
 
             let mut last: Option<usize> = None;
-
-            for vertex in directed(layer, LEFTWARD).copied() {
-                let neighbours: &[(usize, usize)] = if DOWNWARD {
-                    &self.up_flat[self.up_offsets[vertex]..self.up_offsets[vertex.strict_add(1)]]
-                } else {
-                    &self.down_flat
-                        [self.down_offsets[vertex]..self.down_offsets[vertex.strict_add(1)]]
-                };
+            let mut process = |vertex: usize| {
+                let neighbours = &neighbour_flat
+                    [neighbour_offsets[vertex]..neighbour_offsets[vertex.strict_add(1)]];
                 let degree = neighbours.len();
 
                 if degree == 0 {
-                    continue;
+                    return;
                 }
 
                 let mut medians = [
@@ -1138,85 +1157,105 @@ where
                         last = Some(neighbour);
                     }
                 }
+            };
+
+            if LEFTWARD {
+                for vertex in layer.iter().copied() {
+                    process(vertex);
+                }
+            } else {
+                for vertex in layer.iter().rev().copied() {
+                    process(vertex);
+                }
             }
         }
 
         stack.clear();
 
-        for rank in 0..height {
-            let layer = &self.merged_top_flat
-                [self.merged_top_offsets[rank]..self.merged_top_offsets[rank.strict_add(1)]];
+        let mut place = |start: usize| {
+            if root[start] != start || !x[start].is_nan() {
+                return;
+            }
 
-            for start in directed(layer, LEFTWARD).copied() {
-                if root[start] != start || !x[start].is_nan() {
+            stack.push((start, start, 0, false));
+
+            while let Some((root_val, member, runs_applied, started)) = stack.last().copied() {
+                if !started {
+                    x[root_val] = 0.0_f32;
+                    stack.last_mut().unwrap().3 = true;
+                }
+
+                let runs = runs_of(member);
+
+                let mut applied = runs_applied;
+                let mut nested = false;
+
+                while applied < runs.len() {
+                    let run = reflect(applied, runs.len(), DOWNWARD);
+                    let (neighbour, _, _) = runs[run];
+                    let neighbour_root = root[neighbour];
+
+                    if x[neighbour_root].is_nan() {
+                        stack.last_mut().unwrap().2 = applied;
+                        stack.push((neighbour_root, neighbour_root, 0, false));
+
+                        nested = true;
+                        break;
+                    }
+
+                    if sink[root_val] == root_val {
+                        sink[root_val] = sink[neighbour_root];
+                    }
+
+                    if sink[root_val] == sink[neighbour_root] {
+                        x[root_val] =
+                            x[root_val].max(x[neighbour_root] + separation(neighbour, member));
+                    }
+
+                    applied = applied.strict_add(1);
+                }
+
+                if nested {
                     continue;
                 }
 
-                stack.push((start, start, 0, false));
+                let next = align[member];
 
-                while let Some((root_val, member, runs_applied, started)) = stack.last().copied() {
-                    if !started {
-                        x[root_val] = 0.0_f32;
-                        stack.last_mut().unwrap().3 = true;
+                if next == root_val {
+                    let mut member = root_val;
+
+                    while align[member] != root_val {
+                        member = align[member];
+
+                        x[member] = x[root_val];
+                        sink[member] = sink[root_val];
                     }
 
-                    let runs = if LEFTWARD {
-                        &left_runs[left_offsets[member]..left_offsets[member.strict_add(1)]]
-                    } else {
-                        &right_runs[right_offsets[member]..right_offsets[member.strict_add(1)]]
-                    };
+                    stack.pop();
+                } else {
+                    let frame = stack.last_mut().unwrap();
 
-                    let mut applied = runs_applied;
-                    let mut nested = false;
+                    frame.1 = next;
+                    frame.2 = 0;
+                }
+            }
+        };
 
-                    while applied < runs.len() {
-                        let run = reflect(applied, runs.len(), DOWNWARD);
-                        let (neighbour, _, _) = runs[run];
-                        let neighbour_root = root[neighbour];
+        for (layer_start, layer_end) in self
+            .merged_top_offsets
+            .iter()
+            .copied()
+            .zip(self.merged_top_offsets.iter().copied().skip(1))
+        {
+            let layer = &self.merged_top_flat[layer_start..layer_end];
 
-                        if x[neighbour_root].is_nan() {
-                            stack.last_mut().unwrap().2 = applied;
-                            stack.push((neighbour_root, neighbour_root, 0, false));
-
-                            nested = true;
-                            break;
-                        }
-
-                        if sink[root_val] == root_val {
-                            sink[root_val] = sink[neighbour_root];
-                        }
-
-                        if sink[root_val] == sink[neighbour_root] {
-                            x[root_val] =
-                                x[root_val].max(x[neighbour_root] + separation(neighbour, member));
-                        }
-
-                        applied = applied.strict_add(1);
-                    }
-
-                    if nested {
-                        continue;
-                    }
-
-                    let next = align[member];
-
-                    if next == root_val {
-                        let mut member = root_val;
-
-                        while align[member] != root_val {
-                            member = align[member];
-
-                            x[member] = x[root_val];
-                            sink[member] = sink[root_val];
-                        }
-
-                        stack.pop();
-                    } else {
-                        let frame = stack.last_mut().unwrap();
-
-                        frame.1 = next;
-                        frame.2 = 0;
-                    }
+            if LEFTWARD {
+                for start in layer.iter().copied() {
+                    place(start);
+                }
+            } else {
+                for start in layer.iter().rev().copied() {
+                    place(start);
                 }
             }
         }
@@ -1252,13 +1291,7 @@ where
             let mut from = rank;
 
             loop {
-                let runs = if LEFTWARD {
-                    &left_runs[left_offsets[vertex]..left_offsets[vertex.strict_add(1)]]
-                } else {
-                    &right_runs[right_offsets[vertex]..right_offsets[vertex.strict_add(1)]]
-                };
-
-                for (neighbour, start, end) in runs.iter().copied() {
+                for (neighbour, start, end) in runs_of(vertex).iter().copied() {
                     let forward = if DOWNWARD { end > from } else { start < from };
 
                     if !forward {
@@ -1276,13 +1309,7 @@ where
                 while align[vertex] != root[vertex] {
                     vertex = align[vertex];
 
-                    let runs = if LEFTWARD {
-                        &left_runs[left_offsets[vertex]..left_offsets[vertex.strict_add(1)]]
-                    } else {
-                        &right_runs[right_offsets[vertex]..right_offsets[vertex.strict_add(1)]]
-                    };
-
-                    for (neighbour, _, _) in runs.iter().copied() {
+                    for (neighbour, _, _) in runs_of(vertex).iter().copied() {
                         let neighbour_sink = sink[neighbour];
 
                         shift[neighbour_sink] = shift[neighbour_sink].min(
@@ -1298,11 +1325,7 @@ where
                     self.top[vertex]
                 };
 
-                let runs = if LEFTWARD {
-                    &right_runs[right_offsets[vertex]..right_offsets[vertex.strict_add(1)]]
-                } else {
-                    &left_runs[left_offsets[vertex]..left_offsets[vertex.strict_add(1)]]
-                };
+                let runs = across_runs_of(vertex);
                 let next = if DOWNWARD {
                     runs.last()
                         .and_then(|&(neighbour, _, end)| (end == across).then_some(neighbour))
@@ -1533,7 +1556,11 @@ where
             }
         }
 
-        for ((start, end), half_width) in spans(&self.real_offsets)
+        for ((start, end), half_width) in self
+            .real_offsets
+            .iter()
+            .copied()
+            .zip(self.real_offsets.iter().copied().skip(1))
             .zip(self.rank_half_width.iter().copied())
             .skip(first)
             .take(last.saturating_sub(first))
@@ -1565,27 +1592,6 @@ where
             }
         }
     }
-}
-
-#[inline]
-fn directed<T>(slice: &[T], forward: bool) -> impl Iterator<Item = &T> {
-    let mut items = slice.iter();
-
-    iter::from_fn(move || {
-        if forward {
-            items.next()
-        } else {
-            items.next_back()
-        }
-    })
-}
-
-#[inline]
-fn spans(offsets: &[usize]) -> impl Iterator<Item = (usize, usize)> {
-    offsets
-        .iter()
-        .zip(offsets.iter().skip(1))
-        .map(|(start, end)| (*start, *end))
 }
 
 #[inline]
