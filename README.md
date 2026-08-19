@@ -16,7 +16,7 @@ This library is the culmination of everything I've learned over the past 1 1/2 y
 
 Please [consider donating](https://github.com/sponsors/transkatgirl) if you consider this crate useful.
 
-(These primitives are designed specifically for user-facing applications. Crates like [ego-tree](https://crates.io/crates/ego-tree), [petgraph](https://crates.io/crates/petgraph), [daggy](https://crates.io/crates/daggy), etc, are better suited for general-purpose use.)
+(These primitives are designed specifically for user-facing applications. Crates like [ego-tree](https://crates.io/crates/ego-tree), [petgraph](https://crates.io/crates/petgraph), [daggy](https://crates.io/crates/daggy), etc, are better suited for general-purpose or extreme use cases.)
 
 ## Features
 
