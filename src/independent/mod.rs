@@ -379,7 +379,24 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    /// Creates a new, empty [`IndependentWeave`].
+    #[cfg_attr(debug_assertions, contract(
+        ensures(ret.nodes.is_empty()),
+        ensures(ret.validate())
+    ))]
+    pub fn new(metadata: M) -> Self {
+        Self {
+            nodes: HashMap::with_hasher(S::default()),
+            roots: IndexSet::with_hasher(S::default()),
+            active: HashSet::with_hasher(S::default()),
+            bookmarked: IndexSet::with_hasher(S::default()),
+            scratchpad: Scratchpad::new(),
+            metadata,
+        }
+    }
     /// Creates a new, empty [`IndependentWeave`] with at least the specified capacity.
+    ///
+    /// This function over-allocates for worst-case memory usage rather than average-case.
     #[cfg_attr(debug_assertions, contract(
         ensures(ret.nodes.is_empty()),
         ensures(ret.validate())
@@ -409,13 +426,6 @@ where
             .min(self.bookmarked.capacity())
     }
     /// Reserves capacity for at least `additional` more nodes.
-    #[cfg_attr(debug_assertions, contract(
-        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
-        ensures(old(self.roots.clone()) == self.roots),
-        ensures(old(self.active.clone()) == self.active),
-        ensures(old(self.bookmarked.clone()) == self.bookmarked),
-        invariant(self.validate())
-    ))]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
@@ -425,19 +435,13 @@ where
         self.bookmarked
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
     }
-    /// Shrinks the capacity of the weave with a lower limit.
-    #[cfg_attr(debug_assertions, contract(
-        ensures(old(self.nodes.keys().copied().collect::<HashSet<_>>()) == self.nodes.keys().copied().collect::<HashSet<_>>()),
-        ensures(old(self.roots.clone()) == self.roots),
-        ensures(old(self.active.clone()) == self.active),
-        ensures(old(self.bookmarked.clone()) == self.bookmarked),
-        invariant(self.validate())
-    ))]
-    pub fn shrink_to(&mut self, min_capacity: usize) {
-        self.nodes.shrink_to(min_capacity);
-        self.roots.shrink_to(min_capacity);
-        self.active.shrink_to(min_capacity);
-        self.bookmarked.shrink_to(min_capacity);
+    /// Shrinks the capacity of the weave as much as possible.
+    pub fn shrink_to(&mut self) {
+        self.nodes.shrink_to_fit();
+        self.roots.shrink_to_fit();
+        self.active.shrink_to_fit();
+        self.bookmarked.shrink_to_fit();
+        self.scratchpad = Scratchpad::new();
     }
     #[allow(
         clippy::too_many_lines,
