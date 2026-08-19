@@ -10,6 +10,7 @@
 )]
 
 // TODO: Substantial clean-up work, further optimizations
+
 use core::hash::{BuildHasher, Hash};
 
 use alloc::vec::Vec;
@@ -175,6 +176,10 @@ where
         self.rank_built.clear();
     }
     fn push_item(&mut self, vertex: Vertex<K>, top: u32, bottom: u32, size: Vec2) -> u32 {
+        assert!(
+            self.vertices.len() < usize::try_from(u32::MAX).unwrap(),
+            "Too many vertices"
+        );
         #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
         let index = self.vertices.len() as u32;
 
@@ -303,6 +308,8 @@ where
         self.merged_bottom_offsets[0] = 0;
 
         let edges = self.edge_list.len();
+
+        assert!(edges < usize::try_from(u32::MAX).unwrap(), "Too many edges");
 
         self.down_offsets.resize(count.strict_add(1), 0);
         self.up_offsets.resize(count.strict_add(1), 0);
