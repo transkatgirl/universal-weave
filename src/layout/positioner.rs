@@ -50,7 +50,6 @@ where
     down_flat: Vec<(usize, usize)>,
     edge_list: Vec<(usize, usize)>,
     height: usize,
-
     indices: HashMap<K, usize, S>,
     sizes: Vec<Vec2>,
     rank_half_width: Vec<f32>,
@@ -93,7 +92,6 @@ where
             down_flat: Vec::new(),
             edge_list: Vec::new(),
             height: 0,
-
             indices: HashMap::default(),
             sizes: Vec::new(),
             rank_half_width: Vec::new(),
@@ -115,7 +113,7 @@ where
 #[derive(Debug, Clone)]
 enum Vertex<K> {
     Real(K),
-    Segment { to: K },
+    Segment(K),
 }
 
 #[derive(Debug, Clone)]
@@ -126,24 +124,6 @@ struct Polyline<K> {
     end: usize,
     min: Vec2,
     max: Vec2,
-}
-
-struct PassScratch<'a, 'g> {
-    marked: &'a [bool],
-    extent: &'a [f32],
-    margin: &'a [f32],
-    segment: &'a [bool],
-    leftmost_at: &'a [usize],
-    rightmost_at: &'a [usize],
-    left_offsets: &'a [usize],
-    left_runs: &'a [(usize, usize, usize)],
-    right_offsets: &'a [usize],
-    right_runs: &'a [(usize, usize, usize)],
-    root: &'a mut [usize],
-    align: &'a mut [usize],
-    sink: &'a mut [usize],
-    shift: &'a mut [f32],
-    stack: &'a mut ScratchpadVec<'g, (usize, usize, usize, bool)>,
 }
 
 impl<K, S> Layout2D<K, S>
@@ -244,7 +224,7 @@ where
                 Vertex::Real(_) => {
                     self.real_offsets[top] = self.real_offsets[top].strict_add(1);
                 }
-                Vertex::Segment { .. } => {
+                Vertex::Segment(_) => {
                     self.seg_top_offsets[top] = self.seg_top_offsets[top].strict_add(1);
                     self.seg_bottom_offsets[bottom] = self.seg_bottom_offsets[bottom].strict_add(1);
                 }
@@ -281,7 +261,7 @@ where
                     self.real_flat[cursor] = index;
                     self.real_offsets[top] = cursor.strict_add(1);
                 }
-                Vertex::Segment { .. } => {
+                Vertex::Segment(_) => {
                     let cursor = self.seg_top_offsets[top];
 
                     self.seg_top_flat[cursor] = index;
@@ -380,7 +360,7 @@ where
                 {
                     let child = match self.vertices[target] {
                         Vertex::Real(_) => self.top[target],
-                        Vertex::Segment { .. } => self.bottom[target].strict_add(1),
+                        Vertex::Segment(_) => self.bottom[target].strict_add(1),
                     };
 
                     *deepest = (*deepest).max(child);
@@ -504,7 +484,7 @@ where
                         self.link(from_index, index);
                     } else {
                         let segment = self.push_item(
-                            Vertex::Segment { to: id },
+                            Vertex::Segment(id),
                             from_rank + 1,
                             rank - 1,
                             Vec2::ZERO,
@@ -590,7 +570,7 @@ where
                         self.link(from_index, index);
                     } else {
                         let segment = self.push_item(
-                            Vertex::Segment { to: id },
+                            Vertex::Segment(id),
                             from_rank + 1,
                             rank - 1,
                             Vec2::ZERO,
@@ -612,6 +592,24 @@ where
         self.prepare_structure();
         self.assign_dag_coordinates(scratchpad, spacing);
     }
+}
+
+struct PassScratch<'a, 'g> {
+    marked: &'a [bool],
+    extent: &'a [f32],
+    margin: &'a [f32],
+    segment: &'a [bool],
+    leftmost_at: &'a [usize],
+    rightmost_at: &'a [usize],
+    left_offsets: &'a [usize],
+    left_runs: &'a [(usize, usize, usize)],
+    right_offsets: &'a [usize],
+    right_runs: &'a [(usize, usize, usize)],
+    root: &'a mut [usize],
+    align: &'a mut [usize],
+    sink: &'a mut [usize],
+    shift: &'a mut [f32],
+    stack: &'a mut ScratchpadVec<'g, (usize, usize, usize, bool)>,
 }
 
 impl<K, S> Layout2D<K, S>
@@ -677,7 +675,7 @@ where
                     rank_tallest[rank] = rank_tallest[rank].max(size.y);
                     self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
                 }
-                Vertex::Segment { .. } => {
+                Vertex::Segment(_) => {
                     *extent = spacing.corridor * 0.5_f32;
                     *margin = spacing.edge;
                     *segment = true;
@@ -1392,7 +1390,7 @@ where
                 {
                     let (to, real_target) = match self.vertices[target] {
                         Vertex::Real(to) => (to, target),
-                        Vertex::Segment { to } => (to, self.down_flat[self.down_offsets[target]].0),
+                        Vertex::Segment(to) => (to, self.down_flat[self.down_offsets[target]].0),
                     };
 
                     let target_x = self.coordinates[real_target].x;
@@ -1414,7 +1412,7 @@ where
                         self.polyline_points.push(point);
                     }
 
-                    if let Vertex::Segment { .. } = self.vertices[target] {
+                    if let Vertex::Segment(_) = self.vertices[target] {
                         let x = self.coordinates[target].x;
 
                         push_deduplicated(
