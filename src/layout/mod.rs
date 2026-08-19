@@ -7,6 +7,7 @@
 
 use core::{
     hash::{BuildHasher, Hash},
+    marker::PhantomData,
     num::FpCategory,
 };
 
@@ -78,21 +79,19 @@ impl Spacing {
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
 #[derive(Default, Debug, Clone)]
 #[must_use]
-pub struct DependentLayouter<K, S>
+pub struct DependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K, S>,
+    layout: Layout2D<K>,
 }
 
-impl<K, S> DependentLayouter<K, S>
+impl<K> DependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     /// Creates a new [`DependentLayouter`] with the specified spacing.
     pub fn new(spacing: Spacing) -> Self {
@@ -104,7 +103,7 @@ where
 }
 
 impl<K, T, M, S> Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2>
-    for DependentLayouter<K, S>
+    for DependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     S: BuildHasher + Default + Clone + 'static,
@@ -125,21 +124,19 @@ where
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
 #[derive(Default, Debug, Clone)]
 #[must_use]
-pub struct IndependentLayouter<K, S>
+pub struct IndependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K, S>,
+    layout: Layout2D<K>,
 }
 
-impl<K, S> IndependentLayouter<K, S>
+impl<K> IndependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     /// Creates a new [`IndependentLayouter`] with the specified spacing.
     pub fn new(spacing: Spacing) -> Self {
@@ -151,7 +148,7 @@ where
 }
 
 impl<K, T, M, S> Layouter<IndependentWeave<K, T, M, S>, K, IndependentNode<K, T, S>, T, Vec2>
-    for IndependentLayouter<K, S>
+    for IndependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     T: IndependentContents,
@@ -181,9 +178,10 @@ where
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K, S>,
+    layout: Layout2D<K>,
     topological: Vec<K>,
     scratchpad: Scratchpad,
+    _hasher: PhantomData<S>,
 }
 
 impl<K, S> Default for TopologicalLayouter<K, S>
@@ -208,6 +206,7 @@ where
             layout: Layout2D::default(),
             topological: Vec::new(),
             scratchpad: Scratchpad::new(),
+            _hasher: PhantomData,
         }
     }
 }
@@ -229,7 +228,7 @@ where
             "Malformed topological order"
         );
 
-        self.layout.layout_topological(
+        self.layout.layout_topological::<W, N, T, S, _>(
             weave,
             sizes,
             &self.spacing,

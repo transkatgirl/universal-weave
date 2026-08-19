@@ -15,7 +15,6 @@ use core::hash::{BuildHasher, Hash};
 
 use alloc::vec::Vec;
 use glam::Vec2;
-use hashbrown::HashMap;
 use scratchpads::{Scratchpad, ScratchpadVec};
 
 use crate::{
@@ -27,12 +26,12 @@ use crate::{
 
 #[derive(Debug, Clone)]
 #[must_use]
-pub struct Layout2D<K, S>
+pub struct Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
-    vertices: Vec<Vertex<K>>,
+    keys: Vec<K>,
+    is_segment: Vec<bool>,
     top: Vec<u32>,
     bottom: Vec<u32>,
     real_offsets: Vec<u32>,
@@ -49,9 +48,7 @@ where
     up_flat: Vec<(u32, u32)>,
     down_offsets: Vec<u32>,
     down_flat: Vec<u32>,
-    edge_list: Vec<(u32, u32)>,
     height: u32,
-    indices: HashMap<K, u32, S>,
     sizes: Vec<Vec2>,
     rank_half_width: Vec<f32>,
     x_coordinates: Vec<f32>,
@@ -66,14 +63,14 @@ where
     rank_built: Vec<bool>,
 }
 
-impl<K, S> Default for Layout2D<K, S>
+impl<K> Default for Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     fn default() -> Self {
         Self {
-            vertices: Vec::new(),
+            keys: Vec::new(),
+            is_segment: Vec::new(),
             top: Vec::new(),
             bottom: Vec::new(),
             real_offsets: Vec::new(),
@@ -90,9 +87,7 @@ where
             up_flat: Vec::new(),
             down_offsets: Vec::new(),
             down_flat: Vec::new(),
-            edge_list: Vec::new(),
             height: 0,
-            indices: HashMap::default(),
             sizes: Vec::new(),
             rank_half_width: Vec::new(),
             x_coordinates: Vec::new(),
@@ -110,12 +105,6 @@ where
 }
 
 #[derive(Debug, Clone)]
-enum Vertex<K> {
-    Real(K),
-    Segment(K),
-}
-
-#[derive(Debug, Clone)]
 struct Polyline<K> {
     from: K,
     to: K,
@@ -125,14 +114,15 @@ struct Polyline<K> {
     max: Vec2,
 }
 
-impl<K, S> Layout2D<K, S>
+impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     fn clear(&mut self, reserved_nodes: usize) {
-        self.vertices.clear();
-        self.vertices.reserve(reserved_nodes);
+        self.keys.clear();
+        self.keys.reserve(reserved_nodes);
+        self.is_segment.clear();
+        self.is_segment.reserve(reserved_nodes);
         self.top.clear();
         self.top.reserve(reserved_nodes);
         self.bottom.clear();
@@ -153,11 +143,9 @@ where
         self.up_flat.clear();
         self.down_offsets.clear();
         self.down_flat.clear();
-        self.edge_list.clear();
 
         self.height = 0;
 
-        self.indices.clear();
         self.sizes.clear();
         self.sizes.reserve(reserved_nodes);
         self.rank_half_width.clear();
@@ -175,15 +163,16 @@ where
         self.reach_prefix.clear();
         self.rank_built.clear();
     }
-    fn push_item(&mut self, vertex: Vertex<K>, top: u32, bottom: u32, size: Vec2) -> u32 {
+    fn push_item(&mut self, key: K, segment: bool, top: u32, bottom: u32, size: Vec2) -> u32 {
         assert!(
-            self.vertices.len() < usize::try_from(u32::MAX).unwrap(),
+            self.keys.len() < usize::try_from(u32::MAX).unwrap(),
             "Too many vertices"
         );
         #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
-        let index = self.vertices.len() as u32;
+        let index = self.keys.len() as u32;
 
-        self.vertices.push(vertex);
+        self.keys.push(key);
+        self.is_segment.push(segment);
         self.top.push(top);
         self.bottom.push(bottom);
         self.sizes.push(size);
@@ -191,7 +180,7 @@ where
         index
     }
     fn link(&mut self, from: u32, to: u32) {
-        self.edge_list.push((from, to));
+        self.up_flat.push((from, to));
     }
     fn prepare_structure(&mut self) {
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -210,7 +199,7 @@ where
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
 
-        let count = self.vertices.len();
+        let count = self.keys.len();
         let ranks = self.height.strict_add(1) as usize;
 
         self.real_offsets.resize(ranks, 0);
@@ -219,22 +208,20 @@ where
         self.merged_top_offsets.resize(ranks, 0);
         self.merged_bottom_offsets.resize(ranks, 0);
 
-        for ((vertex, top), bottom) in self
-            .vertices
+        for ((segment, top), bottom) in self
+            .is_segment
             .iter()
+            .copied()
             .zip(self.top.iter().copied())
             .zip(self.bottom.iter().copied())
         {
             let (top, bottom) = (top as usize, bottom as usize);
 
-            match vertex {
-                Vertex::Real(_) => {
-                    self.real_offsets[top] = self.real_offsets[top].strict_add(1);
-                }
-                Vertex::Segment(_) => {
-                    self.seg_top_offsets[top] = self.seg_top_offsets[top].strict_add(1);
-                    self.seg_bottom_offsets[bottom] = self.seg_bottom_offsets[bottom].strict_add(1);
-                }
+            if segment {
+                self.seg_top_offsets[top] = self.seg_top_offsets[top].strict_add(1);
+                self.seg_bottom_offsets[bottom] = self.seg_bottom_offsets[bottom].strict_add(1);
+            } else {
+                self.real_offsets[top] = self.real_offsets[top].strict_add(1);
             }
 
             self.merged_top_offsets[top] = self.merged_top_offsets[top].strict_add(1);
@@ -254,9 +241,10 @@ where
         self.merged_top_flat.resize(count, 0);
         self.merged_bottom_flat.resize(count, 0);
 
-        for (index, ((vertex, top), bottom)) in self
-            .vertices
+        for (index, ((segment, top), bottom)) in self
+            .is_segment
             .iter()
+            .copied()
             .zip(self.top.iter().copied())
             .zip(self.bottom.iter().copied())
             .enumerate()
@@ -265,24 +253,21 @@ where
             let narrowed = index as u32;
             let (top, bottom) = (top as usize, bottom as usize);
 
-            match vertex {
-                Vertex::Real(_) => {
-                    let cursor = self.real_offsets[top];
+            if segment {
+                let cursor = self.seg_top_offsets[top];
 
-                    self.real_flat[cursor as usize] = narrowed;
-                    self.real_offsets[top] = cursor.strict_add(1);
-                }
-                Vertex::Segment(_) => {
-                    let cursor = self.seg_top_offsets[top];
+                self.seg_top_flat[cursor as usize] = narrowed;
+                self.seg_top_offsets[top] = cursor.strict_add(1);
 
-                    self.seg_top_flat[cursor as usize] = narrowed;
-                    self.seg_top_offsets[top] = cursor.strict_add(1);
+                let cursor = self.seg_bottom_offsets[bottom];
 
-                    let cursor = self.seg_bottom_offsets[bottom];
+                self.seg_bottom_flat[cursor as usize] = narrowed;
+                self.seg_bottom_offsets[bottom] = cursor.strict_add(1);
+            } else {
+                let cursor = self.real_offsets[top];
 
-                    self.seg_bottom_flat[cursor as usize] = narrowed;
-                    self.seg_bottom_offsets[bottom] = cursor.strict_add(1);
-                }
+                self.real_flat[cursor as usize] = narrowed;
+                self.real_offsets[top] = cursor.strict_add(1);
             }
 
             let cursor = self.merged_top_offsets[top];
@@ -307,14 +292,14 @@ where
         self.merged_bottom_offsets.copy_within(0..height_usize, 1);
         self.merged_bottom_offsets[0] = 0;
 
-        let edges = self.edge_list.len();
+        let edges = self.up_flat.len();
 
         assert!(edges < usize::try_from(u32::MAX).unwrap(), "Too many edges");
 
         self.down_offsets.resize(count.strict_add(1), 0);
         self.up_offsets.resize(count.strict_add(1), 0);
 
-        for (source, target) in self.edge_list.iter().copied() {
+        for (source, target) in self.up_flat.iter().copied() {
             let (source, target) = (source as usize, target as usize);
 
             self.down_offsets[source] = self.down_offsets[source].strict_add(1);
@@ -336,7 +321,7 @@ where
 
         self.down_flat.resize(edges, 0);
 
-        for (source, target) in self.edge_list.iter().copied() {
+        for (source, target) in self.up_flat.iter().copied() {
             let source = source as usize;
             let cursor = self.down_offsets[source];
 
@@ -346,8 +331,6 @@ where
 
         self.down_offsets.copy_within(0..count, 1);
         self.down_offsets[0] = 0;
-
-        self.up_flat.resize(edges, (0, 0));
 
         #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
         for source in self.merged_bottom_flat.iter().copied() {
@@ -386,31 +369,30 @@ where
                     .copied()
                 {
                     let target = target as usize;
-                    let child = match self.vertices[target] {
-                        Vertex::Real(_) => self.top[target],
-                        Vertex::Segment(_) => self.bottom[target].strict_add(1),
+                    let child = if self.is_segment[target] {
+                        self.bottom[target].strict_add(1)
+                    } else {
+                        self.top[target]
                     };
 
                     *deepest = (*deepest).max(child);
                 }
             }
         }
-
-        self.edge_list.clear();
     }
 }
 
-impl<K, S> Layout2D<K, S>
+impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
-    pub fn layout_dependent<T, M, F>(
+    pub fn layout_dependent<T, M, S, F>(
         &mut self,
         weave: &mut DependentWeave<K, T, M, S>,
         sizes: F,
         spacing: &Spacing,
     ) where
+        S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
     {
         assert!(
@@ -424,13 +406,14 @@ where
 
         todo!()
     }
-    pub fn layout_independent<T, M, F>(
+    pub fn layout_independent<T, M, S, F>(
         &mut self,
         weave: &mut IndependentWeave<K, T, M, S>,
         mut sizes: F,
         spacing: &Spacing,
     ) where
         T: IndependentContents,
+        S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
     {
         assert!(
@@ -512,7 +495,7 @@ where
 
                 assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_item(Vertex::Real(id), rank, rank, size);
+                let index = self.push_item(id, false, rank, rank, size);
 
                 vertex_of[dense] = index;
                 processed = processed.strict_add(1);
@@ -525,19 +508,18 @@ where
                     if from_rank + 1 == rank {
                         self.link(from_index, index);
                     } else {
-                        let segment = self.push_item(
-                            Vertex::Segment(id),
-                            from_rank + 1,
-                            rank - 1,
-                            Vec2::ZERO,
-                        );
+                        let segment = self.push_item(id, true, from_rank + 1, rank - 1, Vec2::ZERO);
 
                         self.link(from_index, segment);
                         self.link(segment, index);
                     }
                 }
 
-                for child in bucket(&child_flat, &child_offsets, dense).iter().rev().copied() {
+                for child in bucket(&child_flat, &child_offsets, dense)
+                    .iter()
+                    .rev()
+                    .copied()
+                {
                     let index = child as usize;
 
                     #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
@@ -557,7 +539,7 @@ where
         self.prepare_structure();
         self.assign_dag_coordinates(&mut weave.scratchpad, spacing);
     }
-    pub fn layout_topological<W, N, T, F>(
+    pub fn layout_topological<W, N, T, S, F>(
         &mut self,
         weave: &W,
         mut sizes: F,
@@ -568,6 +550,7 @@ where
         W: Weave<K, N, T>,
         K: Hash + Copy + Eq + Ord + 'static,
         N: Node<K, T>,
+        S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
         for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     {
@@ -577,18 +560,18 @@ where
         );
 
         self.clear(weave.len());
-        self.indices.reserve(weave.len());
 
         {
             let guard = scratchpad.guard();
 
+            let mut indices = guard.map_with_capacity(weave.len(), S::default());
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(weave.len());
 
             for id in topological.drain(..) {
                 let mut rank = 0_u32;
 
                 for parent in weave.get_parents(&id).unwrap() {
-                    let index = self.indices[parent];
+                    let index = indices[parent];
                     let top = self.top[index as usize];
 
                     #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -603,9 +586,9 @@ where
 
                 assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_item(Vertex::Real(id), rank, rank, size);
+                let index = self.push_item(id, false, rank, rank, size);
 
-                self.indices.insert(id, index);
+                indices.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
                     #[allow(
@@ -615,25 +598,16 @@ where
                     if from_rank + 1 == rank {
                         self.link(from_index, index);
                     } else {
-                        let segment = self.push_item(
-                            Vertex::Segment(id),
-                            from_rank + 1,
-                            rank - 1,
-                            Vec2::ZERO,
-                        );
+                        let segment = self.push_item(id, true, from_rank + 1, rank - 1, Vec2::ZERO);
 
                         self.link(from_index, segment);
                         self.link(segment, index);
                     }
                 }
             }
-        }
 
-        assert_eq!(
-            weave.len(),
-            self.indices.len(),
-            "Malformed topological order"
-        );
+            assert_eq!(weave.len(), indices.len(), "Malformed topological order");
+        }
 
         self.prepare_structure();
         self.assign_dag_coordinates(scratchpad, spacing);
@@ -657,10 +631,9 @@ struct PassScratch<'a, 'g> {
     stack: &'a mut ScratchpadVec<'g, (u32, u32, u32, bool)>,
 }
 
-impl<K, S> Layout2D<K, S>
+impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn assign_dag_coordinates(&mut self, scratchpad: &mut Scratchpad, spacing: &Spacing) {
@@ -669,7 +642,7 @@ where
 
         assert!(spacing.validate(), "Invalid spacing");
 
-        let count = self.vertices.len();
+        let count = self.keys.len();
 
         if count == 0 {
             return;
@@ -686,7 +659,6 @@ where
         let guard = scratchpad.guard();
 
         let mut extent = guard.vec_with_capacity(count);
-        let mut segment = guard.vec_with_capacity(count);
         let mut rank_tallest = guard.vec_with_capacity(height_usize);
         let mut candidates = [
             guard.vec_with_capacity(count),
@@ -695,36 +667,30 @@ where
         ];
 
         extent.resize(count, 0.0_f32);
-        segment.resize(count, false);
         rank_tallest.resize(height_usize, 0.0_f32);
         for candidate in &mut candidates {
             candidate.resize(count, 0.0_f32);
         }
 
-        for ((((vertex, size), rank), extent), segment) in self
-            .vertices
+        for (((segment, size), rank), extent) in self
+            .is_segment
             .iter()
+            .copied()
             .zip(self.sizes.iter().copied())
             .zip(self.top.iter().copied())
             .zip(extent.iter_mut())
-            .zip(segment.iter_mut())
         {
             let rank = rank as usize;
 
-            match vertex {
-                Vertex::Real(_) => {
-                    let half_width = size.x * 0.5_f32;
+            if segment {
+                *extent = spacing.corridor * 0.5_f32;
+            } else {
+                let half_width = size.x * 0.5_f32;
 
-                    *extent = half_width;
-                    *segment = false;
+                *extent = half_width;
 
-                    rank_tallest[rank] = rank_tallest[rank].max(size.y);
-                    self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
-                }
-                Vertex::Segment(_) => {
-                    *extent = spacing.corridor * 0.5_f32;
-                    *segment = true;
-                }
+                rank_tallest[rank] = rank_tallest[rank].max(size.y);
+                self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
             }
         }
 
@@ -907,23 +873,22 @@ where
         left_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
         right_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
 
-        let mut left_cursors = guard.vec_with_capacity(count);
-        let mut right_cursors = guard.vec_with_capacity(count);
-
-        left_cursors.extend_from_slice(&left_offsets[..count]);
-        right_cursors.extend_from_slice(&right_offsets[..count]);
-
         for (left, right, start, end) in closed_runs.iter().copied() {
-            let cursor = right_cursors[left as usize];
+            let cursor = right_offsets[left as usize];
 
             right_runs[cursor as usize] = (right, start, end);
-            right_cursors[left as usize] = cursor.strict_add(1);
+            right_offsets[left as usize] = cursor.strict_add(1);
 
-            let cursor = left_cursors[right as usize];
+            let cursor = left_offsets[right as usize];
 
             left_runs[cursor as usize] = (left, start, end);
-            left_cursors[right as usize] = cursor.strict_add(1);
+            left_offsets[right as usize] = cursor.strict_add(1);
         }
+
+        left_offsets.copy_within(0..count, 1);
+        left_offsets[0] = 0;
+        right_offsets.copy_within(0..count, 1);
+        right_offsets[0] = 0;
 
         let mut root = guard.vec_with_capacity(count);
         let mut align = guard.vec_with_capacity(count);
@@ -940,7 +905,7 @@ where
         let mut scratch = PassScratch {
             marked: &marked,
             extent: &extent,
-            segment: &segment,
+            segment: &self.is_segment,
             leftmost_at: &leftmost_at,
             rightmost_at: &rightmost_at,
             left_offsets: &left_offsets,
@@ -1166,9 +1131,8 @@ where
 
             let mut last: Option<usize> = None;
             let mut process = |vertex: usize| {
-                let degree =
-                    neighbour_offsets[vertex.strict_add(1)].strict_sub(neighbour_offsets[vertex])
-                        as usize;
+                let degree = neighbour_offsets[vertex.strict_add(1)]
+                    .strict_sub(neighbour_offsets[vertex]) as usize;
 
                 if degree == 0 {
                     return;
@@ -1398,8 +1362,9 @@ where
 
                 let runs = across_runs_of(vertex);
                 let next = if DOWNWARD {
-                    runs.last()
-                        .and_then(|&(neighbour, _, end)| (end as usize == across).then_some(neighbour))
+                    runs.last().and_then(|&(neighbour, _, end)| {
+                        (end as usize == across).then_some(neighbour)
+                    })
                 } else {
                     runs.first().and_then(|&(neighbour, start, _)| {
                         (start as usize == across).then_some(neighbour)
@@ -1442,10 +1407,9 @@ where
     }
 }
 
-impl<K, S> Layout2D<K, S>
+impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
-    S: BuildHasher + Default + Clone,
 {
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn layer_center(&self, rank: usize) -> f32 {
@@ -1477,9 +1441,7 @@ where
                 .copied()
             {
                 let source = source as usize;
-                let Vertex::Real(from) = self.vertices[source] else {
-                    continue;
-                };
+                let from = self.keys[source];
 
                 let source_x = self.x_coordinates[source];
                 let source_border = self.layer_center(rank) + self.sizes[source].y * 0.5_f32;
@@ -1490,12 +1452,11 @@ where
                     .copied()
                 {
                     let target = target as usize;
-                    let (to, real_target) = match self.vertices[target] {
-                        Vertex::Real(to) => (to, target),
-                        Vertex::Segment(to) => (
-                            to,
-                            self.down_flat[self.down_offsets[target] as usize] as usize,
-                        ),
+                    let to = self.keys[target];
+                    let real_target = if self.is_segment[target] {
+                        self.down_flat[self.down_offsets[target] as usize] as usize
+                    } else {
+                        target
                     };
 
                     let target_x = self.x_coordinates[real_target];
@@ -1517,7 +1478,7 @@ where
                         self.polyline_points.push(point);
                     }
 
-                    if let Vertex::Segment(_) = self.vertices[target] {
+                    if self.is_segment[target] {
                         let x = self.x_coordinates[target];
 
                         push_deduplicated(
@@ -1659,9 +1620,7 @@ where
 
             for vertex in reals[begin..].iter().copied() {
                 let vertex = vertex as usize;
-                let Vertex::Real(id) = self.vertices[vertex] else {
-                    continue;
-                };
+                let id = self.keys[vertex];
 
                 let center = Vec2::new(self.x_coordinates[vertex], y);
                 let size = self.sizes[vertex];
