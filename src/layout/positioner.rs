@@ -4,7 +4,10 @@
     clippy::many_single_char_names,
     reason = "WIP"
 )]
-#![allow(clippy::as_conversions, reason = "usize::MAX is always >= u32::MAX")]
+#![allow(
+    clippy::as_conversions,
+    reason = "cfg gate ensures usize::MAX is always >= u32::MAX"
+)]
 #![allow(
     clippy::arithmetic_side_effects,
     reason = "Node and edge counts fit in u32"
