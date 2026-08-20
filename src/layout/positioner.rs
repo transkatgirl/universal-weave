@@ -407,7 +407,7 @@ where
     pub fn layout_dependent<T, M, S, F>(
         &mut self,
         weave: &mut DependentWeave<K, T, M, S>,
-        sizes: F,
+        mut sizes: F,
         spacing: &Spacing,
     ) where
         S: BuildHasher + Default + Clone,
@@ -420,9 +420,44 @@ where
 
         self.clear(weave.nodes.len());
 
-        let guard = weave.scratchpad.guard();
+        {
+            let guard = weave.scratchpad.guard();
 
-        todo!()
+            let mut stack = guard.vec_with_capacity(weave.nodes.len());
+
+            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX)));
+
+            while let Some((id, parent)) = stack.pop() {
+                let rank = if parent == u32::MAX {
+                    0
+                } else {
+                    self.top[parent as usize] + 1
+                };
+
+                let size = sizes(&id);
+
+                assert!(validate_vec2(size), "Invalid size");
+
+                let index = self.push_item(id, false, rank, rank, size);
+
+                if parent != u32::MAX {
+                    self.link(parent, index);
+                }
+
+                stack.extend(
+                    weave.nodes[&id]
+                        .to
+                        .iter()
+                        .rev()
+                        .map(|&child| (child, index)),
+                );
+            }
+        }
+
+        let guard = weave.scratchpad.guard();
+        let structure = self.prepare_structure(&guard);
+
+        self.assign_dag_coordinates(&guard, &structure, spacing);
     }
     pub fn layout_independent<T, M, S, F>(
         &mut self,
@@ -440,8 +475,6 @@ where
         );
 
         self.clear(weave.nodes.len());
-
-        let mut processed = 0_usize;
 
         {
             let count = weave.nodes.len();
@@ -511,7 +544,6 @@ where
                 let index = self.push_item(id, false, rank, rank, size);
 
                 vertex_of[dense] = index;
-                processed += 1;
 
                 for (from_index, from_rank) in parents.drain(..) {
                     if from_rank + 1 == rank {
@@ -539,8 +571,6 @@ where
                 }
             }
         }
-
-        debug_assert_eq!(weave.nodes.len(), processed, "Malformed weave");
 
         let guard = weave.scratchpad.guard();
         let structure = self.prepare_structure(&guard);
@@ -766,9 +796,13 @@ where
                 continue;
             }
 
-            for item in bucket(&structure.merged_top_flat, &structure.merged_top_offsets, rank)
-                .iter()
-                .copied()
+            for item in bucket(
+                &structure.merged_top_flat,
+                &structure.merged_top_offsets,
+                rank,
+            )
+            .iter()
+            .copied()
             {
                 let item = item as usize;
                 let after = active.successor(item);
@@ -806,9 +840,13 @@ where
             {
                 spanning.insert(segment as usize);
             }
-            for segment in bucket(&structure.seg_bottom_flat, &structure.seg_bottom_offsets, rank)
-                .iter()
-                .copied()
+            for segment in bucket(
+                &structure.seg_bottom_flat,
+                &structure.seg_bottom_offsets,
+                rank,
+            )
+            .iter()
+            .copied()
             {
                 spanning.remove(segment as usize);
             }
@@ -822,8 +860,8 @@ where
                 &structure.merged_bottom_offsets,
                 rank,
             )
-                .iter()
-                .copied()
+            .iter()
+            .copied()
             {
                 let source = source as usize;
                 let base = self.down_offsets[source] as usize;
@@ -1105,7 +1143,10 @@ where
         let (layer_flat, layer_offsets) = if DOWNWARD {
             (&structure.merged_top_flat, &structure.merged_top_offsets)
         } else {
-            (&structure.merged_bottom_flat, &structure.merged_bottom_offsets)
+            (
+                &structure.merged_bottom_flat,
+                &structure.merged_bottom_offsets,
+            )
         };
         let neighbour_offsets: &[u32] = if DOWNWARD {
             &structure.up_offsets
