@@ -99,6 +99,7 @@ struct Polyline {
     source: u32,
     target: u32,
     start: u32,
+    end: u32,
     min: Vec2,
     max: Vec2,
 }
@@ -173,6 +174,7 @@ where
         self.keys.push(key);
         self.top.push(rank);
         self.sizes.push(size);
+        self.height = self.height.max(rank + 1);
 
         index
     }
@@ -194,6 +196,7 @@ where
         self.is_segment.push(true);
         self.top.push(top);
         self.bottom.push(bottom);
+        self.height = self.height.max(bottom + 1);
 
         index
     }
@@ -222,8 +225,6 @@ where
         guard: &'g ScratchpadGuard<'_>,
         edges: &[u32],
     ) -> BuildStructure<'g> {
-        self.height = self.top.iter().copied().max().map_or(0, |rank| rank + 1);
-
         let height_usize = self.height as usize;
 
         self.polyline_ranges.resize(height_usize, (0_u32, 0_u32));
@@ -238,15 +239,14 @@ where
 
         self.real_offsets.resize(ranks, 0);
 
-        let mut seg_top_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(ranks);
-        let mut seg_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(ranks);
+        let mut seg_top_offsets: ScratchpadVec<'g, u32> = guard.vec();
+        let mut seg_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
         let mut merged_top_offsets: ScratchpadVec<'g, u32> = guard.vec();
         let mut merged_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
 
-        seg_top_offsets.resize(ranks, 0);
-        seg_bottom_offsets.resize(ranks, 0);
-
         if has_segments {
+            seg_top_offsets.resize(ranks, 0);
+            seg_bottom_offsets.resize(ranks, 0);
             merged_top_offsets.resize(ranks, 0);
             merged_bottom_offsets.resize(ranks, 0);
 
@@ -351,12 +351,12 @@ where
 
         self.real_offsets.copy_within(0..height_usize, 1);
         self.real_offsets[0] = 0;
-        seg_top_offsets.copy_within(0..height_usize, 1);
-        seg_top_offsets[0] = 0;
-        seg_bottom_offsets.copy_within(0..height_usize, 1);
-        seg_bottom_offsets[0] = 0;
 
         if has_segments {
+            seg_top_offsets.copy_within(0..height_usize, 1);
+            seg_top_offsets[0] = 0;
+            seg_bottom_offsets.copy_within(0..height_usize, 1);
+            seg_bottom_offsets[0] = 0;
             merged_top_offsets.copy_within(0..height_usize, 1);
             merged_top_offsets[0] = 0;
             merged_bottom_offsets.copy_within(0..height_usize, 1);
@@ -400,6 +400,9 @@ where
 
         self.down_flat.resize(edge_count, 0);
 
+        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
+        self.deepest.extend(0..self.height);
+
         let (pairs, _) = edges.as_chunks::<2>();
 
         for &[source, target] in pairs {
@@ -408,6 +411,18 @@ where
 
             self.down_flat[cursor as usize] = target;
             self.down_offsets[source] = cursor + 1;
+
+            if !has_segments || !self.is_segment[source] {
+                let target = target as usize;
+                let child = if has_segments && self.is_segment[target] {
+                    self.bottom[target] + 1
+                } else {
+                    self.top[target]
+                };
+                let rank = self.top[source] as usize;
+
+                self.deepest[rank] = self.deepest[rank].max(child);
+            }
         }
 
         self.down_offsets.copy_within(0..count, 1);
@@ -438,33 +453,6 @@ where
 
         up_offsets.copy_within(0..count, 1);
         up_offsets[0] = 0;
-
-        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
-        self.deepest.extend(0..self.height);
-
-        for ((start, end), deepest) in self
-            .real_offsets
-            .iter()
-            .copied()
-            .zip(self.real_offsets.iter().copied().skip(1))
-            .zip(&mut self.deepest)
-        {
-            for source in self.real_flat[start as usize..end as usize].iter().copied() {
-                for target in bucket(&self.down_flat, &self.down_offsets, source as usize)
-                    .iter()
-                    .copied()
-                {
-                    let target = target as usize;
-                    let child = if has_segments && self.is_segment[target] {
-                        self.bottom[target] + 1
-                    } else {
-                        self.top[target]
-                    };
-
-                    *deepest = (*deepest).max(child);
-                }
-            }
-        }
 
         BuildStructure {
             seg_top_offsets,
@@ -598,7 +586,7 @@ where
 
             self.top.reserve(reserved_items);
 
-            edges.reserve((parent_total as usize).strict_mul(2));
+            edges.reserve((parent_total as usize).strict_mul(4));
 
             let mut parent_flat: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(parent_total as usize);
@@ -694,7 +682,7 @@ where
         self.clear(weave.len());
 
         let guard = scratchpad.guard();
-        let mut edges: ScratchpadVec<'_, u32> = guard.vec();
+        let mut edges: ScratchpadVec<'_, u32> = guard.vec_with_capacity(weave.len().strict_mul(2));
 
         {
             let mut indices = guard.map_with_capacity(weave.len(), S::default());
@@ -760,6 +748,10 @@ struct PassScratch<'a, 'g> {
     merged_top_offsets: &'a [u32],
     merged_bottom_flat: &'a [u32],
     merged_bottom_offsets: &'a [u32],
+    median_entries_down: &'a [[(u32, u32); 2]],
+    median_kinds_down: &'a [u8],
+    median_entries_up: &'a [[(u32, u32); 2]],
+    median_kinds_up: &'a [u8],
     root: &'a mut [u32],
     align: &'a mut [u32],
     sink: &'a mut [u32],
@@ -1037,6 +1029,10 @@ where
             }
         }
 
+        if !any_marked {
+            marked.clear();
+        }
+
         let mut marked_up: ScratchpadVec<'_, bool> = guard.vec();
 
         if any_marked {
@@ -1062,6 +1058,15 @@ where
                 }
             }
         }
+
+        let (median_entries_down, median_kinds_down) = scan_medians(
+            guard,
+            &structure.up_offsets,
+            &structure.up_flat,
+            &self.is_segment,
+        );
+        let (median_entries_up, median_kinds_up) =
+            scan_medians(guard, &self.down_offsets, &self.down_flat, &self.is_segment);
 
         let total_runs = if has_segments {
             closed_runs.len()
@@ -1168,6 +1173,10 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
+            median_entries_down: &median_entries_down,
+            median_kinds_down: &median_kinds_down,
+            median_entries_up: &median_entries_up,
+            median_kinds_up: &median_kinds_up,
             root: &mut root,
             align: &mut align,
             sink: &mut sink,
@@ -1178,10 +1187,10 @@ where
         let [first, second, third] = &mut candidates;
 
         let extents = [
-            self.coordinate_pass::<true, true>(structure, &mut scratch, spacing, first),
-            self.coordinate_pass::<true, false>(structure, &mut scratch, spacing, second),
-            self.coordinate_pass::<false, true>(structure, &mut scratch, spacing, third),
-            self.coordinate_pass::<false, false>(structure, &mut scratch, spacing, &mut fourth),
+            self.coordinate_pass::<true, true>(&mut scratch, spacing, first),
+            self.coordinate_pass::<true, false>(&mut scratch, spacing, second),
+            self.coordinate_pass::<false, true>(&mut scratch, spacing, third),
+            self.coordinate_pass::<false, false>(&mut scratch, spacing, &mut fourth),
         ];
 
         let mut best = 0_usize;
@@ -1275,16 +1284,10 @@ where
 
         assert!(valid, "Output is not normal and positive");
     }
-    #[allow(
-        clippy::float_arithmetic,
-        clippy::integer_division,
-        clippy::integer_division_remainder_used,
-        reason = "Coordinate calculation"
-    )]
+    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool>(
         &self,
-        structure: &BuildStructure<'_>,
         scratch: &mut PassScratch<'_, '_>,
         spacing: &Spacing,
         x: &mut [f32],
@@ -1303,6 +1306,10 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
+            median_entries_down,
+            median_kinds_down,
+            median_entries_up,
+            median_kinds_up,
             root,
             align,
             sink,
@@ -1313,10 +1320,11 @@ where
         let height = self.height as usize;
         let has_segments = self.segments != 0;
 
+        #[allow(clippy::needless_bitwise_bool, reason = "Performance")]
         let separation = |a: usize, b: usize| {
             extent[a]
                 + extent[b]
-                + if has_segments && (self.is_segment[a] || self.is_segment[b]) {
+                + if has_segments && (self.is_segment[a] | self.is_segment[b]) {
                     spacing.edge
                 } else {
                     spacing.node
@@ -1328,20 +1336,10 @@ where
         } else {
             (*merged_bottom_flat, *merged_bottom_offsets)
         };
-        let neighbour_offsets: &[u32] = if DOWNWARD {
-            &structure.up_offsets
+        let (median_entries, median_kinds) = if DOWNWARD {
+            (*median_entries_down, *median_kinds_down)
         } else {
-            &self.down_offsets
-        };
-        let neighbour_at = |vertex: usize, index: usize| -> (u32, usize) {
-            let position = neighbour_offsets[vertex] as usize + index;
-            let neighbour = if DOWNWARD {
-                structure.up_flat[position]
-            } else {
-                self.down_flat[position]
-            };
-
-            (neighbour, position)
+            (*median_entries_up, *median_kinds_up)
         };
         let edge_marked = if DOWNWARD { *marked_up } else { *marked };
         let no_marks = edge_marked.is_empty();
@@ -1373,32 +1371,12 @@ where
 
             let mut last: Option<usize> = None;
             let mut process = |vertex: usize| {
-                let degree = (neighbour_offsets[vertex + 1] - neighbour_offsets[vertex]) as usize;
-
-                if degree == 0 {
-                    return;
-                }
-
-                let medians = [
-                    reflect((degree - 1) / 2, degree, LEFTWARD),
-                    reflect(degree / 2, degree, LEFTWARD),
-                ];
-
-                let mut entries = [neighbour_at(vertex, medians[0]), (0_u32, 0_usize)];
-
-                let distinct = if medians[0] == medians[1] {
-                    1
-                } else {
-                    entries[1] = neighbour_at(vertex, medians[1]);
-
-                    let is_segment =
-                        |entry: (u32, usize)| has_segments && self.is_segment[entry.0 as usize];
-
-                    if !is_segment(entries[0]) && is_segment(entries[1]) {
-                        entries.swap(0, 1);
-                    }
-
-                    2
+                let stored = median_entries[vertex];
+                let (entries, distinct) = match median_kinds[vertex] {
+                    MEDIAN_NONE => return,
+                    MEDIAN_SINGLE => (stored, 1_usize),
+                    MEDIAN_ORDERED if !LEFTWARD => ([stored[1], stored[0]], 2_usize),
+                    _ => (stored, 2_usize),
                 };
 
                 for (neighbour, position) in entries[..distinct].iter().copied() {
@@ -1416,7 +1394,7 @@ where
                         }
                     });
 
-                    if (no_marks || !edge_marked[position]) && admissible {
+                    if (no_marks || !edge_marked[position as usize]) && admissible {
                         align[neighbour] = vertex as u32;
                         root[vertex] = root[neighbour];
                         align[vertex] = root[vertex];
@@ -1711,6 +1689,15 @@ where
 
             let rank_center = self.layer_center(rank);
             let source_band_end = self.layer_ends[rank];
+            let next_rank = rank + 1;
+            let (next_center, next_band_start) = if next_rank < self.layer_ends.len() {
+                (
+                    self.layer_center(next_rank),
+                    source_band_end + self.layer_gap,
+                )
+            } else {
+                (0.0_f32, 0.0_f32)
+            };
 
             for source in bucket(&self.real_flat, &self.real_offsets, rank)
                 .iter()
@@ -1733,10 +1720,16 @@ where
                         target
                     };
                     let target_ordinal = self.ordinal_of(real_target);
+                    let target_top = self.top[real_target] as usize;
+
+                    let (target_center, target_band_start) = if target_top == next_rank {
+                        (next_center, next_band_start)
+                    } else {
+                        (self.layer_center(target_top), self.layer_start(target_top))
+                    };
 
                     let target_x = self.x_coordinates[real_target];
-                    let target_border = self.layer_center(self.top[real_target] as usize)
-                        - self.sizes[target_ordinal].y * 0.5_f32;
+                    let target_border = target_center - self.sizes[target_ordinal].y * 0.5_f32;
 
                     let start = self.polyline_points.len();
                     let first = Vec2::new(source_x, source_border);
@@ -1772,8 +1765,6 @@ where
                         );
                     }
 
-                    let target_band_start = self.layer_start(self.top[real_target] as usize);
-
                     if target_band_start < target_border {
                         push_deduplicated(
                             &mut self.polyline_points,
@@ -1805,6 +1796,7 @@ where
                         source: source_ordinal as u32,
                         target: target_ordinal as u32,
                         start: start as u32,
+                        end: self.polyline_points.len() as u32,
                         min: line_min,
                         max: line_max,
                     });
@@ -1836,13 +1828,11 @@ where
         let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
         let last = self.ranks_started_by(max.y);
 
-        for ((&(range_start, range_end), (rank_min, rank_max)), (left_reach, right_reach)) in self
-            .polyline_ranges
+        for ((&(range_start, range_end), &(rank_min, rank_max)), &(left_reach, right_reach)) in self
+            .polyline_ranges[first_reaching..last.max(first_reaching)]
             .iter()
-            .zip(self.polyline_bounds.iter().copied())
-            .zip(self.polyline_reach.iter().copied())
-            .skip(first_reaching)
-            .take(last.saturating_sub(first_reaching))
+            .zip(&self.polyline_bounds[first_reaching..])
+            .zip(&self.polyline_reach[first_reaching..])
         {
             if !(rank_min.x <= max.x
                 && rank_max.x >= min.x
@@ -1858,7 +1848,7 @@ where
                 self.polyline_points[line.start as usize].x < min.x - right_reach
             });
 
-            for (offset, line) in lines[begin..].iter().enumerate() {
+            for line in &lines[begin..] {
                 if self.polyline_points[line.start as usize].x - left_reach > max.x {
                     break;
                 }
@@ -1868,30 +1858,22 @@ where
                     && line.min.y <= max.y
                     && line.max.y >= min.y
                 {
-                    let end = self
-                        .polylines
-                        .get(range_start as usize + begin + offset + 1)
-                        .map_or(self.polyline_points.len(), |next| next.start as usize);
-
                     callback(LayoutItem::Polyline {
                         from: self.keys[line.source as usize],
                         to: self.keys[line.target as usize],
-                        points: &self.polyline_points[line.start as usize..end],
+                        points: &self.polyline_points[line.start as usize..line.end as usize],
                     });
                 }
             }
         }
 
-        for (rank, ((start, end), half_width)) in self
-            .real_offsets
+        for (rank, ((&start, &end), &half_width)) in self.real_offsets[first..last.max(first)]
             .iter()
-            .copied()
-            .zip(self.real_offsets.iter().copied().skip(1))
-            .zip(self.rank_half_width.iter().copied())
+            .zip(&self.real_offsets[first + 1..])
+            .zip(&self.rank_half_width[first..])
             .enumerate()
-            .skip(first)
-            .take(last.saturating_sub(first))
         {
+            let rank = rank + first;
             let reals = &self.real_flat[start as usize..end as usize];
             let y = self.layer_center(rank);
 
@@ -1926,6 +1908,61 @@ where
 #[inline]
 const fn reflect(index: usize, len: usize, forward: bool) -> usize {
     if forward { index } else { len - 1 - index }
+}
+
+const MEDIAN_NONE: u8 = 0;
+const MEDIAN_SINGLE: u8 = 1;
+const MEDIAN_ORDERED: u8 = 2;
+const MEDIAN_FIXED: u8 = 3;
+
+fn scan_medians<'g>(
+    guard: &'g ScratchpadGuard<'_>,
+    offsets: &[u32],
+    flat: &[u32],
+    is_segment: &[bool],
+) -> (ScratchpadVec<'g, [(u32, u32); 2]>, ScratchpadVec<'g, u8>) {
+    let count = offsets.len().saturating_sub(1);
+    let has_segments = !is_segment.is_empty();
+
+    let mut entries: ScratchpadVec<'g, [(u32, u32); 2]> = guard.vec_with_capacity(count);
+    let mut kinds: ScratchpadVec<'g, u8> = guard.vec_with_capacity(count);
+
+    for (&base, &next) in offsets.iter().zip(offsets.iter().skip(1)) {
+        let degree = next - base;
+
+        if degree == 0 {
+            entries.push([(0_u32, 0_u32); 2]);
+            kinds.push(MEDIAN_NONE);
+            continue;
+        }
+
+        let low_position = base + ((degree - 1) >> 1_u32);
+        let high_position = base + (degree >> 1_u32);
+        let low = (flat[low_position as usize], low_position);
+
+        if low_position == high_position {
+            entries.push([low, low]);
+            kinds.push(MEDIAN_SINGLE);
+            continue;
+        }
+
+        let high = (flat[high_position as usize], high_position);
+        let low_segment = has_segments && is_segment[low.0 as usize];
+        let high_segment = has_segments && is_segment[high.0 as usize];
+
+        if low_segment == high_segment {
+            entries.push([low, high]);
+            kinds.push(MEDIAN_ORDERED);
+        } else if low_segment {
+            entries.push([low, high]);
+            kinds.push(MEDIAN_FIXED);
+        } else {
+            entries.push([high, low]);
+            kinds.push(MEDIAN_FIXED);
+        }
+    }
+
+    (entries, kinds)
 }
 
 #[inline]
