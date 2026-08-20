@@ -12,13 +12,10 @@ fn low_bit(word: u64) -> usize {
 }
 
 fn high_bit(word: u64) -> usize {
-    usize::try_from(63_u32.strict_sub(word.leading_zeros())).unwrap()
+    usize::try_from(word.ilog2()).unwrap()
 }
 
-#[allow(
-    clippy::arithmetic_side_effects,
-    reason = "Bit shifts by masked amounts cannot overflow"
-)]
+#[allow(clippy::arithmetic_side_effects, reason = "Cannot overflow")]
 impl<'g> SlotSet<'g> {
     pub const fn new(guard: &'g ScratchpadGuard<'_>) -> Self {
         Self {
@@ -34,10 +31,10 @@ impl<'g> SlotSet<'g> {
         let mut below = len;
 
         loop {
-            let words = ((below >> 6_u32).strict_add(usize::from(below & 63 != 0))).max(1);
+            let words = ((below >> 6_u32) + usize::from(below & 63 != 0)).max(1);
 
             self.levels.push(total);
-            total = total.strict_add(words);
+            total += words;
 
             if words == 1 {
                 break;
@@ -60,7 +57,7 @@ impl<'g> SlotSet<'g> {
         let mut index = slot;
 
         for &offset in &self.levels {
-            let word = &mut self.words[offset.strict_add(index >> 6_u32)];
+            let word = &mut self.words[offset + (index >> 6_u32)];
             let was = *word;
 
             *word = was | (1_u64 << (index & 63));
@@ -76,7 +73,7 @@ impl<'g> SlotSet<'g> {
         let mut index = slot;
 
         for &offset in &self.levels {
-            let word = &mut self.words[offset.strict_add(index >> 6_u32)];
+            let word = &mut self.words[offset + (index >> 6_u32)];
 
             *word &= !(1_u64 << (index & 63));
 
@@ -94,7 +91,7 @@ impl<'g> SlotSet<'g> {
         loop {
             let &offset = self.levels.get(level)?;
             let word_index = index >> 6_u32;
-            let masked = self.words[offset.strict_add(word_index)] & !(u64::MAX << (index & 63));
+            let masked = self.words[offset + word_index] & !(u64::MAX << (index & 63));
 
             if masked != 0 {
                 index = (word_index << 6_u32) | high_bit(masked);
@@ -103,15 +100,15 @@ impl<'g> SlotSet<'g> {
             }
 
             index = word_index;
-            level = level.strict_add(1);
+            level += 1;
         }
 
         while level > 0 {
-            level = level.strict_sub(1);
+            level -= 1;
 
             let offset = self.levels[level];
 
-            index = (index << 6_u32) | high_bit(self.words[offset.strict_add(index)]);
+            index = (index << 6_u32) | high_bit(self.words[offset + index]);
         }
 
         Some(index)
@@ -123,8 +120,7 @@ impl<'g> SlotSet<'g> {
         loop {
             let &offset = self.levels.get(level)?;
             let word_index = index >> 6_u32;
-            let masked =
-                self.words[offset.strict_add(word_index)] & ((u64::MAX << (index & 63)) << 1_u32);
+            let masked = self.words[offset + word_index] & ((u64::MAX << (index & 63)) << 1_u32);
 
             if masked != 0 {
                 index = (word_index << 6_u32) | low_bit(masked);
@@ -133,15 +129,15 @@ impl<'g> SlotSet<'g> {
             }
 
             index = word_index;
-            level = level.strict_add(1);
+            level += 1;
         }
 
         while level > 0 {
-            level = level.strict_sub(1);
+            level -= 1;
 
             let offset = self.levels[level];
 
-            index = (index << 6_u32) | low_bit(self.words[offset.strict_add(index)]);
+            index = (index << 6_u32) | low_bit(self.words[offset + index]);
         }
 
         Some(index)
@@ -160,15 +156,15 @@ impl<'g> SlotSet<'g> {
             return None;
         }
 
-        let mut level = self.levels.len().strict_sub(1);
+        let mut level = self.levels.len() - 1;
         let mut index = bit(top);
 
         while level > 0 {
-            level = level.strict_sub(1);
+            level -= 1;
 
             let offset = self.levels[level];
 
-            index = (index << 6_u32) | bit(self.words[offset.strict_add(index)]);
+            index = (index << 6_u32) | bit(self.words[offset + index]);
         }
 
         Some(index)
