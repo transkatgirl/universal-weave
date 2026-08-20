@@ -72,11 +72,6 @@ where
     K: Hash + Copy + Eq + Ord,
 {
     fn default() -> Self {
-        assert!(
-            usize::MAX as u128 >= u128::from(u32::MAX),
-            "Unsupported target"
-        );
-
         Self {
             keys: Vec::new(),
             is_segment: Vec::new(),

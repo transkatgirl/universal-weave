@@ -75,7 +75,10 @@ pub mod dependent;
 pub mod independent;
 pub mod wrappers;
 
-#[cfg(feature = "layout")]
+#[cfg(all(
+    feature = "layout",
+    any(target_pointer_width = "32", target_pointer_width = "64")
+))]
 pub mod layout;
 
 #[cfg(feature = "rkyv")]
@@ -938,7 +941,7 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a HashMap<K, N, S>,
     topological_order: &[K],
     is_candidate: impl Fn(&K) -> bool,
-    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, Option<K>), S>,
+    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, K), S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -965,12 +968,12 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
 
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
         let distance = match best_parent {
-            Some((parent_distance, parent)) => Some((parent_distance + 1, Some(*parent))),
+            Some((parent_distance, parent)) => Some((parent_distance + 1, *parent)),
             None => {
                 if has_parents {
                     None
                 } else {
-                    Some((0, None))
+                    Some((0, *id))
                 }
             }
         };
@@ -984,11 +987,16 @@ fn longest_candidate_path_to_root<'a, K, N, T, S>(
         }
     }
 
-    let mut current = longest_distance.map(|(_, id)| id);
+    if let Some(mut id) = longest_distance.map(|(_, id)| id) {
+        loop {
+            reversed_path_callback(id);
 
-    while let Some(id) = current {
-        reversed_path_callback(id);
-        current = scratchpad_map[&id].1;
+            let parent = scratchpad_map[&id].1;
+            if parent == id {
+                break;
+            }
+            id = parent;
+        }
     }
 }
 
@@ -997,7 +1005,7 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
     topological_order: &'a [K],
     is_candidate: impl Fn(&K) -> bool,
-    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, Option<K>), S>,
+    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, K), S>,
     mut reversed_path_callback: impl FnMut(K),
 ) where
     K: Hash + Copy + Eq + Ord + 'a,
@@ -1021,12 +1029,12 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
 
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
         let distance = match best_parent {
-            Some((parent_distance, parent)) => Some((parent_distance + 1, Some(*parent))),
+            Some((parent_distance, parent)) => Some((parent_distance + 1, *parent)),
             None => {
                 if has_parents {
                     None
                 } else {
-                    Some((0, None))
+                    Some((0, *id))
                 }
             }
         };
@@ -1040,11 +1048,16 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
         }
     }
 
-    let mut current = longest_distance.map(|(_, id)| id);
+    if let Some(mut id) = longest_distance.map(|(_, id)| id) {
+        loop {
+            reversed_path_callback(id);
 
-    while let Some(id) = current {
-        reversed_path_callback(id);
-        current = scratchpad_map[&id].1;
+            let parent = scratchpad_map[&id].1;
+            if parent == id {
+                break;
+            }
+            id = parent;
+        }
     }
 }
 
