@@ -13,7 +13,7 @@
     reason = "Node and edge counts fit in u32"
 )]
 
-// TODO: Substantial clean-up work, further optimizations
+// TODO: Substantial clean-up work, test suites
 
 use core::{
     hash::{BuildHasher, Hash},
