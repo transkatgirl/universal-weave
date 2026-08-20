@@ -1875,6 +1875,10 @@ where
     where
         F: FnMut(LayoutItem<'a, K, Vec2>),
     {
+        if self.top.is_empty() {
+            return;
+        }
+
         if !self.down_flat.is_empty() {
             self.build_polylines(min, max);
         }
