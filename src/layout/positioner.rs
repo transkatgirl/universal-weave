@@ -125,11 +125,9 @@ where
         self.keys.reserve(reserved_nodes);
         self.segments = 0;
         self.is_segment.clear();
-        self.is_segment.reserve(reserved_nodes);
         self.top.clear();
         self.top.reserve(reserved_nodes);
         self.bottom.clear();
-        self.bottom.reserve(reserved_nodes);
 
         self.real_offsets.clear();
         self.real_flat.clear();
@@ -154,28 +152,77 @@ where
         self.reach_prefix.clear();
         self.rank_built.clear();
     }
-    fn push_item(&mut self, key: K, segment: bool, top: u32, bottom: u32, size: Vec2) -> u32 {
+    fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
         #[allow(
             clippy::cast_possible_truncation,
             reason = "Total push count < u32::MAX"
         )]
-        let index = self.keys.len() as u32;
+        let index = self.top.len() as u32;
+
+        if self.segments != 0 {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "Total push count < u32::MAX"
+            )]
+            let ordinal = self.keys.len() as u32;
+
+            self.is_segment.push(false);
+            self.bottom.push(ordinal);
+        }
 
         self.keys.push(key);
-        self.segments += u32::from(segment);
-        self.is_segment.push(segment);
-        self.top.push(top);
-        self.bottom.push(bottom);
+        self.top.push(rank);
         self.sizes.push(size);
 
         index
+    }
+    fn push_segment(&mut self, top: u32, bottom: u32) -> u32 {
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "Total push count < u32::MAX"
+        )]
+        let index = self.top.len() as u32;
+
+        if self.segments == 0 {
+            self.is_segment.reserve(self.top.capacity());
+            self.is_segment.resize(index as usize, false);
+            self.bottom.reserve(self.top.capacity());
+            self.bottom.extend(0..index);
+        }
+
+        self.segments += 1;
+        self.is_segment.push(true);
+        self.top.push(top);
+        self.bottom.push(bottom);
+
+        index
+    }
+    #[inline]
+    fn is_seg(&self, vertex: usize) -> bool {
+        self.segments != 0 && self.is_segment[vertex]
+    }
+    #[inline]
+    fn bottom_of(&self, vertex: usize) -> u32 {
+        if self.is_seg(vertex) {
+            self.bottom[vertex]
+        } else {
+            self.top[vertex]
+        }
+    }
+    #[inline]
+    fn ordinal_of(&self, vertex: usize) -> usize {
+        if self.segments == 0 {
+            vertex
+        } else {
+            self.bottom[vertex] as usize
+        }
     }
     fn prepare_structure<'g>(
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
         edges: &[u32],
     ) -> BuildStructure<'g> {
-        self.height = self.bottom.iter().copied().max().map_or(0, |rank| rank + 1);
+        self.height = self.top.iter().copied().max().map_or(0, |rank| rank + 1);
 
         let height_usize = self.height as usize;
 
@@ -185,7 +232,7 @@ where
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
 
-        let count = self.keys.len();
+        let count = self.top.len();
         let ranks = self.height as usize + 1;
         let has_segments = self.segments != 0;
 
@@ -210,7 +257,8 @@ where
                 .zip(self.top.iter().copied())
                 .zip(self.bottom.iter().copied())
             {
-                let (top, bottom) = (top as usize, bottom as usize);
+                let top = top as usize;
+                let bottom = if segment { bottom as usize } else { top };
 
                 if segment {
                     seg_top_offsets[top] += 1;
@@ -259,7 +307,8 @@ where
             {
                 #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
                 let narrowed = index as u32;
-                let (top, bottom) = (top as usize, bottom as usize);
+                let top = top as usize;
+                let bottom = if segment { bottom as usize } else { top };
 
                 if segment {
                     let cursor = seg_top_offsets[top];
@@ -406,7 +455,7 @@ where
                     .copied()
                 {
                     let target = target as usize;
-                    let child = if self.is_segment[target] {
+                    let child = if has_segments && self.is_segment[target] {
                         self.bottom[target] + 1
                     } else {
                         self.top[target]
@@ -472,7 +521,7 @@ where
 
                 assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_item(id, false, rank, rank, size);
+                let index = self.push_real(id, rank, size);
 
                 if parent != u32::MAX {
                     link(&mut edges, parent, index);
@@ -547,11 +596,7 @@ where
 
             let reserved_items = count + parent_total as usize;
 
-            self.keys.reserve(reserved_items);
-            self.is_segment.reserve(reserved_items);
             self.top.reserve(reserved_items);
-            self.bottom.reserve(reserved_items);
-            self.sizes.reserve(reserved_items);
 
             edges.reserve((parent_total as usize).strict_mul(2));
 
@@ -591,7 +636,7 @@ where
 
                 assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_item(id, false, rank, rank, size);
+                let index = self.push_real(id, rank, size);
 
                 vertex_of[dense] = index;
 
@@ -599,7 +644,7 @@ where
                     if from_rank + 1 == rank {
                         link(&mut edges, from_index, index);
                     } else {
-                        let segment = self.push_item(id, true, from_rank + 1, rank - 1, Vec2::ZERO);
+                        let segment = self.push_segment(from_rank + 1, rank - 1);
 
                         link(&mut edges, from_index, segment);
                         link(&mut edges, segment, index);
@@ -668,7 +713,7 @@ where
                 }
 
                 assert!(
-                    self.keys.len() + parents.len() < usize::try_from(u32::MAX).unwrap(),
+                    self.top.len() + parents.len() < usize::try_from(u32::MAX).unwrap(),
                     "Too many vertices"
                 );
 
@@ -676,7 +721,7 @@ where
 
                 assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_item(id, false, rank, rank, size);
+                let index = self.push_real(id, rank, size);
 
                 indices.insert(id, index);
 
@@ -684,7 +729,7 @@ where
                     if from_rank + 1 == rank {
                         link(&mut edges, from_index, index);
                     } else {
-                        let segment = self.push_item(id, true, from_rank + 1, rank - 1, Vec2::ZERO);
+                        let segment = self.push_segment(from_rank + 1, rank - 1);
 
                         link(&mut edges, from_index, segment);
                         link(&mut edges, segment, index);
@@ -740,7 +785,7 @@ where
 
         self.layer_gap = spacing.layer;
 
-        let count = self.keys.len();
+        let count = self.top.len();
 
         if count == 0 {
             return;
@@ -750,7 +795,8 @@ where
 
         let mut fourth = mem::take(&mut self.x_coordinates);
 
-        fourth.resize(count, 0.0_f32);
+        fourth.clear();
+        fourth.resize(count, f32::NAN);
         self.rank_half_width.clear();
         self.rank_half_width.resize(height_usize, 0.0_f32);
 
@@ -765,22 +811,43 @@ where
         extent.resize(count, 0.0_f32);
         rank_tallest.resize(height_usize, 0.0_f32);
         for candidate in &mut candidates {
-            candidate.resize(count, 0.0_f32);
+            candidate.resize(count, f32::NAN);
         }
 
-        for (((segment, size), rank), extent) in self
-            .is_segment
-            .iter()
-            .copied()
-            .zip(self.sizes.iter().copied())
-            .zip(self.top.iter().copied())
-            .zip(extent.iter_mut())
-        {
-            let rank = rank as usize;
+        let has_segments = self.segments != 0;
 
-            if segment {
-                *extent = spacing.corridor * 0.5_f32;
-            } else {
+        if has_segments {
+            let mut sizes = self.sizes.iter().copied();
+
+            for ((segment, rank), extent) in self
+                .is_segment
+                .iter()
+                .copied()
+                .zip(self.top.iter().copied())
+                .zip(extent.iter_mut())
+            {
+                if segment {
+                    *extent = spacing.corridor * 0.5_f32;
+                    continue;
+                }
+
+                let (size, rank) = (sizes.next().unwrap(), rank as usize);
+                let half_width = size.x * 0.5_f32;
+
+                *extent = half_width;
+
+                rank_tallest[rank] = rank_tallest[rank].max(size.y);
+                self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
+            }
+        } else {
+            for ((size, rank), extent) in self
+                .sizes
+                .iter()
+                .copied()
+                .zip(self.top.iter().copied())
+                .zip(extent.iter_mut())
+            {
+                let rank = rank as usize;
                 let half_width = size.x * 0.5_f32;
 
                 *extent = half_width;
@@ -789,8 +856,6 @@ where
                 self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
             }
         }
-
-        let has_segments = self.segments != 0;
 
         let (merged_top_flat, merged_top_offsets): (&[u32], &[u32]) = if has_segments {
             (&structure.merged_top_flat, &structure.merged_top_offsets)
@@ -813,7 +878,11 @@ where
         leftmost_at.resize(height_usize, 0_u32);
         rightmost_at.resize(height_usize, 0_u32);
 
-        let mut closed_runs = guard.vec_with_capacity(count.strict_mul(3));
+        let mut closed_runs = if has_segments {
+            guard.vec_with_capacity(count.strict_mul(3))
+        } else {
+            guard.vec()
+        };
         let mut any_marked = false;
 
         if has_segments {
@@ -960,16 +1029,11 @@ where
                 }
             }
         } else {
-            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             for rank in 0..height_usize {
                 let layer = bucket(&self.real_flat, &self.real_offsets, rank);
 
                 leftmost_at[rank] = layer[0];
                 rightmost_at[rank] = *layer.last().unwrap();
-
-                for (&left, &right) in layer.iter().zip(layer.iter().skip(1)) {
-                    closed_runs.push((left, right, rank as u32, rank as u32));
-                }
             }
         }
 
@@ -999,7 +1063,11 @@ where
             }
         }
 
-        let total_runs = closed_runs.len();
+        let total_runs = if has_segments {
+            closed_runs.len()
+        } else {
+            count - height_usize
+        };
 
         let mut left_offsets = guard.vec_with_capacity(count + 1);
         let mut right_offsets = guard.vec_with_capacity(count + 1);
@@ -1007,47 +1075,72 @@ where
         left_offsets.resize(count + 1, 0_u32);
         right_offsets.resize(count + 1, 0_u32);
 
-        for (left, right, _, _) in closed_runs.iter().copied() {
-            let after_left = left as usize + 1;
-            let after_right = right as usize + 1;
-
-            right_offsets[after_left] += 1;
-            left_offsets[after_right] += 1;
-        }
-
-        let mut left_total = 0_u32;
-        let mut right_total = 0_u32;
-
-        for (left_offset, right_offset) in left_offsets.iter_mut().zip(right_offsets.iter_mut()) {
-            left_total += *left_offset;
-            right_total += *right_offset;
-
-            *left_offset = left_total;
-            *right_offset = right_total;
-        }
-
         let mut left_runs = guard.vec_with_capacity(total_runs);
         let mut right_runs = guard.vec_with_capacity(total_runs);
 
         left_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
         right_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
 
-        for (left, right, start, end) in closed_runs.iter().copied() {
-            let cursor = right_offsets[left as usize];
+        if has_segments {
+            for (left, right, _, _) in closed_runs.iter().copied() {
+                let after_left = left as usize + 1;
+                let after_right = right as usize + 1;
 
-            right_runs[cursor as usize] = (right, start, end);
-            right_offsets[left as usize] = cursor + 1;
+                right_offsets[after_left] += 1;
+                left_offsets[after_right] += 1;
+            }
 
-            let cursor = left_offsets[right as usize];
+            let mut left_total = 0_u32;
+            let mut right_total = 0_u32;
 
-            left_runs[cursor as usize] = (left, start, end);
-            left_offsets[right as usize] = cursor + 1;
+            for (left_offset, right_offset) in left_offsets.iter_mut().zip(right_offsets.iter_mut())
+            {
+                left_total += *left_offset;
+                right_total += *right_offset;
+
+                *left_offset = left_total;
+                *right_offset = right_total;
+            }
+
+            for (left, right, start, end) in closed_runs.iter().copied() {
+                let cursor = right_offsets[left as usize];
+
+                right_runs[cursor as usize] = (right, start, end);
+                right_offsets[left as usize] = cursor + 1;
+
+                let cursor = left_offsets[right as usize];
+
+                left_runs[cursor as usize] = (left, start, end);
+                left_offsets[right as usize] = cursor + 1;
+            }
+
+            left_offsets.copy_within(0..count, 1);
+            left_offsets[0] = 0;
+            right_offsets.copy_within(0..count, 1);
+            right_offsets[0] = 0;
+        } else {
+            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
+            for (vertex, rank) in self.top.iter().copied().enumerate() {
+                let rank = rank as usize;
+                let narrowed = vertex as u32;
+
+                left_offsets[vertex + 1] =
+                    left_offsets[vertex] + u32::from(leftmost_at[rank] != narrowed);
+                right_offsets[vertex + 1] =
+                    right_offsets[vertex] + u32::from(rightmost_at[rank] != narrowed);
+            }
+
+            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
+            for rank in 0..height_usize {
+                let layer = bucket(&self.real_flat, &self.real_offsets, rank);
+                let narrowed = rank as u32;
+
+                for (&left, &right) in layer.iter().zip(layer.iter().skip(1)) {
+                    right_runs[right_offsets[left as usize] as usize] = (right, narrowed, narrowed);
+                    left_runs[left_offsets[right as usize] as usize] = (left, narrowed, narrowed);
+                }
+            }
         }
-
-        left_offsets.copy_within(0..count, 1);
-        left_offsets[0] = 0;
-        right_offsets.copy_within(0..count, 1);
-        right_offsets[0] = 0;
 
         let mut root = guard.vec_with_capacity(count);
         let mut align = guard.vec_with_capacity(count);
@@ -1218,11 +1311,12 @@ where
         } = scratch;
 
         let height = self.height as usize;
+        let has_segments = self.segments != 0;
 
         let separation = |a: usize, b: usize| {
             extent[a]
                 + extent[b]
-                + if self.is_segment[a] || self.is_segment[b] {
+                + if has_segments && (self.is_segment[a] || self.is_segment[b]) {
                     spacing.edge
                 } else {
                     spacing.node
@@ -1272,7 +1366,6 @@ where
         align.copy_from_slice(root);
         sink.copy_from_slice(root);
         shift.fill(f32::INFINITY);
-        x.fill(f32::NAN);
 
         for step in 0..height {
             let rank = reflect(step, height, DOWNWARD);
@@ -1286,30 +1379,33 @@ where
                     return;
                 }
 
-                let mut medians = [
+                let medians = [
                     reflect((degree - 1) / 2, degree, LEFTWARD),
                     reflect(degree / 2, degree, LEFTWARD),
                 ];
 
-                let is_segment =
-                    |median: usize| self.is_segment[neighbour_at(vertex, median).0 as usize];
+                let mut entries = [neighbour_at(vertex, medians[0]), (0_u32, 0_usize)];
 
                 let distinct = if medians[0] == medians[1] {
                     1
                 } else {
-                    if !is_segment(medians[0]) && is_segment(medians[1]) {
-                        medians.swap(0, 1);
+                    entries[1] = neighbour_at(vertex, medians[1]);
+
+                    let is_segment =
+                        |entry: (u32, usize)| has_segments && self.is_segment[entry.0 as usize];
+
+                    if !is_segment(entries[0]) && is_segment(entries[1]) {
+                        entries.swap(0, 1);
                     }
 
                     2
                 };
 
-                for median in medians[..distinct].iter().copied() {
+                for (neighbour, position) in entries[..distinct].iter().copied() {
                     if align[vertex] as usize != vertex {
-                        continue;
+                        break;
                     }
 
-                    let (neighbour, position) = neighbour_at(vertex, median);
                     let neighbour = neighbour as usize;
 
                     let admissible = last.is_none_or(|last| {
@@ -1455,7 +1551,7 @@ where
             let entry_rank = if DOWNWARD {
                 self.top[entry]
             } else {
-                self.bottom[entry]
+                self.bottom_of(entry)
             } as usize;
 
             if rank != entry_rank {
@@ -1505,7 +1601,7 @@ where
                 }
 
                 let across = if DOWNWARD {
-                    self.bottom[vertex]
+                    self.bottom_of(vertex)
                 } else {
                     self.top[vertex]
                 } as usize;
@@ -1613,30 +1709,34 @@ where
             let mut left_reach = 0.0_f32;
             let mut right_reach = 0.0_f32;
 
+            let rank_center = self.layer_center(rank);
+            let source_band_end = self.layer_ends[rank];
+
             for source in bucket(&self.real_flat, &self.real_offsets, rank)
                 .iter()
                 .copied()
             {
                 let source = source as usize;
+                let source_ordinal = self.ordinal_of(source);
 
                 let source_x = self.x_coordinates[source];
-                let source_border = self.layer_center(rank) + self.sizes[source].y * 0.5_f32;
-                let source_band_end = self.layer_ends[rank];
+                let source_border = rank_center + self.sizes[source_ordinal].y * 0.5_f32;
 
                 for target in bucket(&self.down_flat, &self.down_offsets, source)
                     .iter()
                     .copied()
                 {
                     let target = target as usize;
-                    let real_target = if self.is_segment[target] {
+                    let real_target = if self.is_seg(target) {
                         self.down_flat[self.down_offsets[target] as usize] as usize
                     } else {
                         target
                     };
+                    let target_ordinal = self.ordinal_of(real_target);
 
                     let target_x = self.x_coordinates[real_target];
                     let target_border = self.layer_center(self.top[real_target] as usize)
-                        - self.sizes[real_target].y * 0.5_f32;
+                        - self.sizes[target_ordinal].y * 0.5_f32;
 
                     let start = self.polyline_points.len();
                     let first = Vec2::new(source_x, source_border);
@@ -1653,7 +1753,7 @@ where
                         self.polyline_points.push(point);
                     }
 
-                    if self.is_segment[target] {
+                    if self.is_seg(target) {
                         let x = self.x_coordinates[target];
                         let span_start = self.layer_start(self.top[target] as usize);
                         let span_end = self.layer_ends[self.bottom[target] as usize];
@@ -1702,8 +1802,8 @@ where
 
                     #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
                     self.polylines.push(Polyline {
-                        source: source as u32,
-                        target: real_target as u32,
+                        source: source_ordinal as u32,
+                        target: target_ordinal as u32,
                         start: start as u32,
                         min: line_min,
                         max: line_max,
@@ -1801,10 +1901,11 @@ where
 
             for vertex in reals[begin..].iter().copied() {
                 let vertex = vertex as usize;
-                let id = self.keys[vertex];
+                let ordinal = self.ordinal_of(vertex);
+                let id = self.keys[ordinal];
 
                 let center = Vec2::new(self.x_coordinates[vertex], y);
-                let size = self.sizes[vertex];
+                let size = self.sizes[ordinal];
                 let half = size * 0.5_f32;
 
                 if center.x - half.x > max.x {
