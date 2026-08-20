@@ -28,7 +28,9 @@ use crate::{
     IndependentContents, LayoutItem, Node, Weave,
     dependent::DependentWeave,
     independent::IndependentWeave,
-    layout::{Spacing, slotset::SlotSet, validate_float, validate_vec2},
+    layout::{
+        Spacing, slotset::SlotSet, validate_output_float, validate_output_vec2, validate_vec2,
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -1246,14 +1248,14 @@ where
 
             self.layer_ends.push(end);
 
-            valid &= validate_float(start) && validate_float(end);
+            valid &= validate_output_float(start) && validate_output_float(end);
 
             cursor = end;
         }
 
         for coordinate in &mut self.x_coordinates {
             *coordinate -= left;
-            valid &= validate_float(*coordinate);
+            valid &= validate_output_float(*coordinate);
         }
 
         self.reach_prefix.clear();
@@ -1268,9 +1270,9 @@ where
 
         self.size = Vec2::new(right - left, cursor);
 
-        valid &= validate_vec2(self.size);
+        valid &= validate_output_vec2(self.size);
 
-        assert!(valid, "Output is not normal and positive");
+        debug_assert!(valid, "Output is not normal and positive");
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
