@@ -1272,7 +1272,7 @@ where
 
         valid &= validate_output_vec2(self.size);
 
-        debug_assert!(valid, "Output is not normal and positive");
+        assert!(valid, "Output is not normal and positive");
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
