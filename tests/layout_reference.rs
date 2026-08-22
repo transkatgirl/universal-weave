@@ -1,4 +1,7 @@
-use std::hash::{BuildHasher, Hash, RandomState};
+use std::{
+    fmt::Debug,
+    hash::{BuildHasher, Hash, RandomState},
+};
 
 use glam::Vec2;
 use hashbrown::{HashMap, HashSet};
@@ -22,7 +25,7 @@ use universal_weave::{
     layout::{Spacing, TopologicalLayouter},
 };
 
-const CASES: u32 = 1024;
+const CASES: u32 = 4096;
 const MAX_TRANSITIONS: usize = 512;
 const TOLERANCE: f32 = 1e-4;
 
@@ -341,7 +344,7 @@ struct WeaveStateMachine;
 
 impl ReferenceStateMachine for WeaveStateMachine {
     type State = (Vec<Self::Transition>, Spacing);
-    type Transition = (WeaveTransition, u32, u8);
+    type Transition = (WeaveTransition, u32, u8, (u32, u32), (u32, u32));
 
     fn init_state() -> BoxedStrategy<Self::State> {
         any::<(u8, u8, u8, u8)>()
@@ -802,109 +805,51 @@ impl StateMachineTest for WeaveWrapper {
                 <= TOLERANCE
         );
 
-        {
-            let lock = state.scratchpad_arena.guard();
+        compare_layouter_views::<
+            IndependentWeave<u32, WeaveContent, u32, RandomState>,
+            u32,
+            IndependentNode<u32, WeaveContent, RandomState>,
+            WeaveContent,
+        >(
+            &mut state.scratchpad_arena,
+            &mut state.layouter,
+            &mut state.reference_layouter,
+            Vec2::splat(-1.0e30),
+            Vec2::splat(1.0e30),
+        );
 
-            let mut layouter_output = lock.vec();
-            let mut reference_layouter_output = lock.vec();
+        let subview_min = Vec2 {
+            x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
+                * 2.0
+                * (MAX_TRANSITIONS * 20) as f32
+                * 3.0,
+            y: ((transition.3.1 as f32 / u32::MAX as f32) - 0.5)
+                * 2.0
+                * (MAX_TRANSITIONS * 20) as f32
+                * 3.0,
+        };
+        let subview_max = subview_min
+            + Vec2 {
+                x: ((transition.4.0 as f32 / u32::MAX as f32) - 0.5)
+                    * 2.0
+                    * (MAX_TRANSITIONS * 20) as f32,
+                y: ((transition.4.1 as f32 / u32::MAX as f32) - 0.5)
+                    * 2.0
+                    * (MAX_TRANSITIONS * 20) as f32,
+            };
 
-            Layouter::<
-                IndependentWeave<u32, WeaveContent, u32, RandomState>,
-                u32,
-                IndependentNode<u32, WeaveContent, RandomState>,
-                WeaveContent,
-                Vec2,
-            >::view(
-                &mut state.layouter,
-                Vec2::splat(-1.0e30),
-                Vec2::splat(1.0e30),
-                |item| {
-                    layouter_output.push(item);
-                },
-            );
-            Layouter::<
-                IndependentWeave<u32, WeaveContent, u32, RandomState>,
-                u32,
-                IndependentNode<u32, WeaveContent, RandomState>,
-                WeaveContent,
-                Vec2,
-            >::view(
-                &mut state.reference_layouter,
-                Vec2::splat(-1.0e30),
-                Vec2::splat(1.0e30),
-                |item| {
-                    reference_layouter_output.push(item);
-                },
-            );
-
-            assert_eq!(layouter_output.len(), reference_layouter_output.len());
-
-            for (left, right) in layouter_output.into_iter().zip(reference_layouter_output) {
-                match (left, right) {
-                    (
-                        LayoutItem::Node { id, center, size },
-                        LayoutItem::Node {
-                            id: right_id,
-                            center: right_center,
-                            size: right_size,
-                        },
-                    ) => {
-                        assert_eq!(id, right_id);
-                        assert!((center - right_center).abs().max_element() <= TOLERANCE);
-                        assert!((size - right_size).abs().max_element() <= TOLERANCE);
-                    }
-                    (
-                        LayoutItem::Polyline { from, to, points },
-                        LayoutItem::Polyline {
-                            from: right_from,
-                            to: right_to,
-                            points: right_points,
-                        },
-                    ) => {
-                        assert_eq!(from, right_from);
-                        assert_eq!(to, right_to);
-                        assert!(points.len() >= 2 && right_points.len() >= 2);
-                        assert!(
-                            (points.first().unwrap() - right_points.first().unwrap())
-                                .abs()
-                                .max_element()
-                                <= TOLERANCE
-                        );
-                        assert!(
-                            (points.last().unwrap() - right_points.last().unwrap())
-                                .abs()
-                                .max_element()
-                                <= TOLERANCE
-                        );
-                        assert!(
-                            points
-                                .windows(2)
-                                .all(|window| { window[1].y >= window[0].y })
-                        );
-                        assert!(
-                            right_points
-                                .windows(2)
-                                .all(|window| { window[1].y >= window[0].y })
-                        );
-                        for point in points {
-                            assert!(
-                                right_points
-                                    .iter()
-                                    .any(|p| (point - *p).abs().max_element() <= TOLERANCE)
-                            )
-                        }
-                        for point in right_points {
-                            assert!(
-                                points
-                                    .iter()
-                                    .any(|p| (point - *p).abs().max_element() <= TOLERANCE)
-                            )
-                        }
-                    }
-                    _ => panic!(),
-                }
-            }
-        }
+        compare_layouter_views::<
+            IndependentWeave<u32, WeaveContent, u32, RandomState>,
+            u32,
+            IndependentNode<u32, WeaveContent, RandomState>,
+            WeaveContent,
+        >(
+            &mut state.scratchpad_arena,
+            &mut state.layouter,
+            &mut state.reference_layouter,
+            subview_min,
+            subview_max,
+        );
 
         state
     }
@@ -912,6 +857,98 @@ impl StateMachineTest for WeaveWrapper {
         _state: &Self::SystemUnderTest,
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
+    }
+}
+
+fn compare_layouter_views<W, K, N, T>(
+    scratchpad: &mut Scratchpad,
+    left: &mut impl Layouter<W, K, N, T, Vec2>,
+    right: &mut impl Layouter<W, K, N, T, Vec2>,
+    min: Vec2,
+    max: Vec2,
+) where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord + Debug,
+    N: Node<K, T>,
+{
+    let lock = scratchpad.guard();
+
+    let mut layouter_output = lock.vec();
+    let mut reference_layouter_output = lock.vec();
+
+    left.view(min, max, |item| {
+        layouter_output.push(item);
+    });
+    right.view(min, max, |item| {
+        reference_layouter_output.push(item);
+    });
+
+    assert_eq!(layouter_output.len(), reference_layouter_output.len());
+
+    for (left, right) in layouter_output.into_iter().zip(reference_layouter_output) {
+        match (left, right) {
+            (
+                LayoutItem::Node { id, center, size },
+                LayoutItem::Node {
+                    id: right_id,
+                    center: right_center,
+                    size: right_size,
+                },
+            ) => {
+                assert_eq!(id, right_id);
+                assert!((center - right_center).abs().max_element() <= TOLERANCE);
+                assert!((size - right_size).abs().max_element() <= TOLERANCE);
+            }
+            (
+                LayoutItem::Polyline { from, to, points },
+                LayoutItem::Polyline {
+                    from: right_from,
+                    to: right_to,
+                    points: right_points,
+                },
+            ) => {
+                assert_eq!(from, right_from);
+                assert_eq!(to, right_to);
+                assert!(points.len() >= 2 && right_points.len() >= 2);
+                assert!(
+                    (points.first().unwrap() - right_points.first().unwrap())
+                        .abs()
+                        .max_element()
+                        <= TOLERANCE
+                );
+                assert!(
+                    (points.last().unwrap() - right_points.last().unwrap())
+                        .abs()
+                        .max_element()
+                        <= TOLERANCE
+                );
+                assert!(
+                    points
+                        .windows(2)
+                        .all(|window| { window[1].y >= window[0].y })
+                );
+                assert!(
+                    right_points
+                        .windows(2)
+                        .all(|window| { window[1].y >= window[0].y })
+                );
+                for point in points {
+                    assert!(
+                        right_points
+                            .iter()
+                            .any(|p| (point - *p).abs().max_element() <= TOLERANCE)
+                    )
+                }
+                for point in right_points {
+                    assert!(
+                        points
+                            .iter()
+                            .any(|p| (point - *p).abs().max_element() <= TOLERANCE)
+                    )
+                }
+            }
+            _ => panic!(),
+        }
     }
 }
 

@@ -62,6 +62,7 @@ Testing notes:
 - When running multiple tests, use `cargo nextest run` instead of `cargo test`
 - Test building for no_std using `cargo build --target=aarch64-unknown-none --no-default-features --features serde,rkyv,legacy`
 - The following tests continue to function in release mode:
+    - layout_reference
     - archived_dependent
     - archived_independent
     - dependent_behavior_unchanged
