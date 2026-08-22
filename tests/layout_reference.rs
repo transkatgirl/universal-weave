@@ -289,14 +289,10 @@ where
                         (center(target_rank) - target_size.1 * 0.5) as f32,
                     ));
 
-                    points.dedup();
                     let (min, max) = points.iter().fold(
                         (Vec2::INFINITY, Vec2::NEG_INFINITY),
                         |(low, high), &point| (low.min(point), high.max(point)),
                     );
-                    if points.len() == 1 {
-                        points.push(points[0]);
-                    }
 
                     self.polylines
                         .push((source_id, target_key, min, max, points));
