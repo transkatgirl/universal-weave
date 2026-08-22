@@ -468,6 +468,7 @@ where
 }
 
 /// A geometric item within an arrangement of a Weave's content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LayoutItem<'a, K, V> {
     /// Computed geometry for a [`Node`].
     Node {
