@@ -75,6 +75,7 @@ proptest               = "1.11.0"
 proptest-state-machine = "0.8.0"
 proptest-derive        = "0.8.0"
 old_universal_weave    = { package = "universal-weave", version = "=0.4.0" }
+rust-sugiyama-fork     = "=0.5.1"
 
 [profile.test.build-override]
 opt-level = 2
@@ -84,6 +85,12 @@ opt-level = 3
 
 [profile.test.package.rand_chacha]
 opt-level = 3
+
+[[test]]
+name = "layout_reference"
+required-features = [
+	"layout",
+]
 
 [[test]]
 name = "archived_dependent"
