@@ -316,7 +316,6 @@ impl WeaveWrapper {
 
 impl IndependentContents for WeaveContent {}
 
-// Invariants are validated by the function's contracts
 impl StateMachineTest for VirtualPeers {
     type SystemUnderTest = Self;
     type Reference = WeaveStateMachine;

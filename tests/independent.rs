@@ -200,7 +200,6 @@ impl DiscreteContents for WeaveContent {
     }
 }
 
-// Invariants are validated by the function's contracts
 impl StateMachineTest for WeaveWrapper {
     type SystemUnderTest = Self;
     type Reference = WeaveStateMachine;
