@@ -1222,7 +1222,7 @@ where
 
             let low = a.min(b).max(c.min(d));
             let high = a.max(b).min(c.max(d));
-            let combined = (low + high) * 0.5_f32;
+            let combined = f32::midpoint(low, high);
 
             *coordinate = combined;
             left = left.min(combined - extent);
@@ -1687,7 +1687,7 @@ where
     #[inline]
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn layer_center(&self, rank: usize) -> f32 {
-        (self.layer_start(rank) + self.layer_ends[rank]) * 0.5_f32
+        f32::midpoint(self.layer_start(rank), self.layer_ends[rank])
     }
     #[inline]
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
