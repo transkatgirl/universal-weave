@@ -93,6 +93,12 @@ required-features = [
 ]
 
 [[test]]
+name = "layout_dependent"
+required-features = [
+	"layout",
+]
+
+[[test]]
 name = "layout_independent"
 required-features = [
 	"layout",

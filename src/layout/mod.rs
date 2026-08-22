@@ -22,16 +22,7 @@ use crate::{
     layout::positioner::Layout2D,
 };
 
-/*
-
-Tests to write:
-- DependentLayouter parity with TopologicalLayouter
-- IndependentLayouter parity with TopologicalLayouter
-- TopologicalLayouter property testing w/ function contracts
-
-Need to add curve fitting convenience functions
-
-*/
+// TODO: Add curve fitting convenience functions
 
 mod positioner;
 mod slotset;
