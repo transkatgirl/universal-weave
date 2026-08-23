@@ -1,18 +1,8 @@
-#![allow(clippy::expect_used, reason = "API")]
-
 use scratchpads::{ScratchpadGuard, ScratchpadVec};
 
 pub struct SlotSet<'g> {
     words: ScratchpadVec<'g, u64>,
     levels: ScratchpadVec<'g, usize>,
-}
-
-fn low_bit(word: u64) -> usize {
-    usize::try_from(word.trailing_zeros()).unwrap()
-}
-
-fn high_bit(word: u64) -> usize {
-    usize::try_from(word.ilog2()).unwrap()
 }
 
 #[allow(clippy::arithmetic_side_effects, reason = "Cannot overflow")]
@@ -46,7 +36,7 @@ impl<'g> SlotSet<'g> {
         self.words.resize(total, 0);
     }
     pub fn is_empty(&self) -> bool {
-        self.words[*self.levels.last().expect("Set must be rebuilt before use")] == 0
+        self.words[*self.levels.last().unwrap()] == 0
     }
     /*pub fn contains(&self, slot: usize) -> bool {
         self.words[slot >> 6_u32] & (1_u64 << (slot & 63)) != 0
@@ -146,7 +136,7 @@ impl<'g> SlotSet<'g> {
         self.extreme(high_bit)
     }
     fn extreme(&self, bit: impl Fn(u64) -> usize) -> Option<usize> {
-        let top = self.words[*self.levels.last().expect("Set must be rebuilt before use")];
+        let top = self.words[*self.levels.last().unwrap()];
 
         if top == 0 {
             return None;
@@ -160,4 +150,12 @@ impl<'g> SlotSet<'g> {
 
         Some(index)
     }
+}
+
+fn low_bit(word: u64) -> usize {
+    usize::try_from(word.trailing_zeros()).unwrap()
+}
+
+fn high_bit(word: u64) -> usize {
+    usize::try_from(word.ilog2()).unwrap()
 }

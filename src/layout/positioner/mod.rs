@@ -29,9 +29,12 @@ use crate::{
     dependent::DependentWeave,
     independent::IndependentWeave,
     layout::{
-        Spacing, slotset::SlotSet, validate_output_float, validate_output_vec2, validate_vec2,
+        Spacing, positioner::slotset::SlotSet, validate_output_float, validate_output_vec2,
+        validate_vec2,
     },
 };
+
+mod slotset;
 
 #[derive(Debug, Clone)]
 #[must_use]

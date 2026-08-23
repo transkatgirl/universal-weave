@@ -25,7 +25,6 @@ use crate::{
 // TODO: Add curve fitting convenience functions
 
 mod positioner;
-mod slotset;
 
 /// Minimum gaps in a [`Weave`] layout.
 ///
