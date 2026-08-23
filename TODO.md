@@ -44,8 +44,8 @@
 
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
     - [ ] Implement graphing using [dagre](https://crates.io/crates/dagre) or by building our own fork to improve efficiency and add functionality?
-- [ ] Embedded-focused Weave implementation using [micromap](https://crates.io/crates/micromap/0.3.0) (recommend for <32 edges per node) + [ekv](https://crates.io/crates/ekv)
-    - Won't have same DOS-resistance guarantees as typical Weave implementations; May be more appropriate as a seperate crate building on top of `universal-weave`
+- [ ] [micromap](https://crates.io/crates/micromap/0.3.0)-based Weave implementations (waiting on [rkyv support](https://github.com/yegor256/micromap/issues/414)) for performance-focused or memory-limited use cases where node edge limits are acceptable
+    - Need to clearly state that this should only be used if nodes have <= ~64 edges
 
 ### Future plans
 
