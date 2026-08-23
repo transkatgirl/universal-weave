@@ -6,7 +6,8 @@
 )]
 #![allow(
     clippy::as_conversions,
-    reason = "cfg gate ensures usize::MAX is always >= u32::MAX"
+    clippy::cast_possible_truncation,
+    reason = "cfg gate ensures usize::MAX is always >= u32::MAX; assertions ensure input len > u32::MAX"
 )]
 #![allow(
     clippy::arithmetic_side_effects,
@@ -162,17 +163,9 @@ where
         self.rank_built.clear();
     }
     fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "Total push count < u32::MAX"
-        )]
         let index = self.top.len() as u32;
 
         if self.segments != 0 {
-            #[allow(
-                clippy::cast_possible_truncation,
-                reason = "Total push count < u32::MAX"
-            )]
             let ordinal = self.keys.len() as u32;
 
             self.is_segment.push(false);
@@ -187,10 +180,6 @@ where
         index
     }
     fn push_segment(&mut self, top: u32, bottom: u32) -> u32 {
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "Total push count < u32::MAX"
-        )]
         let index = self.top.len() as u32;
 
         if self.segments == 0 {
@@ -205,6 +194,40 @@ where
         self.top.push(top);
         self.bottom.push(bottom);
         self.height = self.height.max(bottom + 1);
+
+        index
+    }
+    fn place_with_parents(
+        &mut self,
+        id: K,
+        size: Vec2,
+        parents: &mut ScratchpadVec<'_, (u32, u32)>,
+        edges: &mut ScratchpadVec<'_, u32>,
+    ) -> u32 {
+        let rank = parents
+            .iter()
+            .map(|&(_, top)| top + 1)
+            .max()
+            .unwrap_or(0_u32);
+
+        assert!(
+            self.top.len() + parents.len() < usize::try_from(u32::MAX).unwrap(),
+            "Too many vertices"
+        );
+        assert!(validate_vec2(size), "Invalid size");
+
+        let index = self.push_real(id, rank, size);
+
+        for (from_index, from_rank) in parents.drain(..) {
+            if from_rank + 1 == rank {
+                link(edges, from_index, index);
+            } else {
+                let segment = self.push_segment(from_rank + 1, rank - 1);
+
+                link(edges, from_index, segment);
+                link(edges, segment, index);
+            }
+        }
 
         index
     }
@@ -301,7 +324,6 @@ where
                 .zip(self.bottom.iter().copied())
                 .enumerate()
             {
-                #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
                 let narrowed = index as u32;
                 let top = top as usize;
                 let bottom = if segment { bottom as usize } else { top };
@@ -335,7 +357,6 @@ where
             }
         } else {
             for (index, top) in self.top.iter().copied().enumerate() {
-                #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
                 let narrowed = index as u32;
                 let top = top as usize;
                 let cursor = self.real_offsets[top];
@@ -345,18 +366,13 @@ where
             }
         }
 
-        self.real_offsets.copy_within(0..height_usize, 1);
-        self.real_offsets[0] = 0;
+        shift_offsets(&mut self.real_offsets);
 
         if has_segments {
-            seg_top_offsets.copy_within(0..height_usize, 1);
-            seg_top_offsets[0] = 0;
-            seg_bottom_offsets.copy_within(0..height_usize, 1);
-            seg_bottom_offsets[0] = 0;
-            merged_top_offsets.copy_within(0..height_usize, 1);
-            merged_top_offsets[0] = 0;
-            merged_bottom_offsets.copy_within(0..height_usize, 1);
-            merged_bottom_offsets[0] = 0;
+            shift_offsets(&mut seg_top_offsets);
+            shift_offsets(&mut seg_bottom_offsets);
+            shift_offsets(&mut merged_top_offsets);
+            shift_offsets(&mut merged_bottom_offsets);
         }
 
         let edge_count = edges.len() >> 1_usize;
@@ -381,25 +397,12 @@ where
             up_offsets[target] += 1;
         }
 
-        let mut down_total = 0_u32;
-        let mut up_total = 0_u32;
-
-        for (down_offset, up_offset) in self.down_offsets.iter_mut().zip(up_offsets.iter_mut()) {
-            let down_len = *down_offset;
-            let up_len = *up_offset;
-
-            *down_offset = down_total;
-            *up_offset = up_total;
-            down_total += down_len;
-            up_total += up_len;
-        }
+        exclusive_prefix_sum(&mut self.down_offsets);
+        exclusive_prefix_sum(&mut up_offsets);
 
         self.down_flat.resize(edge_count, 0);
 
-        #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
         self.deepest.extend(0..self.height);
-
-        let (pairs, _) = edges.as_chunks::<2>();
 
         for &[source, target] in pairs {
             let source = source as usize;
@@ -421,8 +424,7 @@ where
             }
         }
 
-        self.down_offsets.copy_within(0..count, 1);
-        self.down_offsets[0] = 0;
+        shift_offsets(&mut self.down_offsets);
 
         let mut up_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(edge_count);
 
@@ -447,8 +449,7 @@ where
             }
         }
 
-        up_offsets.copy_within(0..count, 1);
-        up_offsets[0] = 0;
+        shift_offsets(&mut up_offsets);
 
         BuildStructure {
             seg_top_offsets,
@@ -560,7 +561,6 @@ where
             parent_offsets.push(0);
             child_offsets.push(0);
 
-            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             for (dense, (&id, node)) in weave.nodes.iter().enumerate() {
                 identifier_map.insert(id, dense as u32);
                 keys.push(id);
@@ -604,36 +604,17 @@ where
 
             while let Some(dense) = stack.pop() {
                 let dense = dense as usize;
-                let mut rank = 0_u32;
 
                 for parent in bucket(&parent_flat, &parent_offsets, dense).iter().copied() {
                     let index = vertex_of[parent as usize];
-                    let top = self.top[index as usize];
 
-                    rank = rank.max(top + 1);
-
-                    parents.push((index, top));
+                    parents.push((index, self.top[index as usize]));
                 }
 
                 let id = keys[dense];
-                let size = sizes(&id);
-
-                assert!(validate_vec2(size), "Invalid size");
-
-                let index = self.push_real(id, rank, size);
+                let index = self.place_with_parents(id, sizes(&id), &mut parents, &mut edges);
 
                 vertex_of[dense] = index;
-
-                for (from_index, from_rank) in parents.drain(..) {
-                    if from_rank + 1 == rank {
-                        link(&mut edges, from_index, index);
-                    } else {
-                        let segment = self.push_segment(from_rank + 1, rank - 1);
-
-                        link(&mut edges, from_index, segment);
-                        link(&mut edges, segment, index);
-                    }
-                }
 
                 for child in bucket(&child_flat, &child_offsets, dense)
                     .iter()
@@ -685,40 +666,15 @@ where
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(weave.len());
 
             for id in topological.drain(..) {
-                let mut rank = 0_u32;
-
                 for parent in weave.get_parents(&id).unwrap() {
                     let index = indices[parent];
-                    let top = self.top[index as usize];
 
-                    rank = rank.max(top + 1);
-
-                    parents.push((index, top));
+                    parents.push((index, self.top[index as usize]));
                 }
 
-                assert!(
-                    self.top.len() + parents.len() < usize::try_from(u32::MAX).unwrap(),
-                    "Too many vertices"
-                );
-
-                let size = sizes(&id);
-
-                assert!(validate_vec2(size), "Invalid size");
-
-                let index = self.push_real(id, rank, size);
+                let index = self.place_with_parents(id, sizes(&id), &mut parents, &mut edges);
 
                 indices.insert(id, index);
-
-                for (from_index, from_rank) in parents.drain(..) {
-                    if from_rank + 1 == rank {
-                        link(&mut edges, from_index, index);
-                    } else {
-                        let segment = self.push_segment(from_rank + 1, rank - 1);
-
-                        link(&mut edges, from_index, segment);
-                        link(&mut edges, segment, index);
-                    }
-                }
             }
 
             assert_eq!(weave.len(), indices.len(), "Malformed topological order");
@@ -900,7 +856,6 @@ where
             active.rebuild(count);
             spanning.rebuild(count);
 
-            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             for rank in 0..=height_usize {
                 if let Some(previous) = rank.checked_sub(1) {
                     for item in bucket(merged_bottom_flat, merged_bottom_offsets, previous)
@@ -1094,24 +1049,12 @@ where
             right_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
 
             for (left, right, _, _) in closed_runs.iter().copied() {
-                let after_left = left as usize + 1;
-                let after_right = right as usize + 1;
-
-                right_offsets[after_left] += 1;
-                left_offsets[after_right] += 1;
+                right_offsets[left as usize] += 1;
+                left_offsets[right as usize] += 1;
             }
 
-            let mut left_total = 0_u32;
-            let mut right_total = 0_u32;
-
-            for (left_offset, right_offset) in left_offsets.iter_mut().zip(right_offsets.iter_mut())
-            {
-                left_total += *left_offset;
-                right_total += *right_offset;
-
-                *left_offset = left_total;
-                *right_offset = right_total;
-            }
+            exclusive_prefix_sum(&mut left_offsets);
+            exclusive_prefix_sum(&mut right_offsets);
 
             for (left, right, start, end) in closed_runs.iter().copied() {
                 let cursor = right_offsets[left as usize];
@@ -1125,10 +1068,8 @@ where
                 left_offsets[right as usize] = cursor + 1;
             }
 
-            left_offsets.copy_within(0..count, 1);
-            left_offsets[0] = 0;
-            right_offsets.copy_within(0..count, 1);
-            right_offsets[0] = 0;
+            shift_offsets(&mut left_offsets);
+            shift_offsets(&mut right_offsets);
         } else {
             left_single.resize(count, NO_RUN);
             right_single.resize(count, NO_RUN);
@@ -1278,7 +1219,6 @@ where
         assert!(valid, "Output is not normal and positive");
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool, const HAS_SEGMENTS: bool>(
         &self,
         scratch: &mut PassScratch<'_, '_>,
@@ -1735,7 +1675,6 @@ where
             self.polyline_points
                 .reserve(edge_count.strict_mul(max_points));
 
-            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             let range_start = self.polylines.len() as u32;
             let mut rank_min = Vec2::INFINITY;
             let mut rank_max = Vec2::NEG_INFINITY;
@@ -1854,7 +1793,6 @@ where
                     left_reach = left_reach.max(source_x - line_min.x);
                     right_reach = right_reach.max(line_max.x - source_x);
 
-                    #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
                     self.polylines.push(Polyline {
                         source: source_ordinal as u32,
                         target: target_ordinal as u32,
@@ -1866,7 +1804,6 @@ where
                 }
             }
 
-            #[allow(clippy::cast_possible_truncation, reason = "Can never overflow")]
             let range_end = self.polylines.len() as u32;
 
             self.polyline_ranges[rank] = (range_start, range_end);
@@ -2066,6 +2003,13 @@ fn push_deduplicated(points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &
     if points.last().is_none_or(|&last| last != point) {
         points.push(point);
     }
+}
+
+fn shift_offsets(offsets: &mut [u32]) {
+    let last = offsets.len() - 1;
+
+    offsets.copy_within(0..last, 1);
+    offsets[0] = 0;
 }
 
 fn exclusive_prefix_sum(offsets: &mut [u32]) -> usize {
