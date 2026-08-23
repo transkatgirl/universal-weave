@@ -45,15 +45,16 @@ where
     K: Hash + Copy + Eq + Ord,
 {
     keys: Vec<K>,
+    sizes: Vec<Vec2>,
     is_segment: BitVec,
     top: Vec<u32>,
     bottom: Vec<u32>,
+    height: u32,
+
     real_offsets: Vec<u32>,
     real_flat: Vec<u32>,
     down_offsets: Vec<u32>,
     down_flat: Vec<u32>,
-    height: u32,
-    sizes: Vec<Vec2>,
     rank_half_width: Vec<f32>,
     x_coordinates: Vec<f32>,
     layer_ends: Vec<f32>,
@@ -76,15 +77,15 @@ where
     fn default() -> Self {
         Self {
             keys: Vec::new(),
+            sizes: Vec::new(),
             is_segment: BitVec::new(),
             top: Vec::new(),
             bottom: Vec::new(),
+            height: 0,
             real_offsets: Vec::new(),
             real_flat: Vec::new(),
             down_offsets: Vec::new(),
             down_flat: Vec::new(),
-            height: 0,
-            sizes: Vec::new(),
             rank_half_width: Vec::new(),
             x_coordinates: Vec::new(),
             layer_ends: Vec::new(),
@@ -132,20 +133,19 @@ where
     fn clear(&mut self, reserved_nodes: usize) {
         self.keys.clear();
         self.keys.reserve(reserved_nodes);
+        self.sizes.clear();
+        self.sizes.reserve(reserved_nodes);
         self.is_segment.clear();
         self.top.clear();
         self.top.reserve(reserved_nodes);
         self.bottom.clear();
+        self.height = 0;
 
         self.real_offsets.clear();
         self.real_flat.clear();
         self.down_offsets.clear();
         self.down_flat.clear();
 
-        self.height = 0;
-
-        self.sizes.clear();
-        self.sizes.reserve(reserved_nodes);
         self.rank_half_width.clear();
 
         self.x_coordinates.clear();
@@ -163,16 +163,15 @@ where
     fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
         let index = self.top.len() as u32;
 
-        if !self.is_segment.is_empty() {
-            let ordinal = self.keys.len() as u32;
+        self.sizes.push(size);
 
+        if !self.is_segment.is_empty() {
             self.is_segment.push(false);
-            self.bottom.push(ordinal);
+            self.bottom.push(self.keys.len() as u32);
         }
 
         self.keys.push(key);
         self.top.push(rank);
-        self.sizes.push(size);
         self.height = self.height.max(rank + 1);
 
         index
@@ -182,8 +181,9 @@ where
 
         if self.is_segment.is_empty() {
             self.is_segment.reserve(self.top.capacity());
-            self.is_segment.resize(index as usize, false);
             self.bottom.reserve(self.top.capacity());
+
+            self.is_segment.resize(self.top.len(), false);
             self.bottom.extend(0..index);
         }
 
