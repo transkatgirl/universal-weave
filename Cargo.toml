@@ -26,14 +26,10 @@ default = [
 ]
 layout = [
 	"dep:glam",
+	"dep:bitvec",
 ]
 rkyv = [
 	"dep:rkyv",
-]
-loro = [
-	"rkyv",
-	"dep:loro",
-	"dep:loro-internal",
 ]
 serde = [
 	"dep:serde",
@@ -41,7 +37,11 @@ serde = [
 	"indexmap/serde",
 ]
 legacy = [  ]
-
+loro = [
+	"rkyv",
+	"dep:loro",
+	"dep:loro-internal",
+]
 
 [dependencies]
 contracts = "0.6.10"
@@ -56,18 +56,21 @@ indexmap = { version = "2.14.0", default-features = false }
 glam = { version = "0.33.3", features = [
 	"libm",
 ], default-features = false, optional = true }
+bitvec = { version = "1.1.1", features = [
+	"alloc",
+], default-features = false, optional = true }
 rkyv = { version = "0.8.18", features = [
 	"alloc",
 	"bytecheck",
 	"hashbrown-0_17",
 	"indexmap-2",
 ], default-features = false, optional = true }
-loro = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046
-loro-internal = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046; No loro-internal functions are called directly
 serde = { version = "1.0.229", features = [
 	"alloc",
 	"derive",
 ], default-features = false, optional = true }
+loro = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046
+loro-internal = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046; No loro-internal functions are called directly
 
 
 [dev-dependencies]

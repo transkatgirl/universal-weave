@@ -22,6 +22,7 @@ use core::{
 };
 
 use alloc::vec::Vec;
+use bitvec::{slice::BitSlice, vec::BitVec};
 use glam::Vec2;
 use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadVec};
 
@@ -45,7 +46,7 @@ where
 {
     keys: Vec<K>,
     segments: u32,
-    is_segment: Vec<bool>,
+    is_segment: BitVec,
     top: Vec<u32>,
     bottom: Vec<u32>,
     real_offsets: Vec<u32>,
@@ -66,7 +67,7 @@ where
     polyline_bounds: Vec<(Vec2, Vec2)>,
     polyline_reach: Vec<(f32, f32)>,
     reach_prefix: Vec<f32>,
-    rank_built: Vec<bool>,
+    rank_built: BitVec,
 }
 
 impl<K> Default for Layout2D<K>
@@ -77,7 +78,7 @@ where
         Self {
             keys: Vec::new(),
             segments: 0,
-            is_segment: Vec::new(),
+            is_segment: BitVec::new(),
             top: Vec::new(),
             bottom: Vec::new(),
             real_offsets: Vec::new(),
@@ -98,7 +99,7 @@ where
             polyline_bounds: Vec::new(),
             polyline_reach: Vec::new(),
             reach_prefix: Vec::new(),
-            rank_built: Vec::new(),
+            rank_built: BitVec::new(),
         }
     }
 }
@@ -272,7 +273,7 @@ where
             for ((segment, top), bottom) in self
                 .is_segment
                 .iter()
-                .copied()
+                .by_vals()
                 .zip(self.top.iter().copied())
                 .zip(self.bottom.iter().copied())
             {
@@ -319,7 +320,7 @@ where
             for (index, ((segment, top), bottom)) in self
                 .is_segment
                 .iter()
-                .copied()
+                .by_vals()
                 .zip(self.top.iter().copied())
                 .zip(self.bottom.iter().copied())
                 .enumerate()
@@ -780,7 +781,7 @@ where
             for ((segment, rank), extent) in self
                 .is_segment
                 .iter()
-                .copied()
+                .by_vals()
                 .zip(self.top.iter().copied())
                 .zip(extent.iter_mut())
             {
@@ -1662,7 +1663,7 @@ where
                 continue;
             }
 
-            self.rank_built[rank] = true;
+            self.rank_built.set(rank, true);
 
             let edge_count: usize = bucket(&self.real_flat, &self.real_offsets, rank)
                 .iter()
@@ -1944,7 +1945,7 @@ fn scan_medians<'g>(
     guard: &'g ScratchpadGuard<'_>,
     offsets: &[u32],
     flat: &[u32],
-    is_segment: &[bool],
+    is_segment: &BitSlice,
 ) -> (ScratchpadVec<'g, [(u32, u32); 2]>, ScratchpadVec<'g, u8>) {
     let count = offsets.len().saturating_sub(1);
     let has_segments = !is_segment.is_empty();
