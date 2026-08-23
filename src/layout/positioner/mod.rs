@@ -190,7 +190,7 @@ where
             self.bottom.extend(0..index);
         }
 
-        self.has_segments |= true;
+        self.has_segments = true;
         self.is_segment.push(true);
         self.top.push(top);
         self.bottom.push(bottom);
