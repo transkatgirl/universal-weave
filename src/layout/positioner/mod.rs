@@ -45,7 +45,7 @@ where
     K: Hash + Copy + Eq + Ord,
 {
     keys: Vec<K>,
-    segments: u32,
+    has_segments: bool,
     is_segment: BitVec,
     top: Vec<u32>,
     bottom: Vec<u32>,
@@ -77,7 +77,7 @@ where
     fn default() -> Self {
         Self {
             keys: Vec::new(),
-            segments: 0,
+            has_segments: false,
             is_segment: BitVec::new(),
             top: Vec::new(),
             bottom: Vec::new(),
@@ -134,7 +134,7 @@ where
     fn clear(&mut self, reserved_nodes: usize) {
         self.keys.clear();
         self.keys.reserve(reserved_nodes);
-        self.segments = 0;
+        self.has_segments = false;
         self.is_segment.clear();
         self.top.clear();
         self.top.reserve(reserved_nodes);
@@ -166,7 +166,7 @@ where
     fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
         let index = self.top.len() as u32;
 
-        if self.segments != 0 {
+        if self.has_segments {
             let ordinal = self.keys.len() as u32;
 
             self.is_segment.push(false);
@@ -183,14 +183,14 @@ where
     fn push_segment(&mut self, top: u32, bottom: u32) -> u32 {
         let index = self.top.len() as u32;
 
-        if self.segments == 0 {
+        if !self.has_segments {
             self.is_segment.reserve(self.top.capacity());
             self.is_segment.resize(index as usize, false);
             self.bottom.reserve(self.top.capacity());
             self.bottom.extend(0..index);
         }
 
-        self.segments += 1;
+        self.has_segments |= true;
         self.is_segment.push(true);
         self.top.push(top);
         self.bottom.push(bottom);
@@ -255,7 +255,7 @@ where
 
         let count = self.top.len();
         let ranks = self.height as usize + 1;
-        let has_segments = self.segments != 0;
+        let has_segments = self.has_segments;
 
         self.real_offsets.resize(ranks, 0);
 
@@ -726,10 +726,10 @@ where
         structure: &BuildStructure<'_>,
         spacing: &Spacing,
     ) {
-        if self.segments == 0 {
-            self.assign_dag_coordinates_impl::<false>(guard, structure, spacing);
-        } else {
+        if self.has_segments {
             self.assign_dag_coordinates_impl::<true>(guard, structure, spacing);
+        } else {
+            self.assign_dag_coordinates_impl::<false>(guard, structure, spacing);
         }
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
@@ -1647,10 +1647,10 @@ where
         }
     }
     fn build_polylines(&mut self, min: Vec2, max: Vec2) {
-        if self.segments == 0 {
-            self.build_polylines_impl::<false>(min, max);
-        } else {
+        if self.has_segments {
             self.build_polylines_impl::<true>(min, max);
+        } else {
+            self.build_polylines_impl::<false>(min, max);
         }
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
@@ -1872,10 +1872,10 @@ where
             }
         }
 
-        if self.segments == 0 {
-            self.view_nodes::<F, false>(min, max, first, last, &mut callback);
-        } else {
+        if self.has_segments {
             self.view_nodes::<F, true>(min, max, first, last, &mut callback);
+        } else {
+            self.view_nodes::<F, false>(min, max, first, last, &mut callback);
         }
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
