@@ -46,9 +46,7 @@ impl<'g> SlotSet<'g> {
         self.words.resize(total, 0);
     }
     pub fn is_empty(&self) -> bool {
-        let &offset = self.levels.last().expect("Set must be rebuilt before use");
-
-        self.words[offset] == 0
+        self.words[*self.levels.last().expect("Set must be rebuilt before use")] == 0
     }
     /*pub fn contains(&self, slot: usize) -> bool {
         self.words[slot >> 6_u32] & (1_u64 << (slot & 63)) != 0
@@ -56,7 +54,7 @@ impl<'g> SlotSet<'g> {
     pub fn insert(&mut self, slot: usize) {
         let mut index = slot;
 
-        for &offset in &self.levels {
+        for offset in self.levels.iter().copied() {
             let word = &mut self.words[offset + (index >> 6_u32)];
             let was = *word;
 
@@ -72,7 +70,7 @@ impl<'g> SlotSet<'g> {
     pub fn remove(&mut self, slot: usize) {
         let mut index = slot;
 
-        for &offset in &self.levels {
+        for offset in self.levels.iter().copied() {
             let word = &mut self.words[offset + (index >> 6_u32)];
 
             *word &= !(1_u64 << (index & 63));
@@ -86,28 +84,27 @@ impl<'g> SlotSet<'g> {
     }
     pub fn predecessor(&self, slot: usize) -> Option<usize> {
         let mut index = slot;
-        let mut level = 0_usize;
 
-        loop {
-            let &offset = self.levels.get(level)?;
-            let word_index = index >> 6_u32;
-            let masked = self.words[offset + word_index] & !(u64::MAX << (index & 63));
+        let level = self
+            .levels
+            .iter()
+            .copied()
+            .enumerate()
+            .find_map(|(level, offset)| {
+                let word_index = index >> 6_u32;
+                let masked = self.words[offset + word_index] & !(u64::MAX << (index & 63));
 
-            if masked != 0 {
-                index = (word_index << 6_u32) | high_bit(masked);
+                if masked != 0 {
+                    index = (word_index << 6_u32) | high_bit(masked);
 
-                break;
-            }
+                    Some(level)
+                } else {
+                    index = word_index;
+                    None
+                }
+            })?;
 
-            index = word_index;
-            level += 1;
-        }
-
-        while level > 0 {
-            level -= 1;
-
-            let offset = self.levels[level];
-
+        for offset in self.levels[..level].iter().copied().rev() {
             index = (index << 6_u32) | high_bit(self.words[offset + index]);
         }
 
@@ -115,28 +112,28 @@ impl<'g> SlotSet<'g> {
     }
     pub fn successor(&self, slot: usize) -> Option<usize> {
         let mut index = slot;
-        let mut level = 0_usize;
 
-        loop {
-            let &offset = self.levels.get(level)?;
-            let word_index = index >> 6_u32;
-            let masked = self.words[offset + word_index] & ((u64::MAX << (index & 63)) << 1_u32);
+        let level = self
+            .levels
+            .iter()
+            .copied()
+            .enumerate()
+            .find_map(|(level, offset)| {
+                let word_index = index >> 6_u32;
+                let masked =
+                    self.words[offset + word_index] & ((u64::MAX << (index & 63)) << 1_u32);
 
-            if masked != 0 {
-                index = (word_index << 6_u32) | low_bit(masked);
+                if masked != 0 {
+                    index = (word_index << 6_u32) | low_bit(masked);
 
-                break;
-            }
+                    Some(level)
+                } else {
+                    index = word_index;
+                    None
+                }
+            })?;
 
-            index = word_index;
-            level += 1;
-        }
-
-        while level > 0 {
-            level -= 1;
-
-            let offset = self.levels[level];
-
+        for offset in self.levels[..level].iter().copied().rev() {
             index = (index << 6_u32) | low_bit(self.words[offset + index]);
         }
 
@@ -149,21 +146,15 @@ impl<'g> SlotSet<'g> {
         self.extreme(high_bit)
     }
     fn extreme(&self, bit: impl Fn(u64) -> usize) -> Option<usize> {
-        let &offset = self.levels.last().expect("Set must be rebuilt before use");
-        let top = self.words[offset];
+        let top = self.words[*self.levels.last().expect("Set must be rebuilt before use")];
 
         if top == 0 {
             return None;
         }
 
-        let mut level = self.levels.len() - 1;
         let mut index = bit(top);
 
-        while level > 0 {
-            level -= 1;
-
-            let offset = self.levels[level];
-
+        for offset in self.levels.iter().copied().rev().skip(1) {
             index = (index << 6_u32) | bit(self.words[offset + index]);
         }
 
