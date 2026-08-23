@@ -122,6 +122,7 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K>,
+    topological: Vec<K>,
 }
 
 impl<K> IndependentLayouter<K>
@@ -133,6 +134,7 @@ where
         Self {
             spacing,
             layout: Layout2D::default(),
+            topological: Vec::new(),
         }
     }
 }
@@ -145,7 +147,10 @@ where
     S: BuildHasher + Default + Clone + 'static,
 {
     fn layout(&mut self, weave: &mut IndependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
-        self.layout.layout_independent(weave, sizes, &self.spacing);
+        weave.get_ordered_identifiers(&mut self.topological);
+
+        self.layout
+            .layout_independent(weave, sizes, &self.spacing, &mut self.topological);
     }
     fn size(&self) -> Vec2 {
         self.layout.size()

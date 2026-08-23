@@ -176,6 +176,17 @@ where
 
         index
     }
+    fn push_real_unsegmentable(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
+        let index = self.top.len() as u32;
+
+        self.sizes.push(size);
+
+        self.keys.push(key);
+        self.top.push(rank);
+        self.height = self.height.max(rank + 1);
+
+        index
+    }
     fn push_segment(&mut self, top: u32, bottom: u32) -> u32 {
         let index = self.top.len() as u32;
 
@@ -194,40 +205,243 @@ where
 
         index
     }
-    fn place_with_parents(
+}
+
+impl<K> Layout2D<K>
+where
+    K: Hash + Copy + Eq + Ord,
+{
+    pub fn layout_dependent<T, M, S, F>(
         &mut self,
-        id: K,
-        size: Vec2,
-        parents: &mut ScratchpadVec<'_, (u32, u32)>,
-        edges: &mut ScratchpadVec<'_, u32>,
-    ) -> u32 {
-        let rank = parents
-            .iter()
-            .map(|&(_, top)| top + 1)
-            .max()
-            .unwrap_or(0_u32);
+        weave: &mut DependentWeave<K, T, M, S>,
+        mut sizes: F,
+        spacing: &Spacing,
+    ) where
+        S: BuildHasher + Default + Clone,
+        F: FnMut(&K) -> Vec2,
+    {
+        assert!(weave.nodes.len() < u32::MAX as usize, "Too many nodes");
 
-        assert!(
-            self.top.len() + parents.len() < usize::try_from(u32::MAX).unwrap(),
-            "Too many vertices"
-        );
-        assert!(validate_vec2(size), "Invalid size");
+        self.clear(weave.nodes.len());
 
-        let index = self.push_real(id, rank, size);
+        let guard = weave.scratchpad.guard();
 
-        for (from_index, from_rank) in parents.drain(..) {
-            if from_rank + 1 == rank {
-                link(edges, from_index, index);
-            } else {
-                let segment = self.push_segment(from_rank + 1, rank - 1);
+        let structure = {
+            let mut edges: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
+            let mut stack = guard.vec_with_capacity(weave.nodes.len());
 
-                link(edges, from_index, segment);
-                link(edges, segment, index);
+            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX)));
+
+            while let Some((id, parent)) = stack.pop() {
+                let rank = if parent == u32::MAX {
+                    0
+                } else {
+                    self.top[parent as usize] + 1
+                };
+
+                let size = sizes(&id);
+
+                assert!(validate_vec2(size), "Invalid size");
+
+                let index = self.push_real_unsegmentable(id, rank, size);
+
+                if parent != u32::MAX {
+                    link(&mut edges, parent, index);
+                }
+
+                stack.extend(
+                    weave.nodes[&id]
+                        .to
+                        .iter()
+                        .rev()
+                        .map(|&child| (child, index)),
+                );
             }
-        }
 
-        index
+            self.prepare_structure(&guard, &edges)
+        };
+
+        self.assign_dag_coordinates(&guard, &structure, spacing);
     }
+    pub fn layout_independent<T, M, S, F>(
+        &mut self,
+        weave: &mut IndependentWeave<K, T, M, S>,
+        mut sizes: F,
+        spacing: &Spacing,
+        topological: &mut Vec<K>,
+    ) where
+        T: IndependentContents,
+        S: BuildHasher + Default + Clone,
+        F: FnMut(&K) -> Vec2,
+    {
+        assert!(weave.nodes.len() < u32::MAX as usize, "Too many nodes");
+
+        self.clear(weave.nodes.len());
+
+        let guard = weave.scratchpad.guard();
+
+        let structure = {
+            let mut edges: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
+            let mut indices = guard.map_with_capacity(weave.nodes.len(), S::default());
+            let mut parents: ScratchpadVec<'_, (u32, u32)> =
+                guard.vec_with_capacity(weave.nodes.len());
+
+            for id in topological.drain(..) {
+                for parent in &weave.nodes.get(&id).unwrap().from {
+                    let index = indices[parent];
+
+                    parents.push((index, self.top[index as usize]));
+                }
+
+                let rank = parents
+                    .iter()
+                    .map(|&(_, top)| top + 1)
+                    .max()
+                    .unwrap_or(0_u32);
+
+                let size = sizes(&id);
+
+                assert!(
+                    self.top.len() + parents.len() < u32::MAX as usize,
+                    "Too many vertices"
+                );
+                assert!(validate_vec2(size), "Invalid size");
+
+                let index = self.push_real(id, rank, size);
+
+                for (from_index, from_rank) in parents.drain(..) {
+                    if from_rank + 1 == rank {
+                        link(&mut edges, from_index, index);
+                    } else {
+                        let segment = self.push_segment(from_rank + 1, rank - 1);
+
+                        link(&mut edges, from_index, segment);
+                        link(&mut edges, segment, index);
+                    }
+                }
+
+                indices.insert(id, index);
+            }
+
+            assert_eq!(
+                weave.nodes.len(),
+                indices.len(),
+                "Malformed topological order"
+            );
+
+            self.prepare_structure(&guard, &edges)
+        };
+
+        self.assign_dag_coordinates(&guard, &structure, spacing);
+    }
+    pub fn layout_topological<W, N, T, S, F>(
+        &mut self,
+        weave: &W,
+        mut sizes: F,
+        spacing: &Spacing,
+        scratchpad: &mut Scratchpad,
+        topological: &mut Vec<K>,
+    ) where
+        W: Weave<K, N, T>,
+        K: Hash + Copy + Eq + Ord + 'static,
+        N: Node<K, T>,
+        S: BuildHasher + Default + Clone,
+        F: FnMut(&K) -> Vec2,
+        for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    {
+        assert!(weave.len() < u32::MAX as usize, "Too many nodes");
+
+        self.clear(weave.len());
+
+        let guard = scratchpad.guard();
+
+        let structure = {
+            let mut edges: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(weave.len().strict_mul(2));
+            let mut indices = guard.map_with_capacity(weave.len(), S::default());
+            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(weave.len());
+
+            for id in topological.drain(..) {
+                for parent in weave.get_parents(&id).unwrap() {
+                    let index = indices[parent];
+
+                    parents.push((index, self.top[index as usize]));
+                }
+
+                let rank = parents
+                    .iter()
+                    .map(|&(_, top)| top + 1)
+                    .max()
+                    .unwrap_or(0_u32);
+
+                let size = sizes(&id);
+
+                assert!(
+                    self.top.len() + parents.len() < u32::MAX as usize,
+                    "Too many vertices"
+                );
+                assert!(validate_vec2(size), "Invalid size");
+
+                let index = self.push_real(id, rank, size);
+
+                for (from_index, from_rank) in parents.drain(..) {
+                    if from_rank + 1 == rank {
+                        link(&mut edges, from_index, index);
+                    } else {
+                        let segment = self.push_segment(from_rank + 1, rank - 1);
+
+                        link(&mut edges, from_index, segment);
+                        link(&mut edges, segment, index);
+                    }
+                }
+
+                indices.insert(id, index);
+            }
+
+            assert_eq!(weave.len(), indices.len(), "Malformed topological order");
+
+            self.prepare_structure(&guard, &edges)
+        };
+
+        self.assign_dag_coordinates(&guard, &structure, spacing);
+    }
+}
+
+const NO_RUN: u32 = u32::MAX;
+
+struct PassScratch<'a, 'g> {
+    marked: &'a [bool],
+    marked_up: &'a [bool],
+    extent: &'a [f32],
+    leftmost_at: &'a [u32],
+    rightmost_at: &'a [u32],
+    left_offsets: &'a [u32],
+    left_runs: &'a [(u32, u32, u32)],
+    right_offsets: &'a [u32],
+    right_runs: &'a [(u32, u32, u32)],
+    left_single: &'a [u32],
+    right_single: &'a [u32],
+    merged_top_flat: &'a [u32],
+    merged_top_offsets: &'a [u32],
+    merged_bottom_flat: &'a [u32],
+    merged_bottom_offsets: &'a [u32],
+    median_entries_down: &'a [[(u32, u32); 2]],
+    median_kinds_down: &'a [u8],
+    median_entries_up: &'a [[(u32, u32); 2]],
+    median_kinds_up: &'a [u8],
+    root: &'a mut ScratchpadVec<'g, u32>,
+    align: &'a mut ScratchpadVec<'g, u32>,
+    sink: &'a mut ScratchpadVec<'g, u32>,
+    shift: &'a mut ScratchpadVec<'g, f32>,
+    stack: &'a mut ScratchpadVec<'g, (u32, u32, u32)>,
+}
+
+impl<K> Layout2D<K>
+where
+    K: Hash + Copy + Eq + Ord,
+{
     #[inline]
     fn bottom_of<const HAS_SEGMENTS: bool>(&self, vertex: usize) -> u32 {
         if HAS_SEGMENTS && self.is_segment[vertex] {
@@ -374,10 +588,7 @@ where
 
         let edge_count = edges.len() >> 1_usize;
 
-        assert!(
-            edge_count < usize::try_from(u32::MAX).unwrap(),
-            "Too many edges"
-        );
+        assert!(edge_count < u32::MAX as usize, "Too many edges");
 
         self.down_offsets.resize(count + 1, 0);
 
@@ -461,261 +672,6 @@ where
             up_flat,
         }
     }
-}
-
-impl<K> Layout2D<K>
-where
-    K: Hash + Copy + Eq + Ord,
-{
-    pub fn layout_dependent<T, M, S, F>(
-        &mut self,
-        weave: &mut DependentWeave<K, T, M, S>,
-        mut sizes: F,
-        spacing: &Spacing,
-    ) where
-        S: BuildHasher + Default + Clone,
-        F: FnMut(&K) -> Vec2,
-    {
-        assert!(
-            weave.nodes.len() < usize::try_from(u32::MAX).unwrap(),
-            "Too many nodes"
-        );
-
-        self.clear(weave.nodes.len());
-
-        let guard = weave.scratchpad.guard();
-        let mut edges: ScratchpadVec<'_, u32> =
-            guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
-
-        {
-            let mut stack = guard.vec_with_capacity(weave.nodes.len());
-
-            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX)));
-
-            while let Some((id, parent)) = stack.pop() {
-                let rank = if parent == u32::MAX {
-                    0
-                } else {
-                    self.top[parent as usize] + 1
-                };
-
-                let size = sizes(&id);
-
-                assert!(validate_vec2(size), "Invalid size");
-
-                let index = self.push_real(id, rank, size);
-
-                if parent != u32::MAX {
-                    link(&mut edges, parent, index);
-                }
-
-                stack.extend(
-                    weave.nodes[&id]
-                        .to
-                        .iter()
-                        .rev()
-                        .map(|&child| (child, index)),
-                );
-            }
-        }
-
-        let structure = self.prepare_structure(&guard, &edges);
-
-        self.assign_dag_coordinates(&guard, &structure, spacing);
-    }
-    pub fn layout_independent<T, M, S, F>(
-        &mut self,
-        weave: &mut IndependentWeave<K, T, M, S>,
-        mut sizes: F,
-        spacing: &Spacing,
-    ) where
-        T: IndependentContents,
-        S: BuildHasher + Default + Clone,
-        F: FnMut(&K) -> Vec2,
-    {
-        assert!(
-            weave.nodes.len() < usize::try_from(u32::MAX).unwrap(),
-            "Too many nodes"
-        );
-
-        self.clear(weave.nodes.len());
-
-        let guard = weave.scratchpad.guard();
-        let mut edges: ScratchpadVec<'_, u32> = guard.vec();
-
-        {
-            let count = weave.nodes.len();
-
-            let mut identifier_map = guard.map_with_capacity(count, S::default());
-            let mut keys: ScratchpadVec<'_, K> = guard.vec_with_capacity(count);
-            let mut remaining: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
-            let mut parent_offsets: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count + 1);
-            let mut child_offsets: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count + 1);
-
-            let mut parent_total = 0_u32;
-            let mut child_total = 0_u32;
-
-            parent_offsets.push(0);
-            child_offsets.push(0);
-
-            for (dense, (&id, node)) in weave.nodes.iter().enumerate() {
-                identifier_map.insert(id, dense as u32);
-                keys.push(id);
-                remaining.push(node.from.len() as u32);
-
-                parent_total = parent_total.strict_add(node.from.len() as u32);
-                child_total = child_total.strict_add(node.to.len() as u32);
-
-                parent_offsets.push(parent_total);
-                child_offsets.push(child_total);
-            }
-
-            assert!(
-                (count as u64) + u64::from(parent_total) < u64::from(u32::MAX),
-                "Too many vertices"
-            );
-
-            let reserved_items = count + parent_total as usize;
-
-            self.top.reserve(reserved_items);
-
-            edges.reserve((parent_total as usize).strict_mul(4));
-
-            let mut parent_flat: ScratchpadVec<'_, u32> =
-                guard.vec_with_capacity(parent_total as usize);
-            let mut child_flat: ScratchpadVec<'_, u32> =
-                guard.vec_with_capacity(child_total as usize);
-
-            for node in weave.nodes.values() {
-                parent_flat.extend(node.from.iter().map(|id| identifier_map[id]));
-                child_flat.extend(node.to.iter().map(|id| identifier_map[id]));
-            }
-
-            let mut vertex_of: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
-            let mut stack: ScratchpadVec<'_, u32> = guard.vec();
-            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(count);
-
-            vertex_of.resize(count, u32::MAX);
-
-            stack.extend(weave.roots.iter().rev().map(|id| identifier_map[id]));
-
-            while let Some(dense) = stack.pop() {
-                let dense = dense as usize;
-
-                for parent in bucket(&parent_flat, &parent_offsets, dense).iter().copied() {
-                    let index = vertex_of[parent as usize];
-
-                    parents.push((index, self.top[index as usize]));
-                }
-
-                let id = keys[dense];
-                let index = self.place_with_parents(id, sizes(&id), &mut parents, &mut edges);
-
-                vertex_of[dense] = index;
-
-                for child in bucket(&child_flat, &child_offsets, dense)
-                    .iter()
-                    .rev()
-                    .copied()
-                {
-                    let index = child as usize;
-
-                    remaining[index] -= 1;
-
-                    if remaining[index] == 0 {
-                        stack.push(child);
-                    }
-                }
-            }
-        }
-
-        let structure = self.prepare_structure(&guard, &edges);
-
-        self.assign_dag_coordinates(&guard, &structure, spacing);
-    }
-    pub fn layout_topological<W, N, T, S, F>(
-        &mut self,
-        weave: &W,
-        mut sizes: F,
-        spacing: &Spacing,
-        scratchpad: &mut Scratchpad,
-        topological: &mut Vec<K>,
-    ) where
-        W: Weave<K, N, T>,
-        K: Hash + Copy + Eq + Ord + 'static,
-        N: Node<K, T>,
-        S: BuildHasher + Default + Clone,
-        F: FnMut(&K) -> Vec2,
-        for<'a> &'a N::From: IntoIterator<Item = &'a K>,
-    {
-        assert!(
-            weave.len() < usize::try_from(u32::MAX).unwrap(),
-            "Too many nodes"
-        );
-
-        self.clear(weave.len());
-
-        let guard = scratchpad.guard();
-        let mut edges: ScratchpadVec<'_, u32> = guard.vec_with_capacity(weave.len().strict_mul(2));
-
-        {
-            let mut indices = guard.map_with_capacity(weave.len(), S::default());
-            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(weave.len());
-
-            for id in topological.drain(..) {
-                for parent in weave.get_parents(&id).unwrap() {
-                    let index = indices[parent];
-
-                    parents.push((index, self.top[index as usize]));
-                }
-
-                let index = self.place_with_parents(id, sizes(&id), &mut parents, &mut edges);
-
-                indices.insert(id, index);
-            }
-
-            assert_eq!(weave.len(), indices.len(), "Malformed topological order");
-        }
-
-        let structure = self.prepare_structure(&guard, &edges);
-
-        self.assign_dag_coordinates(&guard, &structure, spacing);
-    }
-}
-
-const NO_RUN: u32 = u32::MAX;
-
-struct PassScratch<'a, 'g> {
-    marked: &'a [bool],
-    marked_up: &'a [bool],
-    extent: &'a [f32],
-    leftmost_at: &'a [u32],
-    rightmost_at: &'a [u32],
-    left_offsets: &'a [u32],
-    left_runs: &'a [(u32, u32, u32)],
-    right_offsets: &'a [u32],
-    right_runs: &'a [(u32, u32, u32)],
-    left_single: &'a [u32],
-    right_single: &'a [u32],
-    merged_top_flat: &'a [u32],
-    merged_top_offsets: &'a [u32],
-    merged_bottom_flat: &'a [u32],
-    merged_bottom_offsets: &'a [u32],
-    median_entries_down: &'a [[(u32, u32); 2]],
-    median_kinds_down: &'a [u8],
-    median_entries_up: &'a [[(u32, u32); 2]],
-    median_kinds_up: &'a [u8],
-    root: &'a mut ScratchpadVec<'g, u32>,
-    align: &'a mut ScratchpadVec<'g, u32>,
-    sink: &'a mut ScratchpadVec<'g, u32>,
-    shift: &'a mut ScratchpadVec<'g, f32>,
-    stack: &'a mut ScratchpadVec<'g, (u32, u32, u32)>,
-}
-
-impl<K> Layout2D<K>
-where
-    K: Hash + Copy + Eq + Ord,
-{
     fn assign_dag_coordinates(
         &mut self,
         guard: &ScratchpadGuard<'_>,
