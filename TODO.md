@@ -44,7 +44,7 @@
 
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
     - [ ] Implement graphing using [dagre](https://crates.io/crates/dagre) or by building our own fork to improve efficiency and add functionality?
-- [ ] [micromap](https://crates.io/crates/micromap/0.3.0)-based Weave implementations (waiting on [rkyv support](https://github.com/yegor256/micromap/issues/414)) for performance-focused or memory-limited use cases where node edge limits are acceptable
+- [ ] [micromap](https://crates.io/crates/micromap/0.3.0) + [slotmap](https://crates.io/crates/slotmap/1.1.1) based Weave implementations (waiting on [rkyv support](https://github.com/yegor256/micromap/issues/414)) for performance-focused or memory-limited use cases where node edge limits are acceptable
     - Need to clearly state that this should only be used if nodes have <= ~64 edges
 
 ### Future plans
