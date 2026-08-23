@@ -229,7 +229,7 @@ where
         let structure = {
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
-            let mut stack = guard.vec_with_capacity(weave.nodes.len());
+            let mut stack = guard.vec_with_capacity(weave.roots.len());
 
             stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX)));
 
@@ -285,8 +285,7 @@ where
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
             let mut indices = guard.map_with_capacity(weave.nodes.len(), S::default());
-            let mut parents: ScratchpadVec<'_, (u32, u32)> =
-                guard.vec_with_capacity(weave.nodes.len());
+            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
                 for parent in &weave.nodes.get(&id).unwrap().from {
@@ -361,7 +360,7 @@ where
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.len().strict_mul(2));
             let mut indices = guard.map_with_capacity(weave.len(), S::default());
-            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec_with_capacity(weave.len());
+            let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
                 for parent in weave.get_parents(&id).unwrap() {
