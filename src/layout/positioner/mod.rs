@@ -1596,6 +1596,15 @@ where
         let first = self.reach_prefix.partition_point(|&reach| reach < min.y);
         let last = self.ranks_started_by(max.y);
 
+        let push_deduplicated =
+            |points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &mut Vec2| {
+                if points.last().is_none_or(|&last| last != point) {
+                    *min = min.min(point);
+                    *max = max.max(point);
+                    points.push(point);
+                }
+            };
+
         for rank in first..last {
             if self.rank_built[rank] || self.layer_ends[self.deepest[rank] as usize] < min.y {
                 continue;
@@ -1944,16 +1953,11 @@ fn shift_offsets(offsets: &mut [u32]) {
     offsets[0] = 0;
 }
 
-fn push_deduplicated(points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &mut Vec2) {
-    *min = min.min(point);
-    *max = max.max(point);
-
-    if points.last().is_none_or(|&last| last != point) {
-        points.push(point);
-    }
-}
-
 #[inline]
+#[allow(clippy::unreachable, reason = "Compiler limitation")]
 fn bucket<'a, T>(flat: &'a [T], offsets: &[u32], index: usize) -> &'a [T] {
-    &flat[offsets[index] as usize..offsets[index + 1] as usize]
+    let [left, right] = offsets[index..=index + 1] else {
+        unreachable!()
+    };
+    &flat[left as usize..right as usize]
 }
