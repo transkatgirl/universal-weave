@@ -113,6 +113,19 @@ struct Polyline {
     max: Vec2,
 }
 
+struct BuildStructure<'g> {
+    seg_top_offsets: ScratchpadVec<'g, u32>,
+    seg_top_flat: ScratchpadVec<'g, u32>,
+    seg_bottom_offsets: ScratchpadVec<'g, u32>,
+    seg_bottom_flat: ScratchpadVec<'g, u32>,
+    merged_top_offsets: ScratchpadVec<'g, u32>,
+    merged_top_flat: ScratchpadVec<'g, u32>,
+    merged_bottom_offsets: ScratchpadVec<'g, u32>,
+    merged_bottom_flat: ScratchpadVec<'g, u32>,
+    up_offsets: ScratchpadVec<'g, u32>,
+    up_flat: ScratchpadVec<'g, u32>,
+}
+
 impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
@@ -311,7 +324,7 @@ where
                 indices.insert(id, index);
             }
 
-            debug_assert_eq!(
+            assert_eq!(
                 weave.nodes.len(),
                 indices.len(),
                 "Malformed topological order"
@@ -393,19 +406,6 @@ where
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
     }
-}
-
-struct BuildStructure<'g> {
-    seg_top_offsets: ScratchpadVec<'g, u32>,
-    seg_top_flat: ScratchpadVec<'g, u32>,
-    seg_bottom_offsets: ScratchpadVec<'g, u32>,
-    seg_bottom_flat: ScratchpadVec<'g, u32>,
-    merged_top_offsets: ScratchpadVec<'g, u32>,
-    merged_top_flat: ScratchpadVec<'g, u32>,
-    merged_bottom_offsets: ScratchpadVec<'g, u32>,
-    merged_bottom_flat: ScratchpadVec<'g, u32>,
-    up_offsets: ScratchpadVec<'g, u32>,
-    up_flat: ScratchpadVec<'g, u32>,
 }
 
 const NO_RUN: u32 = u32::MAX;
