@@ -44,8 +44,11 @@
 
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
     - [ ] Implement graphing using [dagre](https://crates.io/crates/dagre) or by building our own fork to improve efficiency and add functionality?
-- [ ] [micromap](https://crates.io/crates/micromap/0.3.0) + [slotmap](https://crates.io/crates/slotmap/1.1.1) based Weave implementations (waiting on [rkyv support](https://github.com/yegor256/micromap/issues/414)) for performance-focused or memory-limited use cases where node edge limits are acceptable
-    - Need to clearly state that this should only be used if nodes have <= ~64 edges
+- [ ] For node.from / node.to / weave.bookmarked, replace IndexMap with an IndexMap/micromap hybrid which switches between the two based on item count
+    - Saves 22-40 bytes/element of memory for small collections
+    - Vec matches IndexSet for the following sizes:
+        - &lt;10-29 = nohash hasher
+        - &lt;64 = `std` hasher
 
 ### Future plans
 
