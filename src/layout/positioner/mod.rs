@@ -7,7 +7,7 @@
 #![allow(
     clippy::as_conversions,
     clippy::cast_possible_truncation,
-    reason = "cfg gate ensures usize::MAX is always >= u32::MAX; assertions ensure input len > u32::MAX"
+    reason = "cfg gate ensures usize::MAX is always >= u32::MAX; assertions ensure input len < u32::MAX"
 )]
 #![allow(
     clippy::arithmetic_side_effects,
@@ -148,6 +148,8 @@ where
         self.rank_built.clear();
     }
     fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
+        assert!(validate_vec2(size), "Invalid size");
+
         let index = self.top.len() as u32;
 
         self.sizes.push(size);
@@ -164,6 +166,8 @@ where
         index
     }
     fn push_real_unsegmentable(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
+        assert!(validate_vec2(size), "Invalid size");
+
         let index = self.top.len() as u32;
 
         self.sizes.push(size);
@@ -227,22 +231,19 @@ where
                     self.top[parent as usize] + 1
                 };
 
-                let size = sizes(&id);
-
-                assert!(validate_vec2(size), "Invalid size");
-
-                let index = self.push_real_unsegmentable(id, rank, size);
+                let index = self.push_real_unsegmentable(id, rank, sizes(&id));
 
                 if parent != u32::MAX {
-                    link(&mut edges, parent, index);
+                    edges.extend([parent, index]);
                 }
 
                 stack.extend(
                     weave.nodes[&id]
                         .to
                         .iter()
+                        .copied()
                         .rev()
-                        .map(|&child| (child, index)),
+                        .map(|child| (child, index)),
                 );
             }
 
@@ -275,11 +276,11 @@ where
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
-                for parent in &weave.nodes.get(&id).unwrap().from {
-                    let index = indices[parent];
+                parents.extend(weave.nodes[&id].from.iter().map(|id| {
+                    let index = indices[id];
 
-                    parents.push((index, self.top[index as usize]));
-                }
+                    (index, self.top[index as usize])
+                }));
 
                 let rank = parents
                     .iter()
@@ -287,24 +288,20 @@ where
                     .max()
                     .unwrap_or(0_u32);
 
-                let size = sizes(&id);
-
                 assert!(
                     self.top.len() + parents.len() < u32::MAX as usize,
                     "Too many vertices"
                 );
-                assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_real(id, rank, size);
+                let index = self.push_real(id, rank, sizes(&id));
 
                 for (from_index, from_rank) in parents.drain(..) {
                     if from_rank + 1 == rank {
-                        link(&mut edges, from_index, index);
+                        edges.extend([from_index, index]);
                     } else {
                         let segment = self.push_segment(from_rank + 1, rank - 1);
 
-                        link(&mut edges, from_index, segment);
-                        link(&mut edges, segment, index);
+                        edges.extend([from_index, segment, segment, index]);
                     }
                 }
 
@@ -350,11 +347,11 @@ where
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
-                for parent in weave.get_parents(&id).unwrap() {
-                    let index = indices[parent];
+                parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|id| {
+                    let index = indices[id];
 
-                    parents.push((index, self.top[index as usize]));
-                }
+                    (index, self.top[index as usize])
+                }));
 
                 let rank = parents
                     .iter()
@@ -362,24 +359,20 @@ where
                     .max()
                     .unwrap_or(0_u32);
 
-                let size = sizes(&id);
-
                 assert!(
                     self.top.len() + parents.len() < u32::MAX as usize,
                     "Too many vertices"
                 );
-                assert!(validate_vec2(size), "Invalid size");
 
-                let index = self.push_real(id, rank, size);
+                let index = self.push_real(id, rank, sizes(&id));
 
                 for (from_index, from_rank) in parents.drain(..) {
                     if from_rank + 1 == rank {
-                        link(&mut edges, from_index, index);
+                        edges.extend([from_index, index]);
                     } else {
                         let segment = self.push_segment(from_rank + 1, rank - 1);
 
-                        link(&mut edges, from_index, segment);
-                        link(&mut edges, segment, index);
+                        edges.extend([from_index, segment, segment, index]);
                     }
                 }
 
@@ -1941,12 +1934,6 @@ fn scan_medians<'g>(
     }
 
     (entries, kinds)
-}
-
-#[inline]
-fn link(edges: &mut ScratchpadVec<'_, u32>, from: u32, to: u32) {
-    edges.push(from);
-    edges.push(to);
 }
 
 fn push_deduplicated(points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &mut Vec2) {
