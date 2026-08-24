@@ -46,8 +46,9 @@
     - [ ] Implement graphing using [dagre](https://crates.io/crates/dagre) or by building our own fork to improve efficiency and add functionality?
 - [ ] For node.from / node.to / weave.bookmarked, replace IndexMap with an IndexMap/micromap hybrid which switches between the two based on item count
     - Saves 22-40 bytes/element of memory for small collections
-    - Vec matches IndexSet for the following sizes:
-        - &lt;10-29 = nohash hasher
+    - Vec::contains() roughly matches IndexSet::contains() for the following sizes:
+        - &lt;16 = nohash
+        - &lt;24 = foldhash
         - &lt;64 = `std` hasher
 
 ### Future plans
