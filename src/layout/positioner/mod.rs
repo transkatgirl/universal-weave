@@ -284,29 +284,27 @@ where
 
                 let rank = parents
                     .iter()
-                    .map(|&(_, top)| top + 1)
+                    .map(|(_, top)| *top)
                     .max()
-                    .unwrap_or(0_u32);
-
-                assert!(
-                    self.top.len() + parents.len() < u32::MAX as usize,
-                    "Too many vertices"
-                );
+                    .map_or_default(|r| r + 1);
 
                 let index = self.push_real(id, rank, sizes(&id));
+                indices.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
-                    if from_rank + 1 == rank {
+                    let next_from_rank = from_rank + 1;
+
+                    if next_from_rank == rank {
                         edges.extend([from_index, index]);
                     } else {
-                        let segment = self.push_segment(from_rank + 1, rank - 1);
+                        let segment = self.push_segment(next_from_rank, rank - 1);
 
                         edges.extend([from_index, segment, segment, index]);
                     }
                 }
-
-                indices.insert(id, index);
             }
+
+            assert!(self.top.len() < u32::MAX as usize, "Too many vertices");
 
             debug_assert_eq!(
                 weave.nodes.len(),
@@ -355,29 +353,27 @@ where
 
                 let rank = parents
                     .iter()
-                    .map(|&(_, top)| top + 1)
+                    .map(|(_, top)| *top)
                     .max()
-                    .unwrap_or(0_u32);
-
-                assert!(
-                    self.top.len() + parents.len() < u32::MAX as usize,
-                    "Too many vertices"
-                );
+                    .map_or_default(|r| r + 1);
 
                 let index = self.push_real(id, rank, sizes(&id));
+                indices.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
-                    if from_rank + 1 == rank {
+                    let next_from_rank = from_rank + 1;
+
+                    if next_from_rank == rank {
                         edges.extend([from_index, index]);
                     } else {
-                        let segment = self.push_segment(from_rank + 1, rank - 1);
+                        let segment = self.push_segment(next_from_rank, rank - 1);
 
                         edges.extend([from_index, segment, segment, index]);
                     }
                 }
-
-                indices.insert(id, index);
             }
+
+            assert!(self.top.len() < u32::MAX as usize, "Too many vertices");
 
             assert_eq!(weave.len(), indices.len(), "Malformed topological order");
 
