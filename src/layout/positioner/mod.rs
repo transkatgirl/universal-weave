@@ -384,9 +384,7 @@ where
     }
 }
 
-const NO_RUN: u32 = u32::MAX;
-
-struct BuildStructure<'g> {
+struct CSRScratch<'g> {
     seg_top_offsets: ScratchpadVec<'g, u32>,
     seg_top_flat: ScratchpadVec<'g, u32>,
     seg_bottom_offsets: ScratchpadVec<'g, u32>,
@@ -434,17 +432,8 @@ where
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
         mut edges: ScratchpadVec<'g, u32>,
-    ) -> BuildStructure<'g> {
-        let height_usize = self.height as usize;
-
-        self.polyline_ranges.resize(height_usize, (0_u32, 0_u32));
-        self.rank_built.resize(height_usize, false);
-        self.polyline_bounds
-            .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
-        self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
-
+    ) -> CSRScratch<'g> {
         let ranks = self.height as usize + 1;
-        let has_segments = !self.is_segment.is_empty();
 
         self.real_offsets.resize(ranks, 0);
 
@@ -454,6 +443,7 @@ where
         let mut merged_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
 
         let count = self.top.len();
+        let has_segments = !self.is_segment.is_empty();
 
         if has_segments {
             seg_top_offsets.resize(ranks, 0);
@@ -487,37 +477,12 @@ where
             }
         }
 
-        let real_total = self.real_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
+        let real_total = offsets_from_counts(&mut self.real_offsets);
+        let segment_total = offsets_from_counts(&mut seg_top_offsets);
 
-            *offset = total;
-            total + len
-        }) as usize;
-        let segment_total = seg_top_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        }) as usize;
-
-        seg_bottom_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        });
-        merged_top_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        });
-        merged_bottom_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        });
+        offsets_from_counts(&mut seg_bottom_offsets);
+        offsets_from_counts(&mut merged_top_offsets);
+        offsets_from_counts(&mut merged_bottom_offsets);
 
         self.real_flat.resize(real_total, 0);
 
@@ -611,18 +576,8 @@ where
             up_offsets[target] += 1;
         }
 
-        self.down_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        });
-        up_offsets.iter_mut().fold(0, |total, offset| {
-            let len = *offset;
-
-            *offset = total;
-            total + len
-        });
+        offsets_from_counts(&mut self.down_offsets);
+        offsets_from_counts(&mut up_offsets);
 
         self.down_flat.resize(edge_count, 0);
 
@@ -676,7 +631,15 @@ where
 
         shift_offsets(&mut up_offsets);
 
-        BuildStructure {
+        let height_usize = self.height as usize;
+
+        self.polyline_ranges.resize(height_usize, (0_u32, 0_u32));
+        self.rank_built.resize(height_usize, false);
+        self.polyline_bounds
+            .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
+        self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
+
+        CSRScratch {
             seg_top_offsets,
             seg_top_flat,
             seg_bottom_offsets,
@@ -692,7 +655,7 @@ where
     fn assign_dag_coordinates(
         &mut self,
         guard: &ScratchpadGuard<'_>,
-        structure: &BuildStructure<'_>,
+        structure: &CSRScratch<'_>,
         spacing: &Spacing,
     ) {
         if self.is_segment.is_empty() {
@@ -705,7 +668,7 @@ where
     fn assign_dag_coordinates_impl<const HAS_SEGMENTS: bool>(
         &mut self,
         guard: &ScratchpadGuard<'_>,
-        structure: &BuildStructure<'_>,
+        structure: &CSRScratch<'_>,
         spacing: &Spacing,
     ) {
         const PASSES: [(bool, bool); 4] =
@@ -1023,18 +986,8 @@ where
                 left_offsets[right as usize] += 1;
             }
 
-            left_offsets.iter_mut().fold(0, |total, offset| {
-                let len = *offset;
-
-                *offset = total;
-                total + len
-            });
-            right_offsets.iter_mut().fold(0, |total, offset| {
-                let len = *offset;
-
-                *offset = total;
-                total + len
-            });
+            offsets_from_counts(&mut left_offsets);
+            offsets_from_counts(&mut right_offsets);
 
             for (left, right, start, end) in closed_runs.iter().copied() {
                 let cursor = right_offsets[left as usize];
@@ -1978,6 +1931,19 @@ fn scan_medians<'g>(
     (entries, kinds)
 }
 
+fn offsets_from_counts(offsets: &mut [u32]) -> usize {
+    offsets.iter_mut().fold(0, |total, offset| {
+        let ret = total + *offset;
+        *offset = total;
+        ret
+    }) as usize
+}
+
+fn shift_offsets(offsets: &mut [u32]) {
+    offsets.copy_within(0..offsets.len() - 1, 1);
+    offsets[0] = 0;
+}
+
 fn push_deduplicated(points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &mut Vec2) {
     *min = min.min(point);
     *max = max.max(point);
@@ -1985,13 +1951,6 @@ fn push_deduplicated(points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &
     if points.last().is_none_or(|&last| last != point) {
         points.push(point);
     }
-}
-
-fn shift_offsets(offsets: &mut [u32]) {
-    let last = offsets.len() - 1;
-
-    offsets.copy_within(0..last, 1);
-    offsets[0] = 0;
 }
 
 #[inline]
