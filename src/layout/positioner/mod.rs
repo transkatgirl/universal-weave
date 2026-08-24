@@ -113,19 +113,6 @@ struct Polyline {
     max: Vec2,
 }
 
-struct BuildStructure<'g> {
-    seg_top_offsets: ScratchpadVec<'g, u32>,
-    seg_top_flat: ScratchpadVec<'g, u32>,
-    seg_bottom_offsets: ScratchpadVec<'g, u32>,
-    seg_bottom_flat: ScratchpadVec<'g, u32>,
-    merged_top_offsets: ScratchpadVec<'g, u32>,
-    merged_top_flat: ScratchpadVec<'g, u32>,
-    merged_bottom_offsets: ScratchpadVec<'g, u32>,
-    merged_bottom_flat: ScratchpadVec<'g, u32>,
-    up_offsets: ScratchpadVec<'g, u32>,
-    up_flat: ScratchpadVec<'g, u32>,
-}
-
 impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
@@ -259,7 +246,7 @@ where
                 );
             }
 
-            self.prepare_structure(&guard, &edges)
+            self.prepare_structure(&guard, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -324,13 +311,13 @@ where
                 indices.insert(id, index);
             }
 
-            assert_eq!(
+            debug_assert_eq!(
                 weave.nodes.len(),
                 indices.len(),
                 "Malformed topological order"
             );
 
-            self.prepare_structure(&guard, &edges)
+            self.prepare_structure(&guard, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -401,7 +388,7 @@ where
 
             assert_eq!(weave.len(), indices.len(), "Malformed topological order");
 
-            self.prepare_structure(&guard, &edges)
+            self.prepare_structure(&guard, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -409,6 +396,19 @@ where
 }
 
 const NO_RUN: u32 = u32::MAX;
+
+struct BuildStructure<'g> {
+    seg_top_offsets: ScratchpadVec<'g, u32>,
+    seg_top_flat: ScratchpadVec<'g, u32>,
+    seg_bottom_offsets: ScratchpadVec<'g, u32>,
+    seg_bottom_flat: ScratchpadVec<'g, u32>,
+    merged_top_offsets: ScratchpadVec<'g, u32>,
+    merged_top_flat: ScratchpadVec<'g, u32>,
+    merged_bottom_offsets: ScratchpadVec<'g, u32>,
+    merged_bottom_flat: ScratchpadVec<'g, u32>,
+    up_offsets: ScratchpadVec<'g, u32>,
+    up_flat: ScratchpadVec<'g, u32>,
+}
 
 struct PassScratch<'a, 'g> {
     marked: &'a [bool],
@@ -452,7 +452,7 @@ where
     fn prepare_structure<'g>(
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
-        edges: &[u32],
+        mut edges: ScratchpadVec<'g, u32>,
     ) -> BuildStructure<'g> {
         let height_usize = self.height as usize;
 
@@ -597,7 +597,7 @@ where
 
         let (pairs, _) = edges.as_chunks::<2>();
 
-        for &[source, target] in pairs {
+        for [source, target] in pairs.iter().copied() {
             let (source, target) = (source as usize, target as usize);
 
             self.down_offsets[source] += 1;
@@ -611,7 +611,7 @@ where
 
         self.deepest.extend(0..self.height);
 
-        for &[source, target] in pairs {
+        for [source, target] in pairs.iter().copied() {
             let source = source as usize;
             let cursor = self.down_offsets[source];
 
@@ -633,7 +633,8 @@ where
 
         shift_offsets(&mut self.down_offsets);
 
-        let mut up_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(edge_count);
+        edges.clear();
+        let mut up_flat = edges;
 
         up_flat.resize(edge_count, 0);
 
