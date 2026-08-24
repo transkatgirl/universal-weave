@@ -103,7 +103,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct Polyline {
     source: u32,
     target: u32,
@@ -430,14 +430,6 @@ impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
 {
-    #[inline]
-    fn bottom_of<const HAS_SEGMENTS: bool>(&self, vertex: usize) -> u32 {
-        if HAS_SEGMENTS && self.is_segment[vertex] {
-            self.bottom[vertex]
-        } else {
-            self.top[vertex]
-        }
-    }
     fn prepare_structure<'g>(
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
@@ -451,7 +443,6 @@ where
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
 
-        let count = self.top.len();
         let ranks = self.height as usize + 1;
         let has_segments = !self.is_segment.is_empty();
 
@@ -461,6 +452,8 @@ where
         let mut seg_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
         let mut merged_top_offsets: ScratchpadVec<'g, u32> = guard.vec();
         let mut merged_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
+
+        let count = self.top.len();
 
         if has_segments {
             seg_top_offsets.resize(ranks, 0);
@@ -494,12 +487,37 @@ where
             }
         }
 
-        let real_total = exclusive_prefix_sum(&mut self.real_offsets);
-        let segment_total = exclusive_prefix_sum(&mut seg_top_offsets);
+        let real_total = self.real_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
 
-        exclusive_prefix_sum(&mut seg_bottom_offsets);
-        exclusive_prefix_sum(&mut merged_top_offsets);
-        exclusive_prefix_sum(&mut merged_bottom_offsets);
+            *offset = total;
+            total + len
+        }) as usize;
+        let segment_total = seg_top_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        }) as usize;
+
+        seg_bottom_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        });
+        merged_top_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        });
+        merged_bottom_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        });
 
         self.real_flat.resize(real_total, 0);
 
@@ -593,8 +611,18 @@ where
             up_offsets[target] += 1;
         }
 
-        exclusive_prefix_sum(&mut self.down_offsets);
-        exclusive_prefix_sum(&mut up_offsets);
+        self.down_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        });
+        up_offsets.iter_mut().fold(0, |total, offset| {
+            let len = *offset;
+
+            *offset = total;
+            total + len
+        });
 
         self.down_flat.resize(edge_count, 0);
 
@@ -995,8 +1023,18 @@ where
                 left_offsets[right as usize] += 1;
             }
 
-            exclusive_prefix_sum(&mut left_offsets);
-            exclusive_prefix_sum(&mut right_offsets);
+            left_offsets.iter_mut().fold(0, |total, offset| {
+                let len = *offset;
+
+                *offset = total;
+                total + len
+            });
+            right_offsets.iter_mut().fold(0, |total, offset| {
+                let len = *offset;
+
+                *offset = total;
+                total + len
+            });
 
             for (left, right, start, end) in closed_runs.iter().copied() {
                 let cursor = right_offsets[left as usize];
@@ -1013,13 +1051,13 @@ where
             shift_offsets(&mut left_offsets);
             shift_offsets(&mut right_offsets);
         } else {
-            left_single.resize(count, NO_RUN);
-            right_single.resize(count, NO_RUN);
+            left_single.resize(count, u32::MAX);
+            right_single.resize(count, u32::MAX);
 
             for rank in 0..height_usize {
                 let layer = bucket(&self.real_flat, &self.real_offsets, rank);
 
-                for (&left, &right) in layer.iter().zip(layer.iter().skip(1)) {
+                for (left, right) in layer.iter().copied().zip(layer.iter().copied().skip(1)) {
                     right_single[left as usize] = right;
                     left_single[right as usize] = left;
                 }
@@ -1124,7 +1162,7 @@ where
 
         let mut cursor = 0.0_f32;
 
-        for (rank, &tallest) in rank_tallest.iter().enumerate() {
+        for (rank, tallest) in rank_tallest.iter().copied().enumerate() {
             let start = if rank == 0 {
                 0.0_f32
             } else {
@@ -1248,7 +1286,7 @@ where
             if HAS_SEGMENTS {
                 runs.len()
             } else {
-                usize::from(runs_single[vertex] != NO_RUN)
+                usize::from(runs_single[vertex] != u32::MAX)
             }
         };
         let run_neighbour = |runs: &[(u32, u32, u32)], vertex: usize, run: usize| {
@@ -1437,8 +1475,10 @@ where
 
             let entry_rank = if DOWNWARD {
                 self.top[entry]
+            } else if HAS_SEGMENTS && self.is_segment[entry] {
+                self.bottom[entry]
             } else {
-                self.bottom_of::<HAS_SEGMENTS>(entry)
+                self.top[entry]
             } as usize;
 
             if rank != entry_rank {
@@ -1499,7 +1539,11 @@ where
                 }
 
                 let across = if DOWNWARD {
-                    self.bottom_of::<HAS_SEGMENTS>(vertex)
+                    if HAS_SEGMENTS && self.is_segment[vertex] {
+                        self.bottom[vertex]
+                    } else {
+                        self.top[vertex]
+                    }
                 } else {
                     self.top[vertex]
                 } as usize;
@@ -1519,7 +1563,7 @@ where
                 } else {
                     let neighbour = across_single[vertex];
 
-                    (neighbour != NO_RUN).then_some(neighbour)
+                    (neighbour != u32::MAX).then_some(neighbour)
                 };
 
                 let Some(next) = next else {
@@ -1774,11 +1818,12 @@ where
         let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
         let last = self.ranks_started_by(max.y);
 
-        for ((&(range_start, range_end), &(rank_min, rank_max)), &(left_reach, right_reach)) in self
+        for (((range_start, range_end), (rank_min, rank_max)), (left_reach, right_reach)) in self
             .polyline_ranges[first_reaching..last.max(first_reaching)]
             .iter()
-            .zip(&self.polyline_bounds[first_reaching..])
-            .zip(&self.polyline_reach[first_reaching..])
+            .copied()
+            .zip(self.polyline_bounds[first_reaching..].iter().copied())
+            .zip(self.polyline_reach[first_reaching..].iter().copied())
         {
             if !(rank_min.x <= max.x
                 && rank_max.x >= min.x
@@ -1794,7 +1839,7 @@ where
                 self.polyline_points[line.start as usize].x < min.x - right_reach
             });
 
-            for line in &lines[begin..] {
+            for line in lines[begin..].iter().copied() {
                 if self.polyline_points[line.start as usize].x - left_reach > max.x {
                     break;
                 }
@@ -1830,10 +1875,11 @@ where
     ) where
         F: FnMut(LayoutItem<'a, K, Vec2>),
     {
-        for (rank, ((&start, &end), &half_width)) in self.real_offsets[first..last.max(first)]
+        for (rank, ((start, end), half_width)) in self.real_offsets[first..last.max(first)]
             .iter()
-            .zip(&self.real_offsets[first + 1..])
-            .zip(&self.rank_half_width[first..])
+            .copied()
+            .zip(self.real_offsets[first + 1..].iter().copied())
+            .zip(self.rank_half_width[first..].iter().copied())
             .enumerate()
         {
             let rank = rank + first;
@@ -1894,7 +1940,7 @@ fn scan_medians<'g>(
     let mut entries: ScratchpadVec<'g, [(u32, u32); 2]> = guard.vec_with_capacity(count);
     let mut kinds: ScratchpadVec<'g, u8> = guard.vec_with_capacity(count);
 
-    for (&base, &next) in offsets.iter().zip(offsets.iter().skip(1)) {
+    for (base, next) in offsets.iter().copied().zip(offsets.iter().copied().skip(1)) {
         let degree = next - base;
 
         if degree == 0 {
@@ -1946,19 +1992,6 @@ fn shift_offsets(offsets: &mut [u32]) {
 
     offsets.copy_within(0..last, 1);
     offsets[0] = 0;
-}
-
-fn exclusive_prefix_sum(offsets: &mut [u32]) -> usize {
-    let mut total = 0_u32;
-
-    for offset in offsets {
-        let len = *offset;
-
-        *offset = total;
-        total += len;
-    }
-
-    total as usize
 }
 
 #[inline]
