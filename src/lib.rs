@@ -506,7 +506,6 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
-    V: 'static,
 {
     /// Arranges a [`Weave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///
@@ -645,7 +644,6 @@ where
     W: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
-    V: 'static,
 {
     /// Arranges an [`ImmutableWeave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///
