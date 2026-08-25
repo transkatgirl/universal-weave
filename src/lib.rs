@@ -174,6 +174,8 @@ pub enum DiscreteContentResult<T> {
 /// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
 pub trait IndependentContents {}
 
+impl IndependentContents for () {}
+
 /// [`Node`] contents which can be meaningfully deduplicated.
 ///
 /// Deduplication must be symmetric: `a.is_duplicate_of(b)` implies `b.is_duplicate_of(a)`.
