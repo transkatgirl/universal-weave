@@ -21,7 +21,7 @@ use core::hash::{BuildHasher, Hash};
 use alloc::vec::Vec;
 use glam::Vec2;
 use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadVec};
-use tinyvec::{ArrayVec, array_vec};
+use tinyvec::ArrayVec;
 
 use crate::{
     IndependentContents, LayoutItem, Node, Weave,
@@ -52,8 +52,10 @@ where
     layer_gap: f32,
     size: Vec2,
     polylines: Vec<(u32, u32)>,
+    polyline_source_x: Vec<f32>,
     polyline_segments: Vec<(u32, f32, u32)>,
     polyline_offsets: Vec<u32>,
+    polyline_segment_offsets: Vec<u32>,
     polyline_bounds: Vec<(Vec2, Vec2)>,
     polyline_reach: Vec<(f32, f32)>,
     polyline_block_bounds: Vec<(Vec2, Vec2)>,
@@ -76,8 +78,10 @@ where
             layer_gap: 0.0_f32,
             size: Vec2::ZERO,
             polylines: Vec::new(),
+            polyline_source_x: Vec::new(),
             polyline_segments: Vec::new(),
             polyline_offsets: Vec::new(),
+            polyline_segment_offsets: Vec::new(),
             polyline_bounds: Vec::new(),
             polyline_reach: Vec::new(),
             polyline_block_bounds: Vec::new(),
@@ -110,8 +114,10 @@ where
         self.layer_ends.clear();
         self.size = Vec2::ZERO;
         self.polylines.clear();
+        self.polyline_source_x.clear();
         self.polyline_segments.clear();
         self.polyline_offsets.clear();
+        self.polyline_segment_offsets.clear();
         self.polyline_bounds.clear();
         self.polyline_reach.clear();
         self.polyline_block_bounds.clear();
@@ -456,24 +462,33 @@ where
         if HAS_SEGMENTS {
             seg_top_offsets.resize(ranks, 0);
             seg_bottom_offsets.resize(ranks, 0);
-            merged_top_offsets.resize(ranks, 0);
-            merged_bottom_offsets.resize(ranks, 0);
 
             for (top, bottom) in top.iter().copied().zip(bottom.iter().copied()) {
                 let segment = top & SEG_BIT != 0;
                 let top = (top & RANK_MASK) as usize;
-                let bottom = if segment { bottom as usize } else { top };
 
                 if segment {
                     seg_top_offsets[top] += 1;
-                    seg_bottom_offsets[bottom] += 1;
+                    seg_bottom_offsets[bottom as usize] += 1;
                 } else {
                     self.real_offsets[top] += 1;
                 }
-
-                merged_top_offsets[top] += 1;
-                merged_bottom_offsets[bottom] += 1;
             }
+
+            merged_top_offsets.extend(
+                self.real_offsets
+                    .iter()
+                    .copied()
+                    .zip(seg_top_offsets.iter().copied())
+                    .map(|(real, seg)| real + seg),
+            );
+            merged_bottom_offsets.extend(
+                self.real_offsets
+                    .iter()
+                    .copied()
+                    .zip(seg_bottom_offsets.iter().copied())
+                    .map(|(real, seg)| real + seg),
+            );
         } else {
             for top in top.iter().copied() {
                 self.real_offsets[top as usize] += 1;
@@ -627,6 +642,7 @@ where
         let height_usize = self.height as usize;
 
         self.polyline_offsets.resize(height_usize + 1, 0);
+        self.polyline_segment_offsets.resize(height_usize + 1, 0);
         self.polyline_bounds
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
@@ -1669,6 +1685,7 @@ where
         let edge_count = down_flat.len() - segment_count;
 
         self.polylines.reserve(edge_count);
+        self.polyline_source_x.reserve(edge_count);
 
         if HAS_SEGMENTS {
             self.polyline_segments.reserve(segment_count);
@@ -1738,10 +1755,12 @@ where
 
                     self.polylines
                         .push((source_position as u32, target_position as u32));
+                    self.polyline_source_x.push(source_x);
                 }
             }
 
             self.polyline_offsets[rank + 1] = self.polylines.len() as u32;
+            self.polyline_segment_offsets[rank + 1] = self.polyline_segments.len() as u32;
             self.polyline_bounds[rank] = (rank_min, rank_max);
             self.polyline_reach[rank] = (left_reach, right_reach);
         }
@@ -1794,12 +1813,9 @@ where
                     (self.polyline_offsets[rank], self.polyline_offsets[rank + 1]);
                 let (left_reach, right_reach) = self.polyline_reach[rank];
 
-                let lines = &self.polylines[range_start as usize..range_end as usize];
-
                 let begin = range_start as usize
-                    + lines.partition_point(|line| {
-                        self.x_coordinates[line.0 as usize] < min.x - right_reach
-                    });
+                    + self.polyline_source_x[range_start as usize..range_end as usize]
+                        .partition_point(|&x| x < min.x - right_reach);
 
                 let rank_center = self.layer_center(rank);
                 let source_band_end = self.layer_ends[rank];
@@ -1809,13 +1825,15 @@ where
                     (0.0_f32, 0.0_f32)
                 };
 
-                let mut segment_cursor = self
-                    .polyline_segments
-                    .partition_point(|&(polyline, _, _)| (polyline as usize) < begin);
+                let segment_start = self.polyline_segment_offsets[rank] as usize;
+                let segment_end = self.polyline_segment_offsets[rank + 1] as usize;
+                let mut segment_cursor = segment_start
+                    + self.polyline_segments[segment_start..segment_end]
+                        .partition_point(|&(polyline, _, _)| (polyline as usize) < begin);
 
                 for index in begin..range_end as usize {
                     let line = self.polylines[index];
-                    let source_x = self.x_coordinates[line.0 as usize];
+                    let source_x = self.polyline_source_x[index];
 
                     if source_x - left_reach > max.x {
                         break;
@@ -1926,6 +1944,7 @@ where
     }
 }
 
+#[inline]
 fn line_points(
     first: Vec2,
     source_band_end: f32,
@@ -1933,34 +1952,47 @@ fn line_points(
     last: Vec2,
     target_band_start: f32,
 ) -> ArrayVec<[Vec2; 6]> {
-    let mut points = array_vec!([Vec2; 6] => first);
+    let mut points = [Vec2::ZERO; 6];
+    let mut len = 1;
 
-    let mut push_deduplicated = |point: Vec2| {
-        if points.last() != Some(&point) {
-            points.push(point);
-        }
-    };
+    points[0] = first;
 
     if source_band_end > first.y {
-        push_deduplicated(Vec2::new(first.x, source_band_end));
+        points[len] = Vec2::new(first.x, source_band_end);
+        len += 1;
     }
 
     if let Some((x, span_start, span_end)) = segment {
-        push_deduplicated(Vec2::new(x, span_start));
-        push_deduplicated(Vec2::new(x, span_end));
+        let point = Vec2::new(x, span_start);
+
+        if points[len - 1] != point {
+            points[len] = point;
+            len += 1;
+        }
+
+        let point = Vec2::new(x, span_end);
+
+        if points[len - 1] != point {
+            points[len] = point;
+            len += 1;
+        }
     }
 
     if target_band_start < last.y {
-        push_deduplicated(Vec2::new(last.x, target_band_start));
+        let point = Vec2::new(last.x, target_band_start);
+
+        if points[len - 1] != point {
+            points[len] = point;
+            len += 1;
+        }
     }
 
-    push_deduplicated(last);
-
-    if points.len() == 1 {
-        points.push(last);
+    if points[len - 1] != last || len == 1 {
+        points[len] = last;
+        len += 1;
     }
 
-    points
+    ArrayVec::from_array_len(points, len)
 }
 
 #[inline]
