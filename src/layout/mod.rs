@@ -37,9 +37,9 @@ pub struct Spacing {
     pub node: f32,
     /// Gap between layers of nodes.
     pub layer: f32,
-    /// Gap between edges.
+    /// Reserved space for edges.
     pub corridor: f32,
-    /// Gap between an edge and a node.
+    /// Gap between edges and adjacent items.
     pub edge: f32,
 }
 
@@ -48,8 +48,8 @@ impl Default for Spacing {
         Self {
             node: 16.0,
             layer: 16.0,
-            corridor: 8.0,
-            edge: 4.0,
+            corridor: 0.0,
+            edge: 8.0,
         }
     }
 }
