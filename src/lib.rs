@@ -171,6 +171,15 @@ pub enum DiscreteContentResult<T> {
     Two(T, T),
 }
 
+impl DiscreteContents for () {
+    fn split(self, _at: usize) -> DiscreteContentResult<Self> {
+        DiscreteContentResult::Two((), ())
+    }
+    fn merge(self, _value: Self) -> DiscreteContentResult<Self> {
+        DiscreteContentResult::One(())
+    }
+}
+
 /// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
 pub trait IndependentContents {}
 
