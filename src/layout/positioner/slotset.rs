@@ -17,7 +17,7 @@ impl<'g> SlotSet<'g> {
         self.words.clear();
         self.levels.clear();
 
-        let mut total = 0_usize;
+        let mut total = 0;
         let mut below = len;
 
         loop {

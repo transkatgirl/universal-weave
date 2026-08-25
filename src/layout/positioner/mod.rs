@@ -35,11 +35,6 @@ use crate::{
 
 mod slotset;
 
-const SEG_BIT: u32 = 1 << 31_u32;
-const RANK_MASK: u32 = SEG_BIT - 1;
-const VIEW_BLOCK_SHIFT: u32 = 6;
-const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
-
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct Layout2D<K>
@@ -57,7 +52,7 @@ where
     layer_ends: Vec<f32>,
     layer_gap: f32,
     size: Vec2,
-    polylines: Vec<Polyline>,
+    polylines: Vec<(u32, u32)>,
     polyline_segments: Vec<(u32, f32, u32)>,
     polyline_offsets: Vec<u32>,
     polyline_bounds: Vec<(Vec2, Vec2)>,
@@ -93,11 +88,10 @@ where
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct Polyline {
-    source: u32,
-    target: u32,
-}
+const SEG_BIT: u32 = 1 << 31_u32;
+const RANK_MASK: u32 = SEG_BIT - 1;
+const VIEW_BLOCK_SHIFT: u32 = 6;
+const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
 
 impl<K> Layout2D<K>
 where
@@ -212,12 +206,11 @@ where
 
         let structure = {
             let mut top: ScratchpadVec<'_, u32> = guard.vec_with_capacity(weave.nodes.len());
-            let bottom: ScratchpadVec<'_, u32> = guard.vec();
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
             let mut stack = guard.vec_with_capacity(weave.roots.len());
 
-            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX, 0_u32)));
+            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX, 0)));
 
             while let Some((id, parent, rank)) = stack.pop() {
                 let index = self.push_real_unsegmentable(&mut top, id, rank, sizes(&id));
@@ -226,17 +219,19 @@ where
                     edges.extend([parent, index]);
                 }
 
+                let next_rank = rank + 1;
+
                 stack.extend(
                     weave.nodes[&id]
                         .to
                         .iter()
                         .copied()
                         .rev()
-                        .map(|child| (child, index, rank + 1)),
+                        .map(|child| (child, index, next_rank)),
                 );
             }
 
-            self.prepare_structure(&guard, top, bottom, edges)
+            self.prepare_structure(&guard, top, guard.vec(), edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -259,7 +254,7 @@ where
         let guard = weave.scratchpad.guard();
 
         let structure = {
-            let edge_total: usize = weave.nodes.values().map(|node| node.from.len()).sum();
+            let edge_total = weave.nodes.values().map(|node| node.from.len()).sum();
 
             let mut top: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.nodes.len().strict_add(edge_total));
@@ -631,7 +626,7 @@ where
 
         let height_usize = self.height as usize;
 
-        self.polyline_offsets.resize(height_usize + 1, 0_u32);
+        self.polyline_offsets.resize(height_usize + 1, 0);
         self.polyline_bounds
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
@@ -761,8 +756,8 @@ where
         let mut leftmost_at = guard.vec_with_capacity(height_usize);
         let mut rightmost_at = guard.vec_with_capacity(height_usize);
 
-        leftmost_at.resize(height_usize, 0_u32);
-        rightmost_at.resize(height_usize, 0_u32);
+        leftmost_at.resize(height_usize, 0);
+        rightmost_at.resize(height_usize, 0);
 
         let mut closed_runs = if HAS_SEGMENTS {
             guard.vec_with_capacity(count.strict_mul(3))
@@ -776,7 +771,7 @@ where
 
             let mut open_run_start = guard.vec_with_capacity(count);
 
-            open_run_start.resize(count, 0_u32);
+            open_run_start.resize(count, 0);
 
             let mut active = SlotSet::new(guard);
             let mut spanning = SlotSet::new(guard);
@@ -977,10 +972,10 @@ where
         if HAS_SEGMENTS {
             let total_runs = closed_runs.len();
 
-            left_offsets.resize(count + 1, 0_u32);
-            right_offsets.resize(count + 1, 0_u32);
-            left_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
-            right_runs.resize(total_runs, (0_u32, 0_u32, 0_u32));
+            left_offsets.resize(count + 1, 0);
+            right_offsets.resize(count + 1, 0);
+            left_runs.resize(total_runs, (0, 0, 0));
+            right_runs.resize(total_runs, (0, 0, 0));
 
             for (left, right, _, _) in closed_runs.iter().copied() {
                 right_offsets[left as usize] += 1;
@@ -1058,9 +1053,9 @@ where
             self.coordinate_pass::<false, false, HAS_SEGMENTS>(&mut scratch, spacing, &mut fourth),
         ];
 
-        let mut best = 0_usize;
+        let mut best = 0;
 
-        for pass in 1..4_usize {
+        for pass in 1..4 {
             if extents[pass].1 - extents[pass].0 < extents[best].1 - extents[best].0 {
                 best = pass;
             }
@@ -1301,11 +1296,9 @@ where
                 let stored = &medians[vertex];
                 let (entries, distinct) = match stored.kind {
                     MEDIAN_NONE => return,
-                    MEDIAN_SINGLE => (stored.entries, 1_usize),
-                    MEDIAN_ORDERED if !LEFTWARD => {
-                        ([stored.entries[1], stored.entries[0]], 2_usize)
-                    }
-                    _ => (stored.entries, 2_usize),
+                    MEDIAN_SINGLE => (stored.entries, 1),
+                    MEDIAN_ORDERED if !LEFTWARD => ([stored.entries[1], stored.entries[0]], 2),
+                    _ => (stored.entries, 2),
                 };
 
                 for (neighbour, position) in entries[..distinct].iter().copied() {
@@ -1353,7 +1346,7 @@ where
 
             x[start] = 0.0_f32;
 
-            let mut frame = (narrowed, narrowed, 0_u32);
+            let mut frame = (narrowed, narrowed, 0);
 
             loop {
                 let (root_val, member, runs_applied) = frame;
@@ -1376,7 +1369,7 @@ where
                         stack.push(frame);
 
                         x[neighbour_root as usize] = 0.0_f32;
-                        frame = (neighbour_root, neighbour_root, 0_u32);
+                        frame = (neighbour_root, neighbour_root, 0);
 
                         nested = true;
                         break;
@@ -1422,7 +1415,7 @@ where
 
                     frame = parent;
                 } else {
-                    frame = (root_val, next, 0_u32);
+                    frame = (root_val, next, 0);
                 }
             }
         };
@@ -1710,10 +1703,8 @@ where
                             .push((self.polylines.len() as u32, seg_x, seg_last));
                     }
 
-                    self.polylines.push(Polyline {
-                        source: source_ordinal as u32,
-                        target: target_ordinal as u32,
-                    });
+                    self.polylines
+                        .push((source_ordinal as u32, target_ordinal as u32));
                 }
             }
 
@@ -1774,7 +1765,7 @@ where
 
                 let begin = range_start as usize
                     + lines.partition_point(|line| {
-                        self.x_coordinates[line.source as usize] < min.x - right_reach
+                        self.x_coordinates[line.0 as usize] < min.x - right_reach
                     });
 
                 let rank_center = self.layer_center(rank);
@@ -1791,13 +1782,13 @@ where
 
                 for index in begin..range_end as usize {
                     let line = self.polylines[index];
-                    let source_x = self.x_coordinates[line.source as usize];
+                    let source_x = self.x_coordinates[line.0 as usize];
 
                     if source_x - left_reach > max.x {
                         break;
                     }
 
-                    let target_x = self.x_coordinates[line.target as usize];
+                    let target_x = self.x_coordinates[line.1 as usize];
                     let segment_info = match self.polyline_segments.get(segment_cursor) {
                         Some(&(polyline, seg_x, seg_last)) if polyline as usize == index => {
                             segment_cursor += 1;
@@ -1816,7 +1807,7 @@ where
                         (source_x.min(target_x), source_x.max(target_x))
                     };
 
-                    let source_border = rank_center + self.sizes[line.source as usize].y * 0.5_f32;
+                    let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5_f32;
                     let (target_center, target_band_start) =
                         if let Some((_, seg_last)) = segment_info {
                             let target_rank = seg_last as usize + 1;
@@ -1828,8 +1819,7 @@ where
                         } else {
                             (next_center, next_band_start)
                         };
-                    let target_border =
-                        target_center - self.sizes[line.target as usize].y * 0.5_f32;
+                    let target_border = target_center - self.sizes[line.1 as usize].y * 0.5_f32;
 
                     if line_min_x <= max.x
                         && line_max_x >= min.x
@@ -1841,8 +1831,8 @@ where
                         });
 
                         callback(LayoutItem::Polyline {
-                            from: self.keys[line.source as usize],
-                            to: self.keys[line.target as usize],
+                            from: self.keys[line.0 as usize],
+                            to: self.keys[line.1 as usize],
                             points: line_points(
                                 Vec2::new(source_x, source_border),
                                 source_band_end,
@@ -1973,7 +1963,7 @@ fn scan_medians<'g>(
 
         if degree == 0 {
             medians.push(Medians {
-                entries: [(0_u32, 0_u32); 2],
+                entries: [(0, 0); 2],
                 kind: MEDIAN_NONE,
             });
             continue;
