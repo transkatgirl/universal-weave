@@ -46,7 +46,6 @@ where
     height: u32,
 
     real_offsets: Vec<u32>,
-    real_flat: Vec<u32>,
     rank_half_width: Vec<f32>,
     x_coordinates: Vec<f32>,
     layer_ends: Vec<f32>,
@@ -71,7 +70,6 @@ where
             sizes: Vec::new(),
             height: 0,
             real_offsets: Vec::new(),
-            real_flat: Vec::new(),
             rank_half_width: Vec::new(),
             x_coordinates: Vec::new(),
             layer_ends: Vec::new(),
@@ -105,7 +103,6 @@ where
         self.height = 0;
 
         self.real_offsets.clear();
-        self.real_flat.clear();
 
         self.rank_half_width.clear();
 
@@ -379,6 +376,7 @@ where
 struct LayoutCSR<'g> {
     top: ScratchpadVec<'g, u32>,
     bottom: ScratchpadVec<'g, u32>,
+    real_flat: ScratchpadVec<'g, u32>,
     down_offsets: ScratchpadVec<'g, u32>,
     down_flat: ScratchpadVec<'g, u32>,
     deepest: ScratchpadVec<'g, u32>,
@@ -488,12 +486,13 @@ where
         ends_from_counts(&mut merged_top_offsets);
         ends_from_counts(&mut merged_bottom_offsets);
 
+        let mut real_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(real_total);
         let mut seg_top_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
         let mut seg_bottom_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
         let mut merged_top_flat: ScratchpadVec<'g, u32> = guard.vec();
         let mut merged_bottom_flat: ScratchpadVec<'g, u32> = guard.vec();
 
-        self.real_flat.resize(real_total, 0);
+        real_flat.resize(real_total, 0);
         seg_top_flat.resize(segment_total, 0);
         seg_bottom_flat.resize(segment_total, 0);
 
@@ -527,7 +526,7 @@ where
                     let cursor = &mut self.real_offsets[top];
 
                     *cursor -= 1;
-                    self.real_flat[*cursor as usize] = index;
+                    real_flat[*cursor as usize] = index;
                 }
 
                 let cursor = &mut merged_top_offsets[top];
@@ -546,7 +545,7 @@ where
                 let cursor = &mut self.real_offsets[top];
 
                 *cursor -= 1;
-                self.real_flat[*cursor as usize] = index as u32;
+                real_flat[*cursor as usize] = index as u32;
             }
         }
 
@@ -608,7 +607,7 @@ where
         let ordered: &[u32] = if HAS_SEGMENTS {
             &merged_bottom_flat
         } else {
-            &self.real_flat
+            &real_flat
         };
 
         for source in ordered.iter().copied().rev() {
@@ -635,6 +634,7 @@ where
         LayoutCSR {
             top,
             bottom,
+            real_flat,
             down_offsets,
             down_flat,
             deepest,
@@ -742,7 +742,7 @@ where
         let (merged_top_flat, merged_top_offsets): (&[u32], &[u32]) = if HAS_SEGMENTS {
             (&structure.merged_top_flat, &structure.merged_top_offsets)
         } else {
-            (&self.real_flat, &self.real_offsets)
+            (&structure.real_flat, &self.real_offsets)
         };
         let (merged_bottom_flat, merged_bottom_offsets): (&[u32], &[u32]) = if HAS_SEGMENTS {
             (
@@ -750,7 +750,7 @@ where
                 &structure.merged_bottom_offsets,
             )
         } else {
-            (&self.real_flat, &self.real_offsets)
+            (&structure.real_flat, &self.real_offsets)
         };
 
         let mut marked: ScratchpadVec<'_, bool> = guard.vec();
@@ -912,7 +912,7 @@ where
             }
         } else {
             for rank in 0..height_usize {
-                let layer = bucket(&self.real_flat, &self.real_offsets, rank);
+                let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
 
                 leftmost_at[rank] = layer[0];
                 rightmost_at[rank] = *layer.last().unwrap();
@@ -1002,7 +1002,7 @@ where
             right_single.resize(count, u32::MAX);
 
             for rank in 0..height_usize {
-                let layer = bucket(&self.real_flat, &self.real_offsets, rank);
+                let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
 
                 for (left, right) in layer.iter().copied().zip(layer.iter().copied().skip(1)) {
                     right_single[left as usize] = right;
@@ -1144,29 +1144,61 @@ where
 
         assert!(valid, "Output is not normal and positive");
 
-        if !structure.down_flat.is_empty() {
-            self.build_polylines::<HAS_SEGMENTS>(
-                &structure.top,
-                &structure.down_offsets,
-                &structure.down_flat,
-                &structure.bottom,
-                &fourth,
-            );
-        }
+        let ordinal_of = |vertex: u32| {
+            let vertex = vertex as usize;
+
+            if HAS_SEGMENTS {
+                structure.bottom[vertex] as usize
+            } else {
+                vertex
+            }
+        };
 
         self.x_coordinates.clear();
-        self.x_coordinates.resize(self.keys.len(), 0.0_f32);
+        self.x_coordinates.extend(
+            structure
+                .real_flat
+                .iter()
+                .copied()
+                .map(|vertex| fourth[vertex as usize]),
+        );
 
-        for slot in &mut self.real_flat {
-            let vertex = *slot as usize;
-            let ordinal = if HAS_SEGMENTS {
-                structure.bottom[vertex]
-            } else {
-                *slot
-            };
+        {
+            let mut permuted_keys: ScratchpadVec<'_, K> = guard.vec_with_capacity(self.keys.len());
 
-            self.x_coordinates[ordinal as usize] = fourth[vertex];
-            *slot = ordinal;
+            permuted_keys.extend(
+                structure
+                    .real_flat
+                    .iter()
+                    .copied()
+                    .map(|vertex| self.keys[ordinal_of(vertex)]),
+            );
+            self.keys.copy_from_slice(&permuted_keys);
+        }
+        {
+            let mut permuted_sizes: ScratchpadVec<'_, Vec2> =
+                guard.vec_with_capacity(self.sizes.len());
+
+            permuted_sizes.extend(
+                structure
+                    .real_flat
+                    .iter()
+                    .copied()
+                    .map(|vertex| self.sizes[ordinal_of(vertex)]),
+            );
+            self.sizes.copy_from_slice(&permuted_sizes);
+        }
+
+        if !structure.down_flat.is_empty() {
+            let mut position_of: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
+
+            position_of.resize(count, 0);
+
+            for (position, vertex) in structure.real_flat.iter().copied().enumerate() {
+                position_of[vertex as usize] = position as u32;
+            }
+
+            self.build_polylines::<HAS_SEGMENTS>(structure, &position_of, &fourth);
         }
 
         self.polyline_block_bounds.clear();
@@ -1620,12 +1652,19 @@ where
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn build_polylines<const HAS_SEGMENTS: bool>(
         &mut self,
-        top: &[u32],
-        down_offsets: &[u32],
-        down_flat: &[u32],
-        bottom: &[u32],
+        structure: &LayoutCSR<'_>,
+        position_of: &[u32],
         x_coordinates: &[f32],
     ) {
+        let LayoutCSR {
+            top,
+            bottom,
+            real_flat,
+            down_offsets,
+            down_flat,
+            ..
+        } = structure;
+
         let segment_count = top.len() - self.keys.len();
         let edge_count = down_flat.len() - segment_count;
 
@@ -1649,19 +1688,12 @@ where
                 0.0_f32
             };
 
-            for source in bucket(&self.real_flat, &self.real_offsets, rank)
-                .iter()
-                .copied()
-            {
+            for source in bucket(real_flat, &self.real_offsets, rank).iter().copied() {
                 let source = source as usize;
-                let source_ordinal = if HAS_SEGMENTS {
-                    bottom[source] as usize
-                } else {
-                    source
-                };
+                let source_position = position_of[source] as usize;
 
                 let source_x = x_coordinates[source];
-                let source_border = rank_center + self.sizes[source_ordinal].y * 0.5_f32;
+                let source_border = rank_center + self.sizes[source_position].y * 0.5_f32;
 
                 for target in bucket(down_flat, down_offsets, source).iter().copied() {
                     let target = target as usize;
@@ -1673,11 +1705,7 @@ where
                     } else {
                         (target, None)
                     };
-                    let target_ordinal = if HAS_SEGMENTS {
-                        bottom[real_target] as usize
-                    } else {
-                        real_target
-                    };
+                    let target_position = position_of[real_target] as usize;
                     let target_top = (top[real_target] & RANK_MASK) as usize;
 
                     let target_center = if target_top == next_rank {
@@ -1687,7 +1715,7 @@ where
                     };
 
                     let target_x = x_coordinates[real_target];
-                    let target_border = target_center - self.sizes[target_ordinal].y * 0.5_f32;
+                    let target_border = target_center - self.sizes[target_position].y * 0.5_f32;
 
                     let (min_x, max_x) = if let Some((seg_x, _)) = segment {
                         (
@@ -1709,7 +1737,7 @@ where
                     }
 
                     self.polylines
-                        .push((source_ordinal as u32, target_ordinal as u32));
+                        .push((source_position as u32, target_position as u32));
                 }
             }
 
@@ -1868,17 +1896,19 @@ where
             .enumerate()
         {
             let rank = rank + first;
-            let reals = &self.real_flat[start as usize..end as usize];
+            let (start, end) = (start as usize, end as usize);
             let y = self.layer_center(rank);
 
             let cutoff = min.x - half_width;
-            let begin =
-                reals.partition_point(|&ordinal| self.x_coordinates[ordinal as usize] < cutoff);
+            let begin = start + self.x_coordinates[start..end].partition_point(|&x| x < cutoff);
 
-            for ordinal in reals[begin..].iter().copied() {
-                let ordinal = ordinal as usize;
-                let center = Vec2::new(self.x_coordinates[ordinal], y);
-                let size = self.sizes[ordinal];
+            for ((x, size), id) in self.x_coordinates[begin..end]
+                .iter()
+                .copied()
+                .zip(self.sizes[begin..end].iter().copied())
+                .zip(self.keys[begin..end].iter().copied())
+            {
+                let center = Vec2::new(x, y);
                 let half = size * 0.5_f32;
 
                 if center.x - half.x > max.x {
@@ -1889,11 +1919,7 @@ where
                     && center.y - half.y <= max.y
                     && center.y + half.y >= min.y
                 {
-                    callback(LayoutItem::Node {
-                        id: self.keys[ordinal],
-                        center,
-                        size,
-                    });
+                    callback(LayoutItem::Node { id, center, size });
                 }
             }
         }
