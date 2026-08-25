@@ -94,6 +94,9 @@ pub use indexmap;
 #[cfg(feature = "layout")]
 pub use glam;
 
+#[cfg(feature = "layout")]
+pub use tinyvec;
+
 #[cfg(feature = "rkyv")]
 pub use rkyv;
 
@@ -472,7 +475,7 @@ where
 
 /// A geometric item within an arrangement of a Weave's content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum LayoutItem<'a, K, V> {
+pub enum LayoutItem<K, V, P> {
     /// Computed geometry for a [`Node`].
     Node {
         /// Node identifier.
@@ -489,7 +492,7 @@ pub enum LayoutItem<'a, K, V> {
         /// Child node where the connection ends.
         to: K,
         /// Points for a polyline routed between the two nodes.
-        points: &'a [V],
+        points: P,
     },
 }
 
@@ -498,7 +501,7 @@ pub enum LayoutItem<'a, K, V> {
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter and Weave in a malformed state unless otherwise specified by the implementation.
-pub trait Layouter<W, K, N, T, V>
+pub trait Layouter<W, K, N, T, V, P>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
@@ -516,7 +519,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<'a>(&'a mut self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
+    fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 /// A read-only [`Weave`].
@@ -637,7 +640,7 @@ where
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
-pub trait ImmutableLayouter<W, K, N, T, V>
+pub trait ImmutableLayouter<W, K, N, T, V, P>
 where
     W: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
@@ -655,7 +658,7 @@ where
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view<'a>(&'a mut self, min: V, max: V, callback: impl FnMut(LayoutItem<'a, K, V>));
+    fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

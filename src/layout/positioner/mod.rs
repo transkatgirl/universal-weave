@@ -16,15 +16,12 @@
 
 // TODO: Substantial clean-up work
 
-use core::{
-    hash::{BuildHasher, Hash},
-    mem,
-};
+use core::hash::{BuildHasher, Hash};
 
 use alloc::vec::Vec;
-use bitvec::{slice::BitSlice, vec::BitVec};
 use glam::Vec2;
 use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadVec};
+use tinyvec::{ArrayVec, array_vec};
 
 use crate::{
     IndependentContents, LayoutItem, Node, Weave,
@@ -38,6 +35,11 @@ use crate::{
 
 mod slotset;
 
+const SEG_BIT: u32 = 1 << 31_u32;
+const RANK_MASK: u32 = SEG_BIT - 1;
+const VIEW_BLOCK_SHIFT: u32 = 6;
+const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
+
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct Layout2D<K>
@@ -46,28 +48,22 @@ where
 {
     keys: Vec<K>,
     sizes: Vec<Vec2>,
-    is_segment: BitVec,
-    top: Vec<u32>,
-    bottom: Vec<u32>,
     height: u32,
 
     real_offsets: Vec<u32>,
     real_flat: Vec<u32>,
-    down_offsets: Vec<u32>,
-    down_flat: Vec<u32>,
     rank_half_width: Vec<f32>,
     x_coordinates: Vec<f32>,
     layer_ends: Vec<f32>,
     layer_gap: f32,
-    deepest: Vec<u32>,
     size: Vec2,
-    polyline_points: Vec<Vec2>,
     polylines: Vec<Polyline>,
-    polyline_ranges: Vec<(u32, u32)>,
+    polyline_segments: Vec<(u32, f32, u32)>,
+    polyline_offsets: Vec<u32>,
     polyline_bounds: Vec<(Vec2, Vec2)>,
     polyline_reach: Vec<(f32, f32)>,
+    polyline_block_bounds: Vec<(Vec2, Vec2)>,
     reach_prefix: Vec<f32>,
-    rank_built: BitVec,
 }
 
 impl<K> Default for Layout2D<K>
@@ -78,27 +74,21 @@ where
         Self {
             keys: Vec::new(),
             sizes: Vec::new(),
-            is_segment: BitVec::new(),
-            top: Vec::new(),
-            bottom: Vec::new(),
             height: 0,
             real_offsets: Vec::new(),
             real_flat: Vec::new(),
-            down_offsets: Vec::new(),
-            down_flat: Vec::new(),
             rank_half_width: Vec::new(),
             x_coordinates: Vec::new(),
             layer_ends: Vec::new(),
             layer_gap: 0.0_f32,
-            deepest: Vec::new(),
             size: Vec2::ZERO,
-            polyline_points: Vec::new(),
             polylines: Vec::new(),
-            polyline_ranges: Vec::new(),
+            polyline_segments: Vec::new(),
+            polyline_offsets: Vec::new(),
             polyline_bounds: Vec::new(),
             polyline_reach: Vec::new(),
+            polyline_block_bounds: Vec::new(),
             reach_prefix: Vec::new(),
-            rank_built: BitVec::new(),
         }
     }
 }
@@ -107,10 +97,6 @@ where
 struct Polyline {
     source: u32,
     target: u32,
-    start: u32,
-    end: u32,
-    min: Vec2,
-    max: Vec2,
 }
 
 impl<K> Layout2D<K>
@@ -122,77 +108,84 @@ where
         self.keys.reserve(reserved_nodes);
         self.sizes.clear();
         self.sizes.reserve(reserved_nodes);
-        self.is_segment.clear();
-        self.top.clear();
-        self.top.reserve(reserved_nodes);
-        self.bottom.clear();
         self.height = 0;
 
         self.real_offsets.clear();
         self.real_flat.clear();
-        self.down_offsets.clear();
-        self.down_flat.clear();
 
         self.rank_half_width.clear();
 
         self.x_coordinates.clear();
         self.layer_ends.clear();
-        self.deepest.clear();
         self.size = Vec2::ZERO;
-        self.polyline_points.clear();
         self.polylines.clear();
-        self.polyline_ranges.clear();
+        self.polyline_segments.clear();
+        self.polyline_offsets.clear();
         self.polyline_bounds.clear();
         self.polyline_reach.clear();
+        self.polyline_block_bounds.clear();
         self.reach_prefix.clear();
-        self.rank_built.clear();
     }
-    fn push_real(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
+    fn push_real(
+        &mut self,
+        top: &mut ScratchpadVec<'_, u32>,
+        bottom: &mut ScratchpadVec<'_, u32>,
+        key: K,
+        rank: u32,
+        size: Vec2,
+    ) -> u32 {
         assert!(validate_vec2(size), "Invalid size");
 
-        let index = self.top.len() as u32;
+        let index = top.len() as u32;
 
         self.sizes.push(size);
 
-        if !self.is_segment.is_empty() {
-            self.is_segment.push(false);
-            self.bottom.push(self.keys.len() as u32);
+        if !bottom.is_empty() {
+            bottom.push(self.keys.len() as u32);
         }
 
         self.keys.push(key);
-        self.top.push(rank);
+        top.push(rank);
         self.height = self.height.max(rank + 1);
 
         index
     }
-    fn push_real_unsegmentable(&mut self, key: K, rank: u32, size: Vec2) -> u32 {
+    fn push_real_unsegmentable(
+        &mut self,
+        top: &mut ScratchpadVec<'_, u32>,
+        key: K,
+        rank: u32,
+        size: Vec2,
+    ) -> u32 {
         assert!(validate_vec2(size), "Invalid size");
 
-        let index = self.top.len() as u32;
+        let index = top.len() as u32;
 
         self.sizes.push(size);
 
         self.keys.push(key);
-        self.top.push(rank);
+        top.push(rank);
         self.height = self.height.max(rank + 1);
 
         index
     }
-    fn push_segment(&mut self, top: u32, bottom: u32) -> u32 {
-        let index = self.top.len() as u32;
+    fn push_segment(
+        &mut self,
+        top: &mut ScratchpadVec<'_, u32>,
+        bottom: &mut ScratchpadVec<'_, u32>,
+        first: u32,
+        last: u32,
+    ) -> u32 {
+        let index = top.len() as u32;
 
-        if self.is_segment.is_empty() {
-            self.is_segment.reserve(self.top.capacity());
-            self.bottom.reserve(self.top.capacity());
-
-            self.is_segment.resize(self.top.len(), false);
-            self.bottom.extend(0..index);
+        if bottom.is_empty() {
+            bottom.reserve(top.capacity());
+            bottom.extend(0..index);
         }
 
-        self.is_segment.push(true);
-        self.top.push(top);
-        self.bottom.push(bottom);
-        self.height = self.height.max(bottom + 1);
+        top.push(first | SEG_BIT);
+        bottom.push(last);
+        self.height = self.height.max(last + 1);
 
         index
     }
@@ -211,27 +204,23 @@ where
         S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
     {
-        assert!(weave.nodes.len() < u32::MAX as usize, "Too many nodes");
+        assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
         self.clear(weave.nodes.len());
 
         let guard = weave.scratchpad.guard();
 
         let structure = {
+            let mut top: ScratchpadVec<'_, u32> = guard.vec_with_capacity(weave.nodes.len());
+            let bottom: ScratchpadVec<'_, u32> = guard.vec();
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
             let mut stack = guard.vec_with_capacity(weave.roots.len());
 
-            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX)));
+            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX, 0_u32)));
 
-            while let Some((id, parent)) = stack.pop() {
-                let rank = if parent == u32::MAX {
-                    0
-                } else {
-                    self.top[parent as usize] + 1
-                };
-
-                let index = self.push_real_unsegmentable(id, rank, sizes(&id));
+            while let Some((id, parent, rank)) = stack.pop() {
+                let index = self.push_real_unsegmentable(&mut top, id, rank, sizes(&id));
 
                 if parent != u32::MAX {
                     edges.extend([parent, index]);
@@ -243,11 +232,11 @@ where
                         .iter()
                         .copied()
                         .rev()
-                        .map(|child| (child, index)),
+                        .map(|child| (child, index, rank + 1)),
                 );
             }
 
-            self.prepare_structure(&guard, edges)
+            self.prepare_structure(&guard, top, bottom, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -263,15 +252,20 @@ where
         S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
     {
-        assert!(weave.nodes.len() < u32::MAX as usize, "Too many nodes");
+        assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
         self.clear(weave.nodes.len());
 
         let guard = weave.scratchpad.guard();
 
         let structure = {
+            let edge_total: usize = weave.nodes.values().map(|node| node.from.len()).sum();
+
+            let mut top: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(weave.nodes.len().strict_add(edge_total));
+            let mut bottom: ScratchpadVec<'_, u32> = guard.vec();
             let mut edges: ScratchpadVec<'_, u32> =
-                guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
+                guard.vec_with_capacity(edge_total.strict_mul(4));
             let mut indices = guard.map_with_capacity(weave.nodes.len(), S::default());
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
@@ -279,7 +273,7 @@ where
                 parents.extend(weave.nodes[&id].from.iter().map(|id| {
                     let index = indices[id];
 
-                    (index, self.top[index as usize])
+                    (index, rank_top(&top, index as usize))
                 }));
 
                 let rank = parents
@@ -288,7 +282,7 @@ where
                     .max()
                     .map_or_default(|r| r + 1);
 
-                let index = self.push_real(id, rank, sizes(&id));
+                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
                 indices.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
@@ -297,14 +291,15 @@ where
                     if next_from_rank == rank {
                         edges.extend([from_index, index]);
                     } else {
-                        let segment = self.push_segment(next_from_rank, rank - 1);
+                        let segment =
+                            self.push_segment(&mut top, &mut bottom, next_from_rank, rank - 1);
 
                         edges.extend([from_index, segment, segment, index]);
                     }
                 }
             }
 
-            assert!(self.top.len() < u32::MAX as usize, "Too many vertices");
+            assert!(top.len() < u32::MAX as usize, "Too many vertices");
 
             debug_assert_eq!(
                 weave.nodes.len(),
@@ -312,7 +307,7 @@ where
                 "Malformed topological order"
             );
 
-            self.prepare_structure(&guard, edges)
+            self.prepare_structure(&guard, top, bottom, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -332,15 +327,18 @@ where
         F: FnMut(&K) -> Vec2,
         for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     {
-        assert!(weave.len() < u32::MAX as usize, "Too many nodes");
+        assert!(weave.len() < SEG_BIT as usize, "Too many nodes");
 
         self.clear(weave.len());
 
         let guard = scratchpad.guard();
 
         let structure = {
-            let mut edges: ScratchpadVec<'_, u32> =
+            let mut top: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.len().strict_mul(2));
+            let mut bottom: ScratchpadVec<'_, u32> = guard.vec();
+            let mut edges: ScratchpadVec<'_, u32> =
+                guard.vec_with_capacity(weave.len().strict_mul(4));
             let mut indices = guard.map_with_capacity(weave.len(), S::default());
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
@@ -348,7 +346,7 @@ where
                 parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|id| {
                     let index = indices[id];
 
-                    (index, self.top[index as usize])
+                    (index, rank_top(&top, index as usize))
                 }));
 
                 let rank = parents
@@ -357,7 +355,7 @@ where
                     .max()
                     .map_or_default(|r| r + 1);
 
-                let index = self.push_real(id, rank, sizes(&id));
+                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
                 indices.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
@@ -366,18 +364,19 @@ where
                     if next_from_rank == rank {
                         edges.extend([from_index, index]);
                     } else {
-                        let segment = self.push_segment(next_from_rank, rank - 1);
+                        let segment =
+                            self.push_segment(&mut top, &mut bottom, next_from_rank, rank - 1);
 
                         edges.extend([from_index, segment, segment, index]);
                     }
                 }
             }
 
-            assert!(self.top.len() < u32::MAX as usize, "Too many vertices");
+            assert!(top.len() < u32::MAX as usize, "Too many vertices");
 
             assert_eq!(weave.len(), indices.len(), "Malformed topological order");
 
-            self.prepare_structure(&guard, edges)
+            self.prepare_structure(&guard, top, bottom, edges)
         };
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
@@ -385,6 +384,11 @@ where
 }
 
 struct LayoutCSR<'g> {
+    top: ScratchpadVec<'g, u32>,
+    bottom: ScratchpadVec<'g, u32>,
+    down_offsets: ScratchpadVec<'g, u32>,
+    down_flat: ScratchpadVec<'g, u32>,
+    deepest: ScratchpadVec<'g, u32>,
     seg_top_offsets: ScratchpadVec<'g, u32>,
     seg_top_flat: ScratchpadVec<'g, u32>,
     seg_bottom_offsets: ScratchpadVec<'g, u32>,
@@ -398,6 +402,8 @@ struct LayoutCSR<'g> {
 }
 
 struct PassScratch<'a, 'g> {
+    top: &'a [u32],
+    bottom: &'a [u32],
     marked: &'a [bool],
     marked_up: &'a [bool],
     extent: &'a [f32],
@@ -413,10 +419,8 @@ struct PassScratch<'a, 'g> {
     merged_top_offsets: &'a [u32],
     merged_bottom_flat: &'a [u32],
     merged_bottom_offsets: &'a [u32],
-    median_entries_down: &'a [[(u32, u32); 2]],
-    median_kinds_down: &'a [u8],
-    median_entries_up: &'a [[(u32, u32); 2]],
-    median_kinds_up: &'a [u8],
+    medians_down: &'a [Medians],
+    medians_up: &'a [Medians],
     root: &'a mut ScratchpadVec<'g, u32>,
     align: &'a mut ScratchpadVec<'g, u32>,
     sink: &'a mut ScratchpadVec<'g, u32>,
@@ -431,20 +435,24 @@ where
     fn prepare_structure<'g>(
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
+        top: ScratchpadVec<'g, u32>,
+        bottom: ScratchpadVec<'g, u32>,
         edges: ScratchpadVec<'g, u32>,
     ) -> LayoutCSR<'g> {
-        if self.is_segment.is_empty() {
-            self.prepare_structure_inner::<false>(guard, edges)
+        if bottom.is_empty() {
+            self.prepare_structure_inner::<false>(guard, top, bottom, edges)
         } else {
-            self.prepare_structure_inner::<true>(guard, edges)
+            self.prepare_structure_inner::<true>(guard, top, bottom, edges)
         }
     }
     fn prepare_structure_inner<'g, const HAS_SEGMENTS: bool>(
         &mut self,
         guard: &'g ScratchpadGuard<'_>,
+        top: ScratchpadVec<'g, u32>,
+        bottom: ScratchpadVec<'g, u32>,
         mut edges: ScratchpadVec<'g, u32>,
     ) -> LayoutCSR<'g> {
-        let count = self.top.len();
+        let count = top.len();
         let ranks = self.height as usize + 1;
 
         self.real_offsets.resize(ranks, 0);
@@ -460,14 +468,9 @@ where
             merged_top_offsets.resize(ranks, 0);
             merged_bottom_offsets.resize(ranks, 0);
 
-            for ((segment, top), bottom) in self
-                .is_segment
-                .iter()
-                .by_vals()
-                .zip(self.top.iter().copied())
-                .zip(self.bottom.iter().copied())
-            {
-                let top = top as usize;
+            for (top, bottom) in top.iter().copied().zip(bottom.iter().copied()) {
+                let segment = top & SEG_BIT != 0;
+                let top = (top & RANK_MASK) as usize;
                 let bottom = if segment { bottom as usize } else { top };
 
                 if segment {
@@ -481,16 +484,16 @@ where
                 merged_bottom_offsets[bottom] += 1;
             }
         } else {
-            for top in self.top.iter().copied() {
+            for top in top.iter().copied() {
                 self.real_offsets[top as usize] += 1;
             }
         }
 
-        let real_total = offsets_from_counts(&mut self.real_offsets);
-        let segment_total = offsets_from_counts(&mut seg_top_offsets);
-        offsets_from_counts(&mut seg_bottom_offsets);
-        offsets_from_counts(&mut merged_top_offsets);
-        offsets_from_counts(&mut merged_bottom_offsets);
+        let real_total = ends_from_counts(&mut self.real_offsets);
+        let segment_total = ends_from_counts(&mut seg_top_offsets);
+        ends_from_counts(&mut seg_bottom_offsets);
+        ends_from_counts(&mut merged_top_offsets);
+        ends_from_counts(&mut merged_bottom_offsets);
 
         let mut seg_top_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
         let mut seg_bottom_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
@@ -505,65 +508,57 @@ where
             merged_top_flat.resize(count, 0);
             merged_bottom_flat.resize(count, 0);
 
-            for (index, ((segment, top), bottom)) in self
-                .is_segment
+            for (index, (top, bottom)) in top
                 .iter()
-                .by_vals()
-                .zip(self.top.iter().copied())
-                .zip(self.bottom.iter().copied())
+                .copied()
+                .zip(bottom.iter().copied())
                 .enumerate()
+                .rev()
             {
                 let index = index as u32;
-                let top = top as usize;
+                let segment = top & SEG_BIT != 0;
+                let top = (top & RANK_MASK) as usize;
                 let bottom = if segment { bottom as usize } else { top };
 
                 if segment {
                     let cursor = &mut seg_top_offsets[top];
 
+                    *cursor -= 1;
                     seg_top_flat[*cursor as usize] = index;
-                    *cursor += 1;
 
                     let cursor = &mut seg_bottom_offsets[bottom];
 
+                    *cursor -= 1;
                     seg_bottom_flat[*cursor as usize] = index;
-                    *cursor += 1;
                 } else {
                     let cursor = &mut self.real_offsets[top];
 
+                    *cursor -= 1;
                     self.real_flat[*cursor as usize] = index;
-                    *cursor += 1;
                 }
 
                 let cursor = &mut merged_top_offsets[top];
 
+                *cursor -= 1;
                 merged_top_flat[*cursor as usize] = index;
-                *cursor += 1;
 
                 let cursor = &mut merged_bottom_offsets[bottom];
 
+                *cursor -= 1;
                 merged_bottom_flat[*cursor as usize] = index;
-                *cursor += 1;
             }
         } else {
-            for (index, top) in self.top.iter().copied().enumerate() {
+            for (index, top) in top.iter().copied().enumerate().rev() {
                 let top = top as usize;
                 let cursor = &mut self.real_offsets[top];
 
+                *cursor -= 1;
                 self.real_flat[*cursor as usize] = index as u32;
-                *cursor += 1;
             }
         }
 
-        shift_offsets(&mut self.real_offsets);
-
-        if HAS_SEGMENTS {
-            shift_offsets(&mut seg_top_offsets);
-            shift_offsets(&mut seg_bottom_offsets);
-            shift_offsets(&mut merged_top_offsets);
-            shift_offsets(&mut merged_bottom_offsets);
-        }
-
-        self.down_offsets.resize(count + 1, 0);
+        let mut down_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(count + 1);
+        down_offsets.resize(count + 1, 0);
 
         let mut up_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(count + 1);
         up_offsets.resize(count + 1, 0);
@@ -573,41 +568,41 @@ where
         for [source, target] in pairs.iter().copied() {
             let (source, target) = (source as usize, target as usize);
 
-            self.down_offsets[source] += 1;
+            down_offsets[source] += 1;
             up_offsets[target] += 1;
         }
 
-        offsets_from_counts(&mut self.down_offsets);
-        offsets_from_counts(&mut up_offsets);
+        ends_from_counts(&mut down_offsets);
+        ends_from_counts(&mut up_offsets);
 
         let edge_count = edges.len() >> 1_usize;
         assert!(edge_count < u32::MAX as usize, "Too many edges");
 
-        self.down_flat.resize(edge_count, 0);
+        let mut down_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(edge_count);
+        down_flat.resize(edge_count, 0);
 
-        self.deepest.extend(0..self.height);
+        let mut deepest: ScratchpadVec<'g, u32> = guard.vec_with_capacity(self.height as usize);
+        deepest.extend(0..self.height);
 
-        for [source, target] in pairs.iter().copied() {
+        for [source, target] in pairs.iter().copied().rev() {
             let source = source as usize;
-            let cursor = self.down_offsets[source];
+            let cursor = down_offsets[source] - 1;
 
-            self.down_flat[cursor as usize] = target;
-            self.down_offsets[source] = cursor + 1;
+            down_flat[cursor as usize] = target;
+            down_offsets[source] = cursor;
 
-            if !HAS_SEGMENTS || !self.is_segment[source] {
+            if !HAS_SEGMENTS || !is_seg(&top, source) {
                 let target = target as usize;
-                let child = if HAS_SEGMENTS && self.is_segment[target] {
-                    self.bottom[target] + 1
+                let child = if HAS_SEGMENTS && is_seg(&top, target) {
+                    bottom[target] + 1
                 } else {
-                    self.top[target]
+                    rank_top(&top, target)
                 };
-                let rank = self.top[source] as usize;
+                let rank = rank_top(&top, source) as usize;
 
-                self.deepest[rank] = self.deepest[rank].max(child);
+                deepest[rank] = deepest[rank].max(child);
             }
         }
-
-        shift_offsets(&mut self.down_offsets);
 
         edges.clear();
         let mut up_flat = edges;
@@ -620,30 +615,33 @@ where
             &self.real_flat
         };
 
-        for source in ordered.iter().copied() {
-            for target in bucket(&self.down_flat, &self.down_offsets, source as usize)
+        for source in ordered.iter().copied().rev() {
+            for target in bucket(&down_flat, &down_offsets, source as usize)
                 .iter()
                 .copied()
+                .rev()
             {
                 let target = target as usize;
-                let cursor = up_offsets[target];
+                let cursor = up_offsets[target] - 1;
 
                 up_flat[cursor as usize] = source;
-                up_offsets[target] = cursor + 1;
+                up_offsets[target] = cursor;
             }
         }
 
-        shift_offsets(&mut up_offsets);
-
         let height_usize = self.height as usize;
 
-        self.polyline_ranges.resize(height_usize, (0_u32, 0_u32));
-        self.rank_built.resize(height_usize, false);
+        self.polyline_offsets.resize(height_usize + 1, 0_u32);
         self.polyline_bounds
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
 
         LayoutCSR {
+            top,
+            bottom,
+            down_offsets,
+            down_flat,
+            deepest,
             seg_top_offsets,
             seg_top_flat,
             seg_bottom_offsets,
@@ -662,7 +660,7 @@ where
         structure: &LayoutCSR<'_>,
         spacing: &Spacing,
     ) {
-        if self.is_segment.is_empty() {
+        if structure.bottom.is_empty() {
             self.assign_dag_coordinates_inner::<false>(guard, structure, spacing);
         } else {
             self.assign_dag_coordinates_inner::<true>(guard, structure, spacing);
@@ -682,7 +680,7 @@ where
 
         self.layer_gap = spacing.layer;
 
-        let count = self.top.len();
+        let count = structure.top.len();
 
         if count == 0 {
             return;
@@ -690,9 +688,8 @@ where
 
         let height_usize = self.height as usize;
 
-        let mut fourth = mem::take(&mut self.x_coordinates);
+        let mut fourth = guard.vec_with_capacity(count);
 
-        fourth.clear();
         fourth.resize(count, f32::NAN);
         self.rank_half_width.clear();
         self.rank_half_width.resize(height_usize, 0.0_f32);
@@ -714,19 +711,13 @@ where
         if HAS_SEGMENTS {
             let mut sizes = self.sizes.iter().copied();
 
-            for ((segment, rank), extent) in self
-                .is_segment
-                .iter()
-                .by_vals()
-                .zip(self.top.iter().copied())
-                .zip(extent.iter_mut())
-            {
-                if segment {
-                    *extent = spacing.corridor * 0.5_f32;
+            for (top, extent) in structure.top.iter().copied().zip(extent.iter_mut()) {
+                if top & SEG_BIT != 0 {
+                    *extent = -(spacing.corridor * 0.5_f32);
                     continue;
                 }
 
-                let (size, rank) = (sizes.next().unwrap(), rank as usize);
+                let (size, rank) = (sizes.next().unwrap(), top as usize);
                 let half_width = size.x * 0.5_f32;
 
                 *extent = half_width;
@@ -739,7 +730,7 @@ where
                 .sizes
                 .iter()
                 .copied()
-                .zip(self.top.iter().copied())
+                .zip(structure.top.iter().copied())
                 .zip(extent.iter_mut())
             {
                 let rank = rank as usize;
@@ -781,7 +772,7 @@ where
         let mut any_marked = false;
 
         if HAS_SEGMENTS {
-            marked.resize(self.down_flat.len(), false);
+            marked.resize(structure.down_flat.len(), false);
 
             let mut open_run_start = guard.vec_with_capacity(count);
 
@@ -895,14 +886,15 @@ where
                     .copied()
                 {
                     let source = source as usize;
-                    let base = self.down_offsets[source] as usize;
+                    let base = structure.down_offsets[source] as usize;
                     let mut before: Option<Option<usize>> = None;
                     let mut after: Option<Option<usize>> = None;
 
-                    for (offset, target) in bucket(&self.down_flat, &self.down_offsets, source)
-                        .iter()
-                        .copied()
-                        .enumerate()
+                    for (offset, target) in
+                        bucket(&structure.down_flat, &structure.down_offsets, source)
+                            .iter()
+                            .copied()
+                            .enumerate()
                     {
                         let target = target as usize;
                         let crossed = if target > source {
@@ -938,7 +930,7 @@ where
         let mut marked_up: ScratchpadVec<'_, bool> = guard.vec();
 
         if HAS_SEGMENTS && any_marked {
-            marked_up.resize(self.down_flat.len(), false);
+            marked_up.resize(structure.down_flat.len(), false);
 
             let mut cursors = guard.vec_with_capacity(count);
 
@@ -946,12 +938,13 @@ where
 
             for source in merged_bottom_flat.iter().copied() {
                 let source = source as usize;
-                let base = self.down_offsets[source] as usize;
+                let base = structure.down_offsets[source] as usize;
 
-                for (offset, target) in bucket(&self.down_flat, &self.down_offsets, source)
-                    .iter()
-                    .copied()
-                    .enumerate()
+                for (offset, target) in
+                    bucket(&structure.down_flat, &structure.down_offsets, source)
+                        .iter()
+                        .copied()
+                        .enumerate()
                 {
                     let cursor = cursors[target as usize];
 
@@ -961,14 +954,18 @@ where
             }
         }
 
-        let (median_entries_down, median_kinds_down) = scan_medians(
+        let medians_down = scan_medians(
             guard,
             &structure.up_offsets,
             &structure.up_flat,
-            &self.is_segment,
+            &structure.top,
         );
-        let (median_entries_up, median_kinds_up) =
-            scan_medians(guard, &self.down_offsets, &self.down_flat, &self.is_segment);
+        let medians_up = scan_medians(
+            guard,
+            &structure.down_offsets,
+            &structure.down_flat,
+            &structure.top,
+        );
 
         let mut left_offsets: ScratchpadVec<'_, u32> = guard.vec();
         let mut right_offsets: ScratchpadVec<'_, u32> = guard.vec();
@@ -990,23 +987,20 @@ where
                 left_offsets[right as usize] += 1;
             }
 
-            offsets_from_counts(&mut left_offsets);
-            offsets_from_counts(&mut right_offsets);
+            ends_from_counts(&mut left_offsets);
+            ends_from_counts(&mut right_offsets);
 
-            for (left, right, start, end) in closed_runs.iter().copied() {
-                let cursor = right_offsets[left as usize];
+            for (left, right, start, end) in closed_runs.iter().copied().rev() {
+                let cursor = right_offsets[left as usize] - 1;
 
                 right_runs[cursor as usize] = (right, start, end);
-                right_offsets[left as usize] = cursor + 1;
+                right_offsets[left as usize] = cursor;
 
-                let cursor = left_offsets[right as usize];
+                let cursor = left_offsets[right as usize] - 1;
 
                 left_runs[cursor as usize] = (left, start, end);
-                left_offsets[right as usize] = cursor + 1;
+                left_offsets[right as usize] = cursor;
             }
-
-            shift_offsets(&mut left_offsets);
-            shift_offsets(&mut right_offsets);
         } else {
             left_single.resize(count, u32::MAX);
             right_single.resize(count, u32::MAX);
@@ -1029,6 +1023,8 @@ where
         let mut stack = guard.vec();
 
         let mut scratch = PassScratch {
+            top: &structure.top,
+            bottom: &structure.bottom,
             marked: &marked,
             marked_up: &marked_up,
             extent: &extent,
@@ -1044,10 +1040,8 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            median_entries_down: &median_entries_down,
-            median_kinds_down: &median_kinds_down,
-            median_entries_up: &median_entries_up,
-            median_kinds_up: &median_kinds_up,
+            medians_down: &medians_down,
+            medians_up: &medians_up,
             root: &mut root,
             align: &mut align,
             sink: &mut sink,
@@ -1104,13 +1098,12 @@ where
             let low = a.min(b).max(c.min(d));
             let high = a.max(b).min(c.max(d));
             let combined = f32::midpoint(low, high);
+            let extent = extent.abs();
 
             *coordinate = combined;
             left = left.min(combined - extent);
             right = right.max(combined + extent);
         }
-
-        self.x_coordinates = fourth;
 
         let mut valid = true;
 
@@ -1134,7 +1127,7 @@ where
             cursor = end;
         }
 
-        for coordinate in &mut self.x_coordinates {
+        for coordinate in &mut fourth {
             *coordinate -= left;
             valid &= validate_output_float(*coordinate);
         }
@@ -1144,7 +1137,7 @@ where
 
         let mut reach = 0.0_f32;
 
-        for deep in self.deepest.iter().copied() {
+        for deep in structure.deepest.iter().copied() {
             reach = reach.max(self.layer_ends[deep as usize]);
             self.reach_prefix.push(reach);
         }
@@ -1154,6 +1147,44 @@ where
         valid &= validate_output_vec2(self.size);
 
         assert!(valid, "Output is not normal and positive");
+
+        if !structure.down_flat.is_empty() {
+            self.build_polylines::<HAS_SEGMENTS>(
+                &structure.top,
+                &structure.down_offsets,
+                &structure.down_flat,
+                &structure.bottom,
+                &fourth,
+            );
+        }
+
+        self.x_coordinates.clear();
+        self.x_coordinates.resize(self.keys.len(), 0.0_f32);
+
+        for slot in &mut self.real_flat {
+            let vertex = *slot as usize;
+            let ordinal = if HAS_SEGMENTS {
+                structure.bottom[vertex]
+            } else {
+                *slot
+            };
+
+            self.x_coordinates[ordinal as usize] = fourth[vertex];
+            *slot = ordinal;
+        }
+
+        self.polyline_block_bounds.clear();
+        self.polyline_block_bounds
+            .reserve(height_usize.div_ceil(VIEW_BLOCK));
+
+        for chunk in self.polyline_bounds.chunks(VIEW_BLOCK) {
+            let merged = chunk.iter().copied().fold(
+                (Vec2::INFINITY, Vec2::NEG_INFINITY),
+                |(low, high), (bound_min, bound_max)| (low.min(bound_min), high.max(bound_max)),
+            );
+
+            self.polyline_block_bounds.push(merged);
+        }
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool, const HAS_SEGMENTS: bool>(
@@ -1163,6 +1194,8 @@ where
         x: &mut [f32],
     ) -> (f32, f32) {
         let PassScratch {
+            top,
+            bottom,
             marked,
             marked_up,
             extent,
@@ -1178,10 +1211,8 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            median_entries_down,
-            median_kinds_down,
-            median_entries_up,
-            median_kinds_up,
+            medians_down,
+            medians_up,
             root,
             align,
             sink,
@@ -1193,15 +1224,15 @@ where
 
         let gaps = [spacing.node, spacing.edge];
 
-        #[allow(clippy::needless_bitwise_bool, reason = "Performance")]
         let separation = |a: usize, b: usize| {
+            let (extent_a, extent_b) = (extent[a], extent[b]);
             let gap = if HAS_SEGMENTS {
-                gaps[usize::from(self.is_segment[a] | self.is_segment[b])]
+                gaps[((extent_a.to_bits() | extent_b.to_bits()) >> 31_u32) as usize]
             } else {
                 spacing.node
             };
 
-            extent[a] + extent[b] + gap
+            extent_a.abs() + extent_b.abs() + gap
         };
 
         let (layer_flat, layer_offsets) = if DOWNWARD {
@@ -1209,11 +1240,7 @@ where
         } else {
             (*merged_bottom_flat, *merged_bottom_offsets)
         };
-        let (median_entries, median_kinds) = if DOWNWARD {
-            (*median_entries_down, *median_kinds_down)
-        } else {
-            (*median_entries_up, *median_kinds_up)
-        };
+        let medians = if DOWNWARD { *medians_down } else { *medians_up };
         let edge_marked = if DOWNWARD { *marked_up } else { *marked };
         let no_marks = !HAS_SEGMENTS || edge_marked.is_empty();
         let (runs_flat, runs_offsets) = if LEFTWARD {
@@ -1259,9 +1286,9 @@ where
         root.clear();
         root.extend(0..count);
         align.clear();
-        align.extend(0..count);
+        align.extend_from_slice(root);
         sink.clear();
-        sink.extend(0..count);
+        sink.extend_from_slice(root);
         shift.clear();
         shift.resize(x.len(), f32::INFINITY);
 
@@ -1271,12 +1298,14 @@ where
 
             let mut last: Option<usize> = None;
             let mut process = |vertex: usize| {
-                let stored = median_entries[vertex];
-                let (entries, distinct) = match median_kinds[vertex] {
+                let stored = &medians[vertex];
+                let (entries, distinct) = match stored.kind {
                     MEDIAN_NONE => return,
-                    MEDIAN_SINGLE => (stored, 1_usize),
-                    MEDIAN_ORDERED if !LEFTWARD => ([stored[1], stored[0]], 2_usize),
-                    _ => (stored, 2_usize),
+                    MEDIAN_SINGLE => (stored.entries, 1_usize),
+                    MEDIAN_ORDERED if !LEFTWARD => {
+                        ([stored.entries[1], stored.entries[0]], 2_usize)
+                    }
+                    _ => (stored.entries, 2_usize),
                 };
 
                 for (neighbour, position) in entries[..distinct].iter().copied() {
@@ -1431,11 +1460,11 @@ where
             }
 
             let entry_rank = if DOWNWARD {
-                self.top[entry]
-            } else if HAS_SEGMENTS && self.is_segment[entry] {
-                self.bottom[entry]
+                rank_top(top, entry)
+            } else if HAS_SEGMENTS && is_seg(top, entry) {
+                bottom[entry]
             } else {
-                self.top[entry]
+                rank_top(top, entry)
             } as usize;
 
             if rank != entry_rank {
@@ -1496,13 +1525,13 @@ where
                 }
 
                 let across = if DOWNWARD {
-                    if HAS_SEGMENTS && self.is_segment[vertex] {
-                        self.bottom[vertex]
+                    if HAS_SEGMENTS && is_seg(top, vertex) {
+                        bottom[vertex]
                     } else {
-                        self.top[vertex]
+                        rank_top(top, vertex)
                     }
                 } else {
-                    self.top[vertex]
+                    rank_top(top, vertex)
                 } as usize;
 
                 let next = if HAS_SEGMENTS {
@@ -1551,6 +1580,8 @@ where
                 *x = -*x;
             }
 
+            let extent = extent.abs();
+
             minimum = minimum.min(*x - extent);
             maximum = maximum.max(*x + extent);
         }
@@ -1588,61 +1619,36 @@ where
             0
         }
     }
-    fn build_polylines(&mut self, min: Vec2, max: Vec2) {
-        if self.is_segment.is_empty() {
-            self.build_polylines_inner::<false>(min, max);
-        } else {
-            self.build_polylines_inner::<true>(min, max);
-        }
-    }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    fn build_polylines_inner<const HAS_SEGMENTS: bool>(&mut self, min: Vec2, max: Vec2) {
-        let first = self.reach_prefix.partition_point(|&reach| reach < min.y);
-        let last = self.ranks_started_by(max.y);
+    fn build_polylines<const HAS_SEGMENTS: bool>(
+        &mut self,
+        top: &[u32],
+        down_offsets: &[u32],
+        down_flat: &[u32],
+        bottom: &[u32],
+        x_coordinates: &[f32],
+    ) {
+        let segment_count = top.len() - self.keys.len();
+        let edge_count = down_flat.len() - segment_count;
 
-        let push_deduplicated =
-            |points: &mut Vec<Vec2>, point: Vec2, min: &mut Vec2, max: &mut Vec2| {
-                if points.last().is_none_or(|&last| last != point) {
-                    *min = min.min(point);
-                    *max = max.max(point);
-                    points.push(point);
-                }
-            };
+        self.polylines.reserve(edge_count);
 
-        for rank in first..last {
-            if self.rank_built[rank] || self.layer_ends[self.deepest[rank] as usize] < min.y {
-                continue;
-            }
+        if HAS_SEGMENTS {
+            self.polyline_segments.reserve(segment_count);
+        }
 
-            self.rank_built.set(rank, true);
-
-            let edge_count: usize = bucket(&self.real_flat, &self.real_offsets, rank)
-                .iter()
-                .map(|&source| bucket(&self.down_flat, &self.down_offsets, source as usize).len())
-                .sum();
-
-            let max_points = if HAS_SEGMENTS { 6 } else { 4 };
-
-            self.polylines.reserve(edge_count);
-            self.polyline_points
-                .reserve(edge_count.strict_mul(max_points));
-
-            let range_start = self.polylines.len() as u32;
+        for rank in 0..self.height as usize {
             let mut rank_min = Vec2::INFINITY;
             let mut rank_max = Vec2::NEG_INFINITY;
             let mut left_reach = 0.0_f32;
             let mut right_reach = 0.0_f32;
 
             let rank_center = self.layer_center(rank);
-            let source_band_end = self.layer_ends[rank];
             let next_rank = rank + 1;
-            let (next_center, next_band_start) = if next_rank < self.layer_ends.len() {
-                (
-                    self.layer_center(next_rank),
-                    source_band_end + self.layer_gap,
-                )
+            let next_center = if next_rank < self.layer_ends.len() {
+                self.layer_center(next_rank)
             } else {
-                (0.0_f32, 0.0_f32)
+                0.0_f32
             };
 
             for source in bucket(&self.real_flat, &self.real_offsets, rank)
@@ -1651,114 +1657,67 @@ where
             {
                 let source = source as usize;
                 let source_ordinal = if HAS_SEGMENTS {
-                    self.bottom[source] as usize
+                    bottom[source] as usize
                 } else {
                     source
                 };
 
-                let source_x = self.x_coordinates[source];
+                let source_x = x_coordinates[source];
                 let source_border = rank_center + self.sizes[source_ordinal].y * 0.5_f32;
 
-                for target in bucket(&self.down_flat, &self.down_offsets, source)
-                    .iter()
-                    .copied()
-                {
+                for target in bucket(down_flat, down_offsets, source).iter().copied() {
                     let target = target as usize;
-                    let real_target = if HAS_SEGMENTS && self.is_segment[target] {
-                        self.down_flat[self.down_offsets[target] as usize] as usize
+                    let (real_target, segment) = if HAS_SEGMENTS && is_seg(top, target) {
+                        (
+                            down_flat[down_offsets[target] as usize] as usize,
+                            Some((x_coordinates[target], bottom[target])),
+                        )
                     } else {
-                        target
+                        (target, None)
                     };
                     let target_ordinal = if HAS_SEGMENTS {
-                        self.bottom[real_target] as usize
+                        bottom[real_target] as usize
                     } else {
                         real_target
                     };
-                    let target_top = self.top[real_target] as usize;
+                    let target_top = rank_top(top, real_target) as usize;
 
-                    let (target_center, target_band_start) = if target_top == next_rank {
-                        (next_center, next_band_start)
+                    let target_center = if target_top == next_rank {
+                        next_center
                     } else {
-                        (self.layer_center(target_top), self.layer_start(target_top))
+                        self.layer_center(target_top)
                     };
 
-                    let target_x = self.x_coordinates[real_target];
+                    let target_x = x_coordinates[real_target];
                     let target_border = target_center - self.sizes[target_ordinal].y * 0.5_f32;
 
-                    let start = self.polyline_points.len();
-                    let first = Vec2::new(source_x, source_border);
-                    let mut line_min = first;
-                    let mut line_max = first;
+                    let (min_x, max_x) = if let Some((seg_x, _)) = segment {
+                        (
+                            source_x.min(target_x).min(seg_x),
+                            source_x.max(target_x).max(seg_x),
+                        )
+                    } else {
+                        (source_x.min(target_x), source_x.max(target_x))
+                    };
 
-                    self.polyline_points.push(first);
+                    rank_min = rank_min.min(Vec2::new(min_x, source_border));
+                    rank_max = rank_max.max(Vec2::new(max_x, target_border));
+                    left_reach = left_reach.max(source_x - min_x);
+                    right_reach = right_reach.max(max_x - source_x);
 
-                    if source_band_end > source_border {
-                        let point = Vec2::new(source_x, source_band_end);
-
-                        line_min = line_min.min(point);
-                        line_max = line_max.max(point);
-                        self.polyline_points.push(point);
+                    if let Some((seg_x, seg_last)) = segment {
+                        self.polyline_segments
+                            .push((self.polylines.len() as u32, seg_x, seg_last));
                     }
-
-                    if HAS_SEGMENTS && self.is_segment[target] {
-                        let x = self.x_coordinates[target];
-                        let span_start = self.layer_start(self.top[target] as usize);
-                        let span_end = self.layer_ends[self.bottom[target] as usize];
-
-                        push_deduplicated(
-                            &mut self.polyline_points,
-                            Vec2::new(x, span_start),
-                            &mut line_min,
-                            &mut line_max,
-                        );
-                        push_deduplicated(
-                            &mut self.polyline_points,
-                            Vec2::new(x, span_end),
-                            &mut line_min,
-                            &mut line_max,
-                        );
-                    }
-
-                    if target_band_start < target_border {
-                        push_deduplicated(
-                            &mut self.polyline_points,
-                            Vec2::new(target_x, target_band_start),
-                            &mut line_min,
-                            &mut line_max,
-                        );
-                    }
-
-                    push_deduplicated(
-                        &mut self.polyline_points,
-                        Vec2::new(target_x, target_border),
-                        &mut line_min,
-                        &mut line_max,
-                    );
-
-                    if self.polyline_points.len() == start + 1 {
-                        self.polyline_points
-                            .push(Vec2::new(target_x, target_border));
-                    }
-
-                    rank_min = rank_min.min(line_min);
-                    rank_max = rank_max.max(line_max);
-                    left_reach = left_reach.max(source_x - line_min.x);
-                    right_reach = right_reach.max(line_max.x - source_x);
 
                     self.polylines.push(Polyline {
                         source: source_ordinal as u32,
                         target: target_ordinal as u32,
-                        start: start as u32,
-                        end: self.polyline_points.len() as u32,
-                        min: line_min,
-                        max: line_max,
                     });
                 }
             }
 
-            let range_end = self.polylines.len() as u32;
-
-            self.polyline_ranges[rank] = (range_start, range_end);
+            self.polyline_offsets[rank + 1] = self.polylines.len() as u32;
             self.polyline_bounds[rank] = (rank_min, rank_max);
             self.polyline_reach[rank] = (left_reach, right_reach);
         }
@@ -1768,78 +1727,143 @@ where
         self.size
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    pub fn view<'a, F>(&'a mut self, min: Vec2, max: Vec2, mut callback: F)
+    pub fn view<F>(&self, min: Vec2, max: Vec2, mut callback: F)
     where
-        F: FnMut(LayoutItem<'a, K, Vec2>),
+        F: FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     {
-        if self.top.is_empty() {
+        if self.keys.is_empty() {
             return;
-        }
-
-        if !self.down_flat.is_empty() {
-            self.build_polylines(min, max);
         }
 
         let first = self.layer_ends.partition_point(|&end| end < min.y);
         let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
         let last = self.ranks_started_by(max.y);
 
-        for (((range_start, range_end), (rank_min, rank_max)), (left_reach, right_reach)) in self
-            .polyline_ranges[first_reaching..last.max(first_reaching)]
-            .iter()
-            .copied()
-            .zip(self.polyline_bounds[first_reaching..].iter().copied())
-            .zip(self.polyline_reach[first_reaching..].iter().copied())
-        {
-            if !(rank_min.x <= max.x
-                && rank_max.x >= min.x
-                && rank_min.y <= max.y
-                && rank_max.y >= min.y)
+        let mut next_rank = first_reaching;
+
+        while next_rank < last {
+            let block = next_rank >> VIEW_BLOCK_SHIFT;
+            let block_end = ((block + 1) << VIEW_BLOCK_SHIFT).min(last);
+            let (block_min, block_max) = self.polyline_block_bounds[block];
+
+            if !(block_min.x <= max.x
+                && block_max.x >= min.x
+                && block_min.y <= max.y
+                && block_max.y >= min.y)
             {
+                next_rank = block_end;
                 continue;
             }
 
-            let lines = &self.polylines[range_start as usize..range_end as usize];
+            for rank in next_rank..block_end {
+                let (rank_min, rank_max) = self.polyline_bounds[rank];
 
-            let begin = lines.partition_point(|line| {
-                self.polyline_points[line.start as usize].x < min.x - right_reach
-            });
-
-            for line in lines[begin..].iter().copied() {
-                if self.polyline_points[line.start as usize].x - left_reach > max.x {
-                    break;
+                if !(rank_min.x <= max.x
+                    && rank_max.x >= min.x
+                    && rank_min.y <= max.y
+                    && rank_max.y >= min.y)
+                {
+                    continue;
                 }
 
-                if line.min.x <= max.x
-                    && line.max.x >= min.x
-                    && line.min.y <= max.y
-                    && line.max.y >= min.y
-                {
-                    callback(LayoutItem::Polyline {
-                        from: self.keys[line.source as usize],
-                        to: self.keys[line.target as usize],
-                        points: &self.polyline_points[line.start as usize..line.end as usize],
+                let (range_start, range_end) =
+                    (self.polyline_offsets[rank], self.polyline_offsets[rank + 1]);
+                let (left_reach, right_reach) = self.polyline_reach[rank];
+
+                let lines = &self.polylines[range_start as usize..range_end as usize];
+
+                let begin = range_start as usize
+                    + lines.partition_point(|line| {
+                        self.x_coordinates[line.source as usize] < min.x - right_reach
                     });
+
+                let rank_center = self.layer_center(rank);
+                let source_band_end = self.layer_ends[rank];
+                let (next_center, next_band_start) = if rank + 1 < self.layer_ends.len() {
+                    (self.layer_center(rank + 1), self.layer_start(rank + 1))
+                } else {
+                    (0.0_f32, 0.0_f32)
+                };
+
+                let mut segment_cursor = self
+                    .polyline_segments
+                    .partition_point(|&(polyline, _, _)| (polyline as usize) < begin);
+
+                for index in begin..range_end as usize {
+                    let line = self.polylines[index];
+                    let source_x = self.x_coordinates[line.source as usize];
+
+                    if source_x - left_reach > max.x {
+                        break;
+                    }
+
+                    let target_x = self.x_coordinates[line.target as usize];
+                    let segment_info = match self.polyline_segments.get(segment_cursor) {
+                        Some(&(polyline, seg_x, seg_last)) if polyline as usize == index => {
+                            segment_cursor += 1;
+
+                            Some((seg_x, seg_last))
+                        }
+                        _ => None,
+                    };
+
+                    let (line_min_x, line_max_x) = if let Some((seg_x, _)) = segment_info {
+                        (
+                            source_x.min(target_x).min(seg_x),
+                            source_x.max(target_x).max(seg_x),
+                        )
+                    } else {
+                        (source_x.min(target_x), source_x.max(target_x))
+                    };
+
+                    let source_border = rank_center + self.sizes[line.source as usize].y * 0.5_f32;
+                    let (target_center, target_band_start) =
+                        if let Some((_, seg_last)) = segment_info {
+                            let target_rank = seg_last as usize + 1;
+
+                            (
+                                self.layer_center(target_rank),
+                                self.layer_start(target_rank),
+                            )
+                        } else {
+                            (next_center, next_band_start)
+                        };
+                    let target_border =
+                        target_center - self.sizes[line.target as usize].y * 0.5_f32;
+
+                    if line_min_x <= max.x
+                        && line_max_x >= min.x
+                        && source_border <= max.y
+                        && target_border >= min.y
+                    {
+                        let segment = segment_info.map(|(seg_x, seg_last)| {
+                            (seg_x, next_band_start, self.layer_ends[seg_last as usize])
+                        });
+
+                        callback(LayoutItem::Polyline {
+                            from: self.keys[line.source as usize],
+                            to: self.keys[line.target as usize],
+                            points: line_points(
+                                Vec2::new(source_x, source_border),
+                                source_band_end,
+                                segment,
+                                Vec2::new(target_x, target_border),
+                                target_band_start,
+                            ),
+                        });
+                    }
                 }
             }
+
+            next_rank = block_end;
         }
 
-        if self.is_segment.is_empty() {
-            self.view_nodes::<F, false>(min, max, first, last, &mut callback);
-        } else {
-            self.view_nodes::<F, true>(min, max, first, last, &mut callback);
-        }
+        self.view_nodes(min, max, first, last, callback);
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    fn view_nodes<'a, F, const HAS_SEGMENTS: bool>(
-        &'a self,
-        min: Vec2,
-        max: Vec2,
-        first: usize,
-        last: usize,
-        callback: &mut F,
-    ) where
-        F: FnMut(LayoutItem<'a, K, Vec2>),
+    fn view_nodes<F>(&self, min: Vec2, max: Vec2, first: usize, last: usize, mut callback: F)
+    where
+        F: FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     {
         for (rank, ((start, end), half_width)) in self.real_offsets[first..last.max(first)]
             .iter()
@@ -1854,18 +1878,11 @@ where
 
             let cutoff = min.x - half_width;
             let begin =
-                reals.partition_point(|&vertex| self.x_coordinates[vertex as usize] < cutoff);
+                reals.partition_point(|&ordinal| self.x_coordinates[ordinal as usize] < cutoff);
 
-            for vertex in reals[begin..].iter().copied() {
-                let vertex = vertex as usize;
-                let ordinal = if HAS_SEGMENTS {
-                    self.bottom[vertex] as usize
-                } else {
-                    vertex
-                };
-                let id = self.keys[ordinal];
-
-                let center = Vec2::new(self.x_coordinates[vertex], y);
+            for ordinal in reals[begin..].iter().copied() {
+                let ordinal = ordinal as usize;
+                let center = Vec2::new(self.x_coordinates[ordinal], y);
                 let size = self.sizes[ordinal];
                 let half = size * 0.5_f32;
 
@@ -1877,11 +1894,42 @@ where
                     && center.y - half.y <= max.y
                     && center.y + half.y >= min.y
                 {
-                    callback(LayoutItem::Node { id, center, size });
+                    callback(LayoutItem::Node {
+                        id: self.keys[ordinal],
+                        center,
+                        size,
+                    });
                 }
             }
         }
     }
+}
+
+fn line_points(
+    first: Vec2,
+    source_band_end: f32,
+    segment: Option<(f32, f32, f32)>,
+    last: Vec2,
+    target_band_start: f32,
+) -> ArrayVec<[Vec2; 6]> {
+    let mut points = array_vec!([Vec2; 6] => first);
+
+    if source_band_end > first.y {
+        points.push(Vec2::new(first.x, source_band_end));
+    }
+
+    if let Some((x, span_start, span_end)) = segment {
+        points.push(Vec2::new(x, span_start));
+        points.push(Vec2::new(x, span_end));
+    }
+
+    if target_band_start < last.y {
+        points.push(Vec2::new(last.x, target_band_start));
+    }
+
+    points.push(last);
+
+    points
 }
 
 #[inline]
@@ -1889,29 +1937,45 @@ const fn reflect(index: usize, len: usize, forward: bool) -> usize {
     if forward { index } else { len - 1 - index }
 }
 
+#[inline]
+const fn is_seg(top: &[u32], vertex: usize) -> bool {
+    top[vertex] & SEG_BIT != 0
+}
+
+#[inline]
+const fn rank_top(top: &[u32], vertex: usize) -> u32 {
+    top[vertex] & RANK_MASK
+}
+
 const MEDIAN_NONE: u8 = 0;
 const MEDIAN_SINGLE: u8 = 1;
 const MEDIAN_ORDERED: u8 = 2;
 const MEDIAN_FIXED: u8 = 3;
 
+#[derive(Clone, Copy)]
+struct Medians {
+    entries: [(u32, u32); 2],
+    kind: u8,
+}
+
 fn scan_medians<'g>(
     guard: &'g ScratchpadGuard<'_>,
     offsets: &[u32],
     flat: &[u32],
-    is_segment: &BitSlice,
-) -> (ScratchpadVec<'g, [(u32, u32); 2]>, ScratchpadVec<'g, u8>) {
+    top: &[u32],
+) -> ScratchpadVec<'g, Medians> {
     let count = offsets.len().saturating_sub(1);
-    let has_segments = !is_segment.is_empty();
 
-    let mut entries: ScratchpadVec<'g, [(u32, u32); 2]> = guard.vec_with_capacity(count);
-    let mut kinds: ScratchpadVec<'g, u8> = guard.vec_with_capacity(count);
+    let mut medians: ScratchpadVec<'g, Medians> = guard.vec_with_capacity(count);
 
     for (base, next) in offsets.iter().copied().zip(offsets.iter().copied().skip(1)) {
         let degree = next - base;
 
         if degree == 0 {
-            entries.push([(0_u32, 0_u32); 2]);
-            kinds.push(MEDIAN_NONE);
+            medians.push(Medians {
+                entries: [(0_u32, 0_u32); 2],
+                kind: MEDIAN_NONE,
+            });
             continue;
         }
 
@@ -1920,41 +1984,36 @@ fn scan_medians<'g>(
         let low = (flat[low_position as usize], low_position);
 
         if low_position == high_position {
-            entries.push([low, low]);
-            kinds.push(MEDIAN_SINGLE);
+            medians.push(Medians {
+                entries: [low, low],
+                kind: MEDIAN_SINGLE,
+            });
             continue;
         }
 
         let high = (flat[high_position as usize], high_position);
-        let low_segment = has_segments && is_segment[low.0 as usize];
-        let high_segment = has_segments && is_segment[high.0 as usize];
+        let low_segment = top[low.0 as usize] & SEG_BIT != 0;
+        let high_segment = top[high.0 as usize] & SEG_BIT != 0;
 
-        if low_segment == high_segment {
-            entries.push([low, high]);
-            kinds.push(MEDIAN_ORDERED);
+        let (entries, kind) = if low_segment == high_segment {
+            ([low, high], MEDIAN_ORDERED)
         } else if low_segment {
-            entries.push([low, high]);
-            kinds.push(MEDIAN_FIXED);
+            ([low, high], MEDIAN_FIXED)
         } else {
-            entries.push([high, low]);
-            kinds.push(MEDIAN_FIXED);
-        }
+            ([high, low], MEDIAN_FIXED)
+        };
+
+        medians.push(Medians { entries, kind });
     }
 
-    (entries, kinds)
+    medians
 }
 
-fn offsets_from_counts(offsets: &mut [u32]) -> usize {
+fn ends_from_counts(offsets: &mut [u32]) -> usize {
     offsets.iter_mut().fold(0, |total, offset| {
-        let ret = total + *offset;
-        *offset = total;
-        ret
+        *offset += total;
+        *offset
     }) as usize
-}
-
-fn shift_offsets(offsets: &mut [u32]) {
-    offsets.copy_within(0..offsets.len() - 1, 1);
-    offsets[0] = 0;
 }
 
 #[inline]

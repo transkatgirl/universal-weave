@@ -16,6 +16,7 @@ use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runn
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use scratchpads::Scratchpad;
+use tinyvec::ArrayVec;
 use universal_weave::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     IndependentContents, IndependentWeave as IndependentWeaveTrait, LayoutItem, Layouter,
@@ -48,6 +49,7 @@ prop_state_machine! {
     );
 }
 
+#[allow(clippy::type_complexity)]
 struct ReferenceLayouter<K>
 where
     K: Hash + Copy + Eq + Ord,
@@ -55,7 +57,7 @@ where
     spacing: Spacing,
     size: Vec2,
     nodes: Vec<(K, Vec2, Vec2)>,
-    polylines: Vec<(K, K, Vec2, Vec2, Vec<Vec2>)>,
+    polylines: Vec<(K, K, Vec2, Vec2, ArrayVec<[Vec2; 6]>)>,
 }
 
 impl<K> ReferenceLayouter<K>
@@ -122,7 +124,7 @@ impl<K> GraphBuilder<K> {
     }
 }
 
-impl<W, K, N, T> Layouter<W, K, N, T, Vec2> for ReferenceLayouter<K>
+impl<W, K, N, T> Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for ReferenceLayouter<K>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
@@ -297,8 +299,13 @@ where
                         |(low, high), &point| (low.min(point), high.max(point)),
                     );
 
-                    self.polylines
-                        .push((source_id, target_key, min, max, points));
+                    self.polylines.push((
+                        source_id,
+                        target_key,
+                        min,
+                        max,
+                        ArrayVec::from_iter(points.iter().copied()),
+                    ));
                 }
             }
         }
@@ -306,23 +313,19 @@ where
     fn size(&self) -> Vec2 {
         self.size
     }
-    fn view<'a>(
-        &'a mut self,
+    fn view(
+        &mut self,
         min: Vec2,
         max: Vec2,
-        mut callback: impl FnMut(LayoutItem<'a, K, Vec2>),
+        mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
-        for (from, to, line_min, line_max, points) in &self.polylines {
+        for (from, to, line_min, line_max, points) in self.polylines.iter().copied() {
             if line_min.x <= max.x
                 && line_max.x >= min.x
                 && line_min.y <= max.y
                 && line_max.y >= min.y
             {
-                callback(LayoutItem::Polyline {
-                    from: *from,
-                    to: *to,
-                    points,
-                })
+                callback(LayoutItem::Polyline { from, to, points })
             }
         }
 
@@ -792,6 +795,7 @@ impl StateMachineTest for WeaveWrapper {
                 IndependentNode<u32, WeaveContent, RandomState>,
                 WeaveContent,
                 Vec2,
+                ArrayVec<[Vec2; 6]>,
             >::size(&state.layouter)
                 - Layouter::<
                     IndependentWeave<u32, WeaveContent, u32, RandomState>,
@@ -799,6 +803,7 @@ impl StateMachineTest for WeaveWrapper {
                     IndependentNode<u32, WeaveContent, RandomState>,
                     WeaveContent,
                     Vec2,
+                    ArrayVec<[Vec2; 6]>,
                 >::size(&state.reference_layouter))
             .abs()
             .max_element()
@@ -862,8 +867,8 @@ impl StateMachineTest for WeaveWrapper {
 
 fn compare_layouter_views<W, K, N, T>(
     scratchpad: &mut Scratchpad,
-    left: &mut impl Layouter<W, K, N, T, Vec2>,
-    right: &mut impl Layouter<W, K, N, T, Vec2>,
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     min: Vec2,
     max: Vec2,
 ) where

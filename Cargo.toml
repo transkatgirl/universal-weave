@@ -26,7 +26,7 @@ default = [
 ]
 layout = [
 	"dep:glam",
-	"dep:bitvec",
+	"dep:tinyvec",
 ]
 rkyv = [
 	"dep:rkyv",
@@ -56,9 +56,7 @@ indexmap = { version = "2.14.0", default-features = false }
 glam = { version = "0.33.3", features = [
 	"libm",
 ], default-features = false, optional = true }
-bitvec = { version = "1.1.1", features = [
-	"alloc",
-], default-features = false, optional = true }
+tinyvec = { version = "1.12.0", optional = true }
 rkyv = { version = "0.8.18", features = [
 	"alloc",
 	"bytecheck",

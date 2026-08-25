@@ -14,6 +14,7 @@ use core::{
 use alloc::vec::Vec;
 use glam::Vec2;
 use scratchpads::Scratchpad;
+use tinyvec::ArrayVec;
 
 use crate::{
     IndependentContents, LayoutItem, Layouter, Node, Weave,
@@ -92,7 +93,8 @@ where
     }
 }
 
-impl<K, T, M, S> Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2>
+impl<K, T, M, S>
+    Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2, ArrayVec<[Vec2; 6]>>
     for DependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord + 'static,
@@ -104,7 +106,12 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view(
+        &mut self,
+        min: Vec2,
+        max: Vec2,
+        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+    ) {
         self.layout.view(min, max, callback);
     }
 }
@@ -139,8 +146,15 @@ where
     }
 }
 
-impl<K, T, M, S> Layouter<IndependentWeave<K, T, M, S>, K, IndependentNode<K, T, S>, T, Vec2>
-    for IndependentLayouter<K>
+impl<K, T, M, S>
+    Layouter<
+        IndependentWeave<K, T, M, S>,
+        K,
+        IndependentNode<K, T, S>,
+        T,
+        Vec2,
+        ArrayVec<[Vec2; 6]>,
+    > for IndependentLayouter<K>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     T: IndependentContents,
@@ -155,7 +169,12 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view(
+        &mut self,
+        min: Vec2,
+        max: Vec2,
+        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+    ) {
         self.layout.view(min, max, callback);
     }
 }
@@ -206,7 +225,7 @@ where
     }
 }
 
-impl<W, K, N, T, S> Layouter<W, K, N, T, Vec2> for TopologicalLayouter<K, S>
+impl<W, K, N, T, S> Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for TopologicalLayouter<K, S>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + 'static,
@@ -234,7 +253,12 @@ where
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
-    fn view<'a>(&'a mut self, min: Vec2, max: Vec2, callback: impl FnMut(LayoutItem<'a, K, Vec2>)) {
+    fn view(
+        &mut self,
+        min: Vec2,
+        max: Vec2,
+        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+    ) {
         self.layout.view(min, max, callback);
     }
 }

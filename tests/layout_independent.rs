@@ -11,6 +11,7 @@ use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runn
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
 use scratchpads::Scratchpad;
+use tinyvec::ArrayVec;
 use universal_weave::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
     IndependentContents, IndependentWeave as IndependentWeaveTrait, Layouter, MetadataWeave, Node,
@@ -494,6 +495,7 @@ impl StateMachineTest for WeaveWrapper {
                 IndependentNode<u32, WeaveContent, RandomState>,
                 WeaveContent,
                 Vec2,
+                ArrayVec<[Vec2; 6]>,
             >::size(&state.layouter),
             Layouter::<
                 IndependentWeave<u32, WeaveContent, u32, RandomState>,
@@ -501,6 +503,7 @@ impl StateMachineTest for WeaveWrapper {
                 IndependentNode<u32, WeaveContent, RandomState>,
                 WeaveContent,
                 Vec2,
+                ArrayVec<[Vec2; 6]>,
             >::size(&state.reference_layouter)
         );
 
@@ -561,8 +564,8 @@ impl StateMachineTest for WeaveWrapper {
 
 fn compare_layouter_views<W, K, N, T>(
     scratchpad: &mut Scratchpad,
-    left: &mut impl Layouter<W, K, N, T, Vec2>,
-    right: &mut impl Layouter<W, K, N, T, Vec2>,
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     min: Vec2,
     max: Vec2,
 ) where
