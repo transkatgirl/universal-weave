@@ -267,8 +267,7 @@ where
             for id in topological.drain(..) {
                 parents.extend(weave.nodes[&id].from.iter().map(|id| {
                     let index = indices[id];
-
-                    (index, rank_top(&top, index as usize))
+                    (index, top[index as usize] & RANK_MASK)
                 }));
 
                 let rank = parents
@@ -340,8 +339,7 @@ where
             for id in topological.drain(..) {
                 parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|id| {
                     let index = indices[id];
-
-                    (index, rank_top(&top, index as usize))
+                    (index, top[index as usize] & RANK_MASK)
                 }));
 
                 let rank = parents
@@ -586,14 +584,17 @@ where
             down_flat[cursor as usize] = target;
             down_offsets[source] = cursor;
 
-            if !HAS_SEGMENTS || !is_seg(&top, source) {
+            let top_source_raw = top[source];
+
+            if !HAS_SEGMENTS || top_source_raw & SEG_BIT == 0 {
                 let target = target as usize;
-                let child = if HAS_SEGMENTS && is_seg(&top, target) {
+                let top_target_raw = top[target];
+                let child = if HAS_SEGMENTS && top_target_raw & SEG_BIT != 0 {
                     bottom[target] + 1
                 } else {
-                    rank_top(&top, target)
+                    top_target_raw & RANK_MASK
                 };
-                let rank = rank_top(&top, source) as usize;
+                let rank = (top_source_raw & RANK_MASK) as usize;
 
                 deepest[rank] = deepest[rank].max(child);
             }
@@ -1452,12 +1453,14 @@ where
                 continue;
             }
 
+            let top_entry_raw = top[entry];
+
             let entry_rank = if DOWNWARD {
-                rank_top(top, entry)
-            } else if HAS_SEGMENTS && is_seg(top, entry) {
+                top_entry_raw & RANK_MASK
+            } else if HAS_SEGMENTS && top_entry_raw & SEG_BIT != 0 {
                 bottom[entry]
             } else {
-                rank_top(top, entry)
+                top_entry_raw & RANK_MASK
             } as usize;
 
             if rank != entry_rank {
@@ -1517,14 +1520,16 @@ where
                     }
                 }
 
+                let top_vertex_raw = top[vertex];
+
                 let across = if DOWNWARD {
-                    if HAS_SEGMENTS && is_seg(top, vertex) {
+                    if HAS_SEGMENTS && top_vertex_raw & SEG_BIT != 0 {
                         bottom[vertex]
                     } else {
-                        rank_top(top, vertex)
+                        top_vertex_raw & RANK_MASK
                     }
                 } else {
-                    rank_top(top, vertex)
+                    top_vertex_raw & RANK_MASK
                 } as usize;
 
                 let next = if HAS_SEGMENTS {
@@ -1660,7 +1665,7 @@ where
 
                 for target in bucket(down_flat, down_offsets, source).iter().copied() {
                     let target = target as usize;
-                    let (real_target, segment) = if HAS_SEGMENTS && is_seg(top, target) {
+                    let (real_target, segment) = if HAS_SEGMENTS && top[target] & SEG_BIT != 0 {
                         (
                             down_flat[down_offsets[target] as usize] as usize,
                             Some((x_coordinates[target], bottom[target])),
@@ -1673,7 +1678,7 @@ where
                     } else {
                         real_target
                     };
-                    let target_top = rank_top(top, real_target) as usize;
+                    let target_top = (top[real_target] & RANK_MASK) as usize;
 
                     let target_center = if target_top == next_rank {
                         next_center
@@ -1904,20 +1909,30 @@ fn line_points(
 ) -> ArrayVec<[Vec2; 6]> {
     let mut points = array_vec!([Vec2; 6] => first);
 
+    let mut push_deduplicated = |point: Vec2| {
+        if points.last() != Some(&point) {
+            points.push(point);
+        }
+    };
+
     if source_band_end > first.y {
-        points.push(Vec2::new(first.x, source_band_end));
+        push_deduplicated(Vec2::new(first.x, source_band_end));
     }
 
     if let Some((x, span_start, span_end)) = segment {
-        points.push(Vec2::new(x, span_start));
-        points.push(Vec2::new(x, span_end));
+        push_deduplicated(Vec2::new(x, span_start));
+        push_deduplicated(Vec2::new(x, span_end));
     }
 
     if target_band_start < last.y {
-        points.push(Vec2::new(last.x, target_band_start));
+        push_deduplicated(Vec2::new(last.x, target_band_start));
     }
 
-    points.push(last);
+    push_deduplicated(last);
+
+    if points.len() == 1 {
+        points.push(last);
+    }
 
     points
 }
@@ -1925,16 +1940,6 @@ fn line_points(
 #[inline]
 const fn reflect(index: usize, len: usize, forward: bool) -> usize {
     if forward { index } else { len - 1 - index }
-}
-
-#[inline]
-const fn is_seg(top: &[u32], vertex: usize) -> bool {
-    top[vertex] & SEG_BIT != 0
-}
-
-#[inline]
-const fn rank_top(top: &[u32], vertex: usize) -> u32 {
-    top[vertex] & RANK_MASK
 }
 
 const MEDIAN_NONE: u8 = 0;
