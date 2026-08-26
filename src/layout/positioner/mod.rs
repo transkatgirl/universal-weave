@@ -234,10 +234,10 @@ where
                 );
             }
 
-            self.prepare_structure(&guard, top, guard.vec(), edges)
+            self.prepare_structure_inner::<false>(&guard, top, guard.vec(), edges)
         };
 
-        self.assign_dag_coordinates(&guard, &structure, spacing);
+        self.assign_dag_coordinates_inner::<false>(&guard, &structure, spacing);
     }
     pub fn layout_independent<T, M, S, F>(
         &mut self,
