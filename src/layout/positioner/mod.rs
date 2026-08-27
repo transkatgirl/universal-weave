@@ -449,14 +449,17 @@ where
         mut edges: ScratchpadVec<'g, u32>,
     ) -> LayoutCSR<'g> {
         let count = top.len();
+        let edge_count = edges.len() >> 1_usize;
         let ranks = self.height as usize + 1;
+
+        assert!(edge_count < u32::MAX as usize, "Too many edges");
 
         self.real_offsets.resize(ranks, 0);
 
-        let mut seg_top_offsets: ScratchpadVec<'g, u32> = guard.vec();
-        let mut seg_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
-        let mut merged_top_offsets: ScratchpadVec<'g, u32> = guard.vec();
-        let mut merged_bottom_offsets: ScratchpadVec<'g, u32> = guard.vec();
+        let mut seg_top_offsets = guard.vec();
+        let mut seg_bottom_offsets = guard.vec();
+        let mut merged_top_offsets = guard.vec();
+        let mut merged_bottom_offsets = guard.vec();
 
         if HAS_SEGMENTS {
             seg_top_offsets.resize(ranks, 0);
@@ -500,11 +503,11 @@ where
         ends_from_counts(&mut merged_top_offsets);
         ends_from_counts(&mut merged_bottom_offsets);
 
-        let mut real_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(real_total);
-        let mut seg_top_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
-        let mut seg_bottom_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(segment_total);
-        let mut merged_top_flat: ScratchpadVec<'g, u32> = guard.vec();
-        let mut merged_bottom_flat: ScratchpadVec<'g, u32> = guard.vec();
+        let mut real_flat = guard.vec_with_capacity(real_total);
+        let mut seg_top_flat = guard.vec_with_capacity(segment_total);
+        let mut seg_bottom_flat = guard.vec_with_capacity(segment_total);
+        let mut merged_top_flat = guard.vec();
+        let mut merged_bottom_flat = guard.vec();
 
         real_flat.resize(real_total, 0);
         seg_top_flat.resize(segment_total, 0);
@@ -555,39 +558,33 @@ where
             }
         } else {
             for (index, top) in top.iter().copied().enumerate().rev() {
-                let top = top as usize;
-                let cursor = &mut self.real_offsets[top];
+                let cursor = &mut self.real_offsets[top as usize];
 
                 *cursor -= 1;
                 real_flat[*cursor as usize] = index as u32;
             }
         }
 
-        let mut down_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(count + 1);
-        down_offsets.resize(count + 1, 0);
-
-        let mut up_offsets: ScratchpadVec<'g, u32> = guard.vec_with_capacity(count + 1);
-        up_offsets.resize(count + 1, 0);
-
         let (pairs, _) = edges.as_chunks::<2>();
 
-        for [source, target] in pairs.iter().copied() {
-            let (source, target) = (source as usize, target as usize);
+        let mut up_offsets = guard.vec_with_capacity(count + 1);
+        let mut down_offsets = guard.vec_with_capacity(count + 1);
 
-            down_offsets[source] += 1;
-            up_offsets[target] += 1;
+        up_offsets.resize(count + 1, 0);
+        down_offsets.resize(count + 1, 0);
+
+        for [source, target] in pairs.iter().copied() {
+            up_offsets[target as usize] += 1;
+            down_offsets[source as usize] += 1;
         }
 
-        ends_from_counts(&mut down_offsets);
         ends_from_counts(&mut up_offsets);
+        ends_from_counts(&mut down_offsets);
 
-        let edge_count = edges.len() >> 1_usize;
-        assert!(edge_count < u32::MAX as usize, "Too many edges");
+        let mut down_flat = guard.vec_with_capacity(edge_count);
+        let mut deepest = guard.vec_with_capacity(self.height as usize);
 
-        let mut down_flat: ScratchpadVec<'g, u32> = guard.vec_with_capacity(edge_count);
         down_flat.resize(edge_count, 0);
-
-        let mut deepest: ScratchpadVec<'g, u32> = guard.vec_with_capacity(self.height as usize);
         deepest.extend(0..self.height);
 
         for [source, target] in pairs.iter().copied().rev() {
@@ -602,6 +599,7 @@ where
             if !HAS_SEGMENTS || top_source_raw & SEG_BIT == 0 {
                 let target = target as usize;
                 let top_target_raw = top[target];
+
                 let child = if HAS_SEGMENTS && top_target_raw & SEG_BIT != 0 {
                     bottom[target] + 1
                 } else {
@@ -618,7 +616,7 @@ where
 
         up_flat.resize(edge_count, 0);
 
-        let ordered: &[u32] = if HAS_SEGMENTS {
+        let ordered = if HAS_SEGMENTS {
             &merged_bottom_flat
         } else {
             &real_flat
