@@ -799,6 +799,8 @@ where
 
             for rank in 0..=height {
                 if let Some(previous) = rank.checked_sub(1) {
+                    let end = previous as u32;
+
                     for item in bucket(merged_bottom_flat, merged_bottom_offsets, previous)
                         .iter()
                         .copied()
@@ -808,8 +810,6 @@ where
                         let after = active.successor(item);
 
                         active.remove(item);
-
-                        let end = previous as u32;
 
                         if let Some(left) = before {
                             let start = open_run_start[left];
@@ -833,43 +833,62 @@ where
                     }
                 }
 
-                if rank >= height {
+                if rank == height {
                     continue;
                 }
 
-                for item in bucket(merged_top_flat, merged_top_offsets, rank)
-                    .iter()
-                    .copied()
-                {
-                    let item = item as usize;
-                    let after = active.successor(item);
-                    let before = active.predecessor(item);
+                if let Some(previous) = rank.checked_sub(1) {
+                    let end = previous as u32;
 
-                    if let (Some(left), Some(right), Some(end)) =
-                        (before, after, rank.checked_sub(1))
+                    for item in bucket(merged_top_flat, merged_top_offsets, rank)
+                        .iter()
+                        .copied()
                     {
-                        let start = open_run_start[left];
-                        let end = end as u32;
+                        let item = item as usize;
+                        let rank = rank as u32;
+                        let before = active.predecessor(item);
+                        let after = active.successor(item);
 
-                        if end >= start {
-                            closed_runs.push((left as u32, right as u32, start, end));
+                        active.insert(item);
+
+                        if let (Some(left), Some(right)) = (before, after) {
+                            let start = open_run_start[left];
+
+                            if end >= start {
+                                closed_runs.push((left as u32, right as u32, start, end));
+                            }
+                        }
+
+                        if let Some(left) = before {
+                            open_run_start[left] = rank;
+                        }
+                        if after.is_some() {
+                            open_run_start[item] = rank;
                         }
                     }
+                } else {
+                    for item in bucket(merged_top_flat, merged_top_offsets, rank)
+                        .iter()
+                        .copied()
+                    {
+                        let item = item as usize;
+                        let rank = rank as u32;
 
-                    if let Some(left) = before {
-                        open_run_start[left] = rank as u32;
-                    }
-                    if after.is_some() {
-                        open_run_start[item] = rank as u32;
-                    }
+                        if let Some(left) = active.predecessor(item) {
+                            open_run_start[left] = rank;
+                        }
+                        if active.successor(item).is_some() {
+                            open_run_start[item] = rank;
+                        }
 
-                    active.insert(item);
+                        active.insert(item);
+                    }
                 }
 
                 leftmost_at[rank] = active.first().unwrap() as u32;
                 rightmost_at[rank] = active.last().unwrap() as u32;
 
-                if rank + 1 >= height {
+                if rank + 1 == height {
                     continue;
                 }
 
@@ -879,6 +898,7 @@ where
                 {
                     spanning.insert(segment as usize);
                 }
+
                 for segment in bucket(
                     &structure.seg_bottom_flat,
                     &structure.seg_bottom_offsets,
