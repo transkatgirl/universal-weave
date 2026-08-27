@@ -558,7 +558,7 @@ where
             }
         }
 
-        let (pairs, _) = edges.as_chunks::<2>();
+        let pairs = edges.as_chunks::<2>().0;
 
         let mut up_offsets = guard.vec_with_capacity(count + 1);
         let mut down_offsets = guard.vec_with_capacity(count + 1);
@@ -1220,8 +1220,8 @@ where
 
         if !structure.down_flat.is_empty() {
             root.clear();
-            let mut position_of = root;
 
+            let mut position_of = root;
             position_of.resize(count, 0);
 
             for (position, vertex) in structure.real_flat.iter().copied().enumerate() {
@@ -1235,14 +1235,13 @@ where
         self.polyline_block_bounds
             .reserve(height.div_ceil(VIEW_BLOCK));
 
-        for chunk in self.polyline_bounds.chunks(VIEW_BLOCK) {
-            let merged = chunk.iter().copied().fold(
-                (Vec2::INFINITY, Vec2::NEG_INFINITY),
-                |(low, high), (bound_min, bound_max)| (low.min(bound_min), high.max(bound_max)),
-            );
-
-            self.polyline_block_bounds.push(merged);
-        }
+        self.polyline_block_bounds
+            .extend(self.polyline_bounds.chunks(VIEW_BLOCK).map(|chunk| {
+                chunk.iter().copied().fold(
+                    (Vec2::INFINITY, Vec2::NEG_INFINITY),
+                    |(low, high), (bound_min, bound_max)| (low.min(bound_min), high.max(bound_max)),
+                )
+            }));
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool, const HAS_SEGMENTS: bool>(
