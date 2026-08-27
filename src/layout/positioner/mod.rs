@@ -1,9 +1,4 @@
-#![allow(
-    clippy::too_many_lines,
-    clippy::cognitive_complexity,
-    clippy::many_single_char_names,
-    reason = "WIP"
-)]
+#![allow(clippy::too_many_lines, clippy::cognitive_complexity, reason = "WIP")]
 #![allow(
     clippy::as_conversions,
     clippy::cast_possible_truncation,
@@ -987,13 +982,13 @@ where
             }
         }
 
-        let medians_down = scan_medians(
+        let medians_down = build_medians(
             guard,
             &structure.up_offsets,
             &structure.up_flat,
             &structure.top,
         );
-        let medians_up = scan_medians(
+        let medians_up = build_medians(
             guard,
             &structure.down_offsets,
             &structure.down_flat,
@@ -1016,23 +1011,23 @@ where
             right_runs.resize(total_runs, (0, 0, 0));
 
             for (left, right, _, _) in closed_runs.iter().copied() {
-                right_offsets[left as usize] += 1;
                 left_offsets[right as usize] += 1;
+                right_offsets[left as usize] += 1;
             }
 
             ends_from_counts(&mut left_offsets);
             ends_from_counts(&mut right_offsets);
 
             for (left, right, start, end) in closed_runs.iter().copied().rev() {
-                let cursor = &mut right_offsets[left as usize];
-
-                *cursor -= 1;
-                right_runs[*cursor as usize] = (right, start, end);
-
                 let cursor = &mut left_offsets[right as usize];
 
                 *cursor -= 1;
                 left_runs[*cursor as usize] = (left, start, end);
+
+                let cursor = &mut right_offsets[left as usize];
+
+                *cursor -= 1;
+                right_runs[*cursor as usize] = (right, start, end);
             }
         } else {
             left_single.resize(count, u32::MAX);
@@ -1042,18 +1037,22 @@ where
                 let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
 
                 for (left, right) in layer.iter().copied().zip(layer.iter().copied().skip(1)) {
-                    right_single[left as usize] = right;
                     left_single[right as usize] = left;
+                    right_single[left as usize] = right;
                 }
             }
         }
 
-        let mut root = guard.vec_with_capacity(count);
-        let mut align = guard.vec_with_capacity(count);
-        let mut sink = guard.vec_with_capacity(count);
-        let mut shift = guard.vec_with_capacity(count);
+        let mut candidates = [
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+        ];
 
-        let mut stack = guard.vec();
+        for candidate in &mut candidates {
+            candidate.resize(count, f32::NAN);
+        }
 
         let mut scratch = PassScratch {
             top: &structure.top,
@@ -1075,23 +1074,12 @@ where
             merged_bottom_offsets,
             medians_down: &medians_down,
             medians_up: &medians_up,
-            root: &mut root,
-            align: &mut align,
-            sink: &mut sink,
-            shift: &mut shift,
-            stack: &mut stack,
+            root: &mut guard.vec_with_capacity(count),
+            align: &mut guard.vec_with_capacity(count),
+            sink: &mut guard.vec_with_capacity(count),
+            shift: &mut guard.vec_with_capacity(count),
+            stack: &mut guard.vec(),
         };
-
-        let mut candidates = [
-            guard.vec_with_capacity(count),
-            guard.vec_with_capacity(count),
-            guard.vec_with_capacity(count),
-            guard.vec_with_capacity(count),
-        ];
-
-        for candidate in &mut candidates {
-            candidate.resize(count, f32::NAN);
-        }
 
         let extents = [
             self.coordinate_pass::<true, true, HAS_SEGMENTS>(
@@ -2065,53 +2053,62 @@ struct Medians {
     kind: MedianKind,
 }
 
-fn scan_medians<'g>(
+fn build_medians<'g>(
     guard: &'g ScratchpadGuard<'_>,
     offsets: &[u32],
     flat: &[u32],
     top: &[u32],
 ) -> ScratchpadVec<'g, Medians> {
-    let count = offsets.len().saturating_sub(1);
+    let mut medians = guard.vec_with_capacity(offsets.len().saturating_sub(1));
 
-    let mut medians = guard.vec_with_capacity(count);
+    medians.extend(
+        offsets
+            .iter()
+            .copied()
+            .zip(offsets.iter().copied().skip(1))
+            .map(|(base, next)| {
+                let degree = next - base;
 
-    for (base, next) in offsets.iter().copied().zip(offsets.iter().copied().skip(1)) {
-        let degree = next - base;
+                if degree == 0 {
+                    Medians {
+                        entries: [(0, 0); 2],
+                        kind: MedianKind::None,
+                    }
+                } else {
+                    let low_position = base + ((degree - 1) >> 1_u32);
+                    let high_position = base + (degree >> 1_u32);
+                    let low = (flat[low_position as usize], low_position);
 
-        if degree == 0 {
-            medians.push(Medians {
-                entries: [(0, 0); 2],
-                kind: MedianKind::None,
-            });
-            continue;
-        }
+                    if low_position == high_position {
+                        Medians {
+                            entries: [low, low],
+                            kind: MedianKind::Single,
+                        }
+                    } else {
+                        let high = (flat[high_position as usize], high_position);
+                        let low_segment = top[low.0 as usize] & SEG_BIT != 0;
+                        let high_segment = top[high.0 as usize] & SEG_BIT != 0;
 
-        let low_position = base + ((degree - 1) >> 1_u32);
-        let high_position = base + (degree >> 1_u32);
-        let low = (flat[low_position as usize], low_position);
-
-        if low_position == high_position {
-            medians.push(Medians {
-                entries: [low, low],
-                kind: MedianKind::Single,
-            });
-            continue;
-        }
-
-        let high = (flat[high_position as usize], high_position);
-        let low_segment = top[low.0 as usize] & SEG_BIT != 0;
-        let high_segment = top[high.0 as usize] & SEG_BIT != 0;
-
-        let (entries, kind) = if low_segment == high_segment {
-            ([low, high], MedianKind::Ordered)
-        } else if low_segment {
-            ([low, high], MedianKind::Fixed)
-        } else {
-            ([high, low], MedianKind::Fixed)
-        };
-
-        medians.push(Medians { entries, kind });
-    }
+                        if low_segment == high_segment {
+                            Medians {
+                                entries: [low, high],
+                                kind: MedianKind::Ordered,
+                            }
+                        } else if low_segment {
+                            Medians {
+                                entries: [low, high],
+                                kind: MedianKind::Fixed,
+                            }
+                        } else {
+                            Medians {
+                                entries: [high, low],
+                                kind: MedianKind::Fixed,
+                            }
+                        }
+                    }
+                }
+            }),
+    );
 
     medians
 }
