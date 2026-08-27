@@ -45,3 +45,5 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 		- Built-in action queuing wrapper (can be used to implement undo/redo)
 - Supports `no_std` environments (requires `alloc`)
 	- Loro must be disabled when building for `no_std`
+	- Recommended heap size is 1.2 MB per 1,000 nodes
+		- Significant memory efficiency improvements are planned for future releases
