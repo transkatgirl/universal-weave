@@ -293,6 +293,7 @@ where
 }
 
 #[cfg(feature = "rkyv")]
+#[allow(unsafe_code, reason = "rkyv limitation")]
 // SAFETY:
 // All fields are safe to access and no unsafe functions are called
 unsafe impl<K, T, M, S, C> Verify<C> for ArchivedDependentWeave<K, T, M, S>

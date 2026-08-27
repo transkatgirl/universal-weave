@@ -13,7 +13,7 @@
 #![forbid(non_ascii_idents)]
 #![warn(missing_docs)]
 #![warn(let_underscore)]
-#![cfg_attr(not(feature = "rkyv"), warn(unsafe_code))] // rkyv limitation
+#![warn(unsafe_code)]
 #![warn(clippy::pedantic)]
 #![warn(clippy::cargo)]
 #![allow(clippy::multiple_crate_versions, reason = "Unresolvable")]
