@@ -1175,7 +1175,6 @@ where
         let mut reach = 0.0_f32;
 
         self.reach_prefix.clear();
-        self.reach_prefix.reserve(structure.deepest.len());
         self.reach_prefix
             .extend(structure.deepest.iter().copied().map(|deep| {
                 reach = reach.max(self.layer_ends[deep as usize]);
@@ -1183,7 +1182,6 @@ where
             }));
 
         self.x_coordinates.clear();
-        self.x_coordinates.reserve(structure.real_flat.len());
         self.x_coordinates.extend(
             structure
                 .real_flat
@@ -1192,38 +1190,30 @@ where
                 .map(|vertex| fourth[vertex as usize]),
         );
 
-        let ordinal_of = |vertex: u32| {
-            let vertex = vertex as usize;
-
-            if HAS_SEGMENTS {
-                structure.bottom[vertex] as usize
-            } else {
-                vertex
-            }
-        };
-
         {
-            let mut permuted_keys = guard.vec_with_capacity(self.keys.len());
+            let ordinal_of = |vertex| {
+                if HAS_SEGMENTS {
+                    structure.bottom[vertex] as usize
+                } else {
+                    vertex
+                }
+            };
 
-            permuted_keys.extend(
+            let permuted_keys = guard.inner.alloc_iter_exact(
                 structure
                     .real_flat
                     .iter()
                     .copied()
-                    .map(|vertex| self.keys[ordinal_of(vertex)]),
+                    .map(|vertex| self.keys[ordinal_of(vertex as usize)]),
             );
             self.keys.copy_from_slice(&permuted_keys);
-        }
 
-        {
-            let mut permuted_sizes = guard.vec_with_capacity(self.sizes.len());
-
-            permuted_sizes.extend(
+            let permuted_sizes = guard.inner.alloc_iter_exact(
                 structure
                     .real_flat
                     .iter()
                     .copied()
-                    .map(|vertex| self.sizes[ordinal_of(vertex)]),
+                    .map(|vertex| self.sizes[ordinal_of(vertex as usize)]),
             );
             self.sizes.copy_from_slice(&permuted_sizes);
         }
