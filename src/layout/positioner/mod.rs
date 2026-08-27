@@ -1054,6 +1054,8 @@ where
             candidate.resize(count, f32::NAN);
         }
 
+        let mut root = guard.vec_with_capacity(count);
+
         let mut scratch = PassScratch {
             top: &structure.top,
             bottom: &structure.bottom,
@@ -1074,7 +1076,7 @@ where
             merged_bottom_offsets,
             medians_down: &medians_down,
             medians_up: &medians_up,
-            root: &mut guard.vec_with_capacity(count),
+            root: &mut root,
             align: &mut guard.vec_with_capacity(count),
             sink: &mut guard.vec_with_capacity(count),
             shift: &mut guard.vec_with_capacity(count),
@@ -1225,6 +1227,7 @@ where
             );
             self.keys.copy_from_slice(&permuted_keys);
         }
+
         {
             let mut permuted_sizes = guard.vec_with_capacity(self.sizes.len());
 
@@ -1239,7 +1242,8 @@ where
         }
 
         if !structure.down_flat.is_empty() {
-            let mut position_of = guard.vec_with_capacity(count);
+            root.clear();
+            let mut position_of = root;
 
             position_of.resize(count, 0);
 
