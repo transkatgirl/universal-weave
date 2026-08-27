@@ -590,10 +590,11 @@ where
 
         for [source, target] in pairs.iter().copied().rev() {
             let source = source as usize;
-            let cursor = down_offsets[source] - 1;
 
-            down_flat[cursor as usize] = target;
-            down_offsets[source] = cursor;
+            let cursor = &mut down_offsets[source];
+
+            *cursor -= 1;
+            down_flat[*cursor as usize] = target;
 
             let top_source_raw = top[source];
 
@@ -631,10 +632,11 @@ where
                 .rev()
             {
                 let target = target as usize;
-                let cursor = up_offsets[target] - 1;
 
-                up_flat[cursor as usize] = source;
-                up_offsets[target] = cursor;
+                let cursor = &mut up_offsets[target];
+
+                *cursor -= 1;
+                up_flat[*cursor as usize] = source;
             }
         }
 
@@ -1002,15 +1004,15 @@ where
             ends_from_counts(&mut right_offsets);
 
             for (left, right, start, end) in closed_runs.iter().copied().rev() {
-                let cursor = right_offsets[left as usize] - 1;
+                let cursor = &mut right_offsets[left as usize];
 
-                right_runs[cursor as usize] = (right, start, end);
-                right_offsets[left as usize] = cursor;
+                *cursor -= 1;
+                right_runs[*cursor as usize] = (right, start, end);
 
-                let cursor = left_offsets[right as usize] - 1;
+                let cursor = &mut left_offsets[right as usize];
 
-                left_runs[cursor as usize] = (left, start, end);
-                left_offsets[right as usize] = cursor;
+                *cursor -= 1;
+                left_runs[*cursor as usize] = (left, start, end);
             }
         } else {
             left_single.resize(count, u32::MAX);
