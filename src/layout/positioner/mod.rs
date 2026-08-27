@@ -23,10 +23,7 @@ use crate::{
     IndependentContents, LayoutItem, Node, Weave,
     dependent::DependentWeave,
     independent::IndependentWeave,
-    layout::{
-        Spacing, positioner::slotset::SlotSet, validate_output_float, validate_output_vec2,
-        validate_vec2,
-    },
+    layout::{Spacing, positioner::slotset::SlotSet, validate_output_float, validate_vec2},
 };
 
 mod slotset;
@@ -1109,20 +1106,20 @@ where
         let mut best = 0;
 
         for pass in 1..4 {
-            if extents[pass].1 - extents[pass].0 < extents[best].1 - extents[best].0 {
+            let pass_extent = extents[pass];
+            let best_extent = extents[best];
+
+            if pass_extent.1 - pass_extent.0 < best_extent.1 - best_extent.0 {
                 best = pass;
             }
         }
 
-        let mut offsets = [0.0_f32; 4];
-
-        for (pass, offset) in offsets.iter_mut().enumerate() {
-            *offset = if pass & 1 == 0 {
-                extents[best].0 - extents[pass].0
-            } else {
-                extents[best].1 - extents[pass].1
-            };
-        }
+        let offsets = [
+            extents[best].0 - extents[0].0,
+            extents[best].1 - extents[1].1,
+            extents[best].0 - extents[2].0,
+            extents[best].1 - extents[3].1,
+        ];
 
         let mut left = f32::INFINITY;
         let mut right = f32::NEG_INFINITY;
@@ -1143,9 +1140,7 @@ where
                 *coordinate + offsets[3],
             );
 
-            let low = a.min(b).max(c.min(d));
-            let high = a.max(b).min(c.max(d));
-            let combined = f32::midpoint(low, high);
+            let combined = f32::midpoint(a.min(b).max(c.min(d)), a.max(b).min(c.max(d)));
             let extent = extent.abs();
 
             *coordinate = combined;
@@ -1153,48 +1148,49 @@ where
             right = right.max(combined + extent);
         }
 
-        let mut valid = true;
+        let mut cursor = rank_tallest[0];
+        let mut valid = validate_output_float(cursor);
 
         self.layer_ends.clear();
-        self.layer_ends.reserve(height);
+        self.layer_ends.reserve(rank_tallest.len());
+        self.layer_ends.push(cursor);
+        self.layer_ends
+            .extend(rank_tallest.into_iter().skip(1).map(|tallest| {
+                cursor += spacing.layer + tallest;
+                valid &= validate_output_float(cursor);
 
-        let mut cursor = 0.0_f32;
+                cursor
+            }));
 
-        for (rank, tallest) in rank_tallest.iter().copied().enumerate() {
-            let start = if rank == 0 {
-                0.0_f32
-            } else {
-                cursor + spacing.layer
-            };
-            let end = start + tallest;
-
-            self.layer_ends.push(end);
-
-            valid &= validate_output_float(start) && validate_output_float(end);
-
-            cursor = end;
-        }
+        self.size = Vec2::new(right - left, cursor);
+        valid &= validate_output_float(self.size.x);
 
         for coordinate in &mut fourth {
             *coordinate -= left;
             valid &= validate_output_float(*coordinate);
         }
 
-        self.reach_prefix.clear();
-        self.reach_prefix.reserve(height);
+        assert!(valid, "Output is not normal and positive");
 
         let mut reach = 0.0_f32;
 
-        for deep in structure.deepest.iter().copied() {
-            reach = reach.max(self.layer_ends[deep as usize]);
-            self.reach_prefix.push(reach);
-        }
+        self.reach_prefix.clear();
+        self.reach_prefix.reserve(structure.deepest.len());
+        self.reach_prefix
+            .extend(structure.deepest.iter().copied().map(|deep| {
+                reach = reach.max(self.layer_ends[deep as usize]);
+                reach
+            }));
 
-        self.size = Vec2::new(right - left, cursor);
-
-        valid &= validate_output_vec2(self.size);
-
-        assert!(valid, "Output is not normal and positive");
+        self.x_coordinates.clear();
+        self.x_coordinates.reserve(structure.real_flat.len());
+        self.x_coordinates.extend(
+            structure
+                .real_flat
+                .iter()
+                .copied()
+                .map(|vertex| fourth[vertex as usize]),
+        );
 
         let ordinal_of = |vertex: u32| {
             let vertex = vertex as usize;
@@ -1205,15 +1201,6 @@ where
                 vertex
             }
         };
-
-        self.x_coordinates.clear();
-        self.x_coordinates.extend(
-            structure
-                .real_flat
-                .iter()
-                .copied()
-                .map(|vertex| fourth[vertex as usize]),
-        );
 
         {
             let mut permuted_keys = guard.vec_with_capacity(self.keys.len());

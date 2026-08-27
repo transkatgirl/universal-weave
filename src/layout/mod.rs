@@ -280,8 +280,3 @@ const fn validate_output_float(value: f32) -> bool {
         FpCategory::Normal | FpCategory::Zero | FpCategory::Subnormal
     ) && value.is_sign_positive()
 }
-
-#[must_use]
-const fn validate_output_vec2(value: Vec2) -> bool {
-    validate_output_float(value.x) && validate_output_float(value.y)
-}
