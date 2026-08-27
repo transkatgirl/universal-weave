@@ -13,6 +13,7 @@
     clippy::arithmetic_side_effects,
     reason = "Node and edge counts fit in u32"
 )]
+#![allow(clippy::impl_trait_in_params, reason = "Readability")]
 
 // TODO: Substantial clean-up work
 
@@ -192,14 +193,13 @@ impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
 {
-    pub fn layout_dependent<T, M, S, F>(
+    pub fn layout_dependent<T, M, S>(
         &mut self,
         weave: &mut DependentWeave<K, T, M, S>,
-        mut sizes: F,
+        mut sizes: impl FnMut(&K) -> Vec2,
         spacing: &Spacing,
     ) where
         S: BuildHasher + Default + Clone,
-        F: FnMut(&K) -> Vec2,
     {
         assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
@@ -239,16 +239,15 @@ where
 
         self.assign_dag_coordinates_inner::<false>(&guard, &structure, spacing);
     }
-    pub fn layout_independent<T, M, S, F>(
+    pub fn layout_independent<T, M, S>(
         &mut self,
         weave: &mut IndependentWeave<K, T, M, S>,
-        mut sizes: F,
+        mut sizes: impl FnMut(&K) -> Vec2,
         spacing: &Spacing,
         topological: &mut Vec<K>,
     ) where
         T: IndependentContents,
         S: BuildHasher + Default + Clone,
-        F: FnMut(&K) -> Vec2,
     {
         assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
@@ -1344,10 +1343,10 @@ where
             let mut process = |vertex: usize| {
                 let stored = &medians[vertex];
                 let (entries, distinct) = match stored.kind {
-                    MEDIAN_NONE => return,
-                    MEDIAN_SINGLE => (stored.entries, 1),
-                    MEDIAN_ORDERED if !LEFTWARD => ([stored.entries[1], stored.entries[0]], 2),
-                    _ => (stored.entries, 2),
+                    MedianKind::None => return,
+                    MedianKind::Single => (stored.entries, 1),
+                    MedianKind::Ordered if !LEFTWARD => ([stored.entries[1], stored.entries[0]], 2),
+                    MedianKind::Ordered | MedianKind::Fixed => (stored.entries, 2),
                 };
 
                 for (neighbour, position) in entries[..distinct].iter().copied() {
@@ -1640,20 +1639,20 @@ impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
 {
-    #[inline]
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
+    #[inline]
     fn layer_start(&self, rank: usize) -> f32 {
         rank.checked_sub(1).map_or(0.0_f32, |previous| {
             self.layer_ends[previous] + self.layer_gap
         })
     }
-    #[inline]
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
+    #[inline]
     fn layer_center(&self, rank: usize) -> f32 {
         f32::midpoint(self.layer_start(rank), self.layer_ends[rank])
     }
-    #[inline]
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
+    #[inline]
     fn ranks_started_by(&self, y: f32) -> usize {
         let Some(interior) = self.layer_ends.len().checked_sub(1) else {
             return 0;
@@ -1770,10 +1769,12 @@ where
         self.size
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    pub fn view<F>(&self, min: Vec2, max: Vec2, mut callback: F)
-    where
-        F: FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
-    {
+    pub fn view(
+        &self,
+        min: Vec2,
+        max: Vec2,
+        mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+    ) {
         if self.keys.is_empty() {
             return;
         }
@@ -1902,10 +1903,14 @@ where
         self.view_nodes(min, max, first, last, callback);
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    fn view_nodes<F>(&self, min: Vec2, max: Vec2, first: usize, last: usize, mut callback: F)
-    where
-        F: FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
-    {
+    fn view_nodes(
+        &self,
+        min: Vec2,
+        max: Vec2,
+        first: usize,
+        last: usize,
+        mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+    ) {
         for (rank, ((start, end), half_width)) in self.real_offsets[first..last.max(first)]
             .iter()
             .copied()
@@ -2000,15 +2005,18 @@ const fn reflect(index: usize, len: usize, forward: bool) -> usize {
     if forward { index } else { len - 1 - index }
 }
 
-const MEDIAN_NONE: u8 = 0;
-const MEDIAN_SINGLE: u8 = 1;
-const MEDIAN_ORDERED: u8 = 2;
-const MEDIAN_FIXED: u8 = 3;
+#[derive(Debug, Clone, Copy)]
+enum MedianKind {
+    None,
+    Single,
+    Ordered,
+    Fixed,
+}
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct Medians {
     entries: [(u32, u32); 2],
-    kind: u8,
+    kind: MedianKind,
 }
 
 fn scan_medians<'g>(
@@ -2027,7 +2035,7 @@ fn scan_medians<'g>(
         if degree == 0 {
             medians.push(Medians {
                 entries: [(0, 0); 2],
-                kind: MEDIAN_NONE,
+                kind: MedianKind::None,
             });
             continue;
         }
@@ -2039,7 +2047,7 @@ fn scan_medians<'g>(
         if low_position == high_position {
             medians.push(Medians {
                 entries: [low, low],
-                kind: MEDIAN_SINGLE,
+                kind: MedianKind::Single,
             });
             continue;
         }
@@ -2049,11 +2057,11 @@ fn scan_medians<'g>(
         let high_segment = top[high.0 as usize] & SEG_BIT != 0;
 
         let (entries, kind) = if low_segment == high_segment {
-            ([low, high], MEDIAN_ORDERED)
+            ([low, high], MedianKind::Ordered)
         } else if low_segment {
-            ([low, high], MEDIAN_FIXED)
+            ([low, high], MedianKind::Fixed)
         } else {
-            ([high, low], MEDIAN_FIXED)
+            ([high, low], MedianKind::Fixed)
         };
 
         medians.push(Medians { entries, kind });
@@ -2069,8 +2077,8 @@ fn ends_from_counts(offsets: &mut [u32]) -> usize {
     }) as usize
 }
 
-#[inline]
 #[allow(clippy::unreachable, reason = "Compiler limitation")]
+#[inline]
 fn bucket<'a, T>(flat: &'a [T], offsets: &[u32], index: usize) -> &'a [T] {
     let [left, right] = offsets[index..=index + 1] else {
         unreachable!()
