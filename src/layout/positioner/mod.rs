@@ -76,7 +76,7 @@ where
             rank_half_width: Vec::new(),
             x_coordinates: Vec::new(),
             layer_ends: Vec::new(),
-            layer_gap: 0.0_f32,
+            layer_gap: 0.0,
             size: Vec2::ZERO,
             polylines: Vec::new(),
             polyline_source_x: Vec::new(),
@@ -114,6 +114,7 @@ where
         self.x_coordinates.clear();
         self.layer_ends.clear();
         self.size = Vec2::ZERO;
+        self.layer_gap = 0.0;
         self.polylines.clear();
         self.polyline_source_x.clear();
         self.polyline_segments.clear();
@@ -603,11 +604,12 @@ where
                 let child = if HAS_SEGMENTS && top_target_raw & SEG_BIT != 0 {
                     bottom[target] + 1
                 } else {
-                    top_target_raw & RANK_MASK
+                    top_target_raw
                 };
                 let rank = (top_source_raw & RANK_MASK) as usize;
 
-                deepest[rank] = deepest[rank].max(child);
+                let deepest_rank = &mut deepest[rank];
+                *deepest_rank = (*deepest_rank).max(child);
             }
         }
 
@@ -682,118 +684,118 @@ where
         structure: &LayoutCSR<'_>,
         spacing: &Spacing,
     ) {
-        const PASSES: [(bool, bool); 4] =
-            [(true, true), (true, false), (false, true), (false, false)];
-
         assert!(spacing.validate(), "Invalid spacing");
 
         self.layer_gap = spacing.layer;
 
         let count = structure.top.len();
+        let height = self.height as usize;
 
         if count == 0 {
             return;
         }
 
-        let height_usize = self.height as usize;
-
-        let mut fourth = guard.vec_with_capacity(count);
-
-        fourth.resize(count, f32::NAN);
-        self.rank_half_width.clear();
-        self.rank_half_width.resize(height_usize, 0.0_f32);
-
         let mut extent = guard.vec_with_capacity(count);
-        let mut rank_tallest = guard.vec_with_capacity(height_usize);
-        let mut candidates = [
-            guard.vec_with_capacity(count),
-            guard.vec_with_capacity(count),
-            guard.vec_with_capacity(count),
-        ];
+        let mut rank_tallest = guard.vec_with_capacity(height);
 
-        extent.resize(count, 0.0_f32);
-        rank_tallest.resize(height_usize, 0.0_f32);
-        for candidate in &mut candidates {
-            candidate.resize(count, f32::NAN);
-        }
+        extent.resize(count, 0.0);
+        rank_tallest.resize(height, 0.0_f32);
+
+        self.rank_half_width.clear();
+        self.rank_half_width.resize(height, 0.0);
 
         if HAS_SEGMENTS {
-            let mut sizes = self.sizes.iter().copied();
-
-            for (top, extent) in structure.top.iter().copied().zip(extent.iter_mut()) {
-                if top & SEG_BIT != 0 {
-                    *extent = -(spacing.corridor * 0.5_f32);
-                    continue;
-                }
-
-                let (size, rank) = (sizes.next().unwrap(), top as usize);
-                let half_width = size.x * 0.5_f32;
-
-                *extent = half_width;
-
-                rank_tallest[rank] = rank_tallest[rank].max(size.y);
-                self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
-            }
-        } else {
-            for ((size, rank), extent) in self
-                .sizes
+            for ((top, extent), size) in structure
+                .top
                 .iter()
                 .copied()
-                .zip(structure.top.iter().copied())
                 .zip(extent.iter_mut())
+                .filter_map(|(top, extent)| {
+                    if top & SEG_BIT != 0 {
+                        *extent = -(spacing.corridor * 0.5);
+                        None
+                    } else {
+                        Some((top, extent))
+                    }
+                })
+                .zip(self.sizes.iter().copied())
             {
-                let rank = rank as usize;
+                let rank = top as usize;
+                let half_width = size.x * 0.5;
+
+                *extent = half_width;
+
+                let rank_tallest = &mut rank_tallest[rank];
+                *rank_tallest = (*rank_tallest).max(size.y);
+
+                let rank_half_width = &mut self.rank_half_width[rank];
+                *rank_half_width = (*rank_half_width).max(half_width);
+            }
+        } else {
+            for ((top, extent), size) in structure
+                .top
+                .iter()
+                .copied()
+                .zip(extent.iter_mut())
+                .zip(self.sizes.iter().copied())
+            {
+                let rank = top as usize;
                 let half_width = size.x * 0.5_f32;
 
                 *extent = half_width;
 
-                rank_tallest[rank] = rank_tallest[rank].max(size.y);
-                self.rank_half_width[rank] = self.rank_half_width[rank].max(half_width);
+                let rank_tallest = &mut rank_tallest[rank];
+                *rank_tallest = (*rank_tallest).max(size.y);
+
+                let rank_half_width = &mut self.rank_half_width[rank];
+                *rank_half_width = (*rank_half_width).max(half_width);
             }
         }
 
-        let (merged_top_flat, merged_top_offsets): (&[u32], &[u32]) = if HAS_SEGMENTS {
-            (&structure.merged_top_flat, &structure.merged_top_offsets)
-        } else {
-            (&structure.real_flat, &self.real_offsets)
-        };
-        let (merged_bottom_flat, merged_bottom_offsets): (&[u32], &[u32]) = if HAS_SEGMENTS {
-            (
-                &structure.merged_bottom_flat,
-                &structure.merged_bottom_offsets,
-            )
-        } else {
-            (&structure.real_flat, &self.real_offsets)
-        };
+        let (merged_top_flat, merged_top_offsets, merged_bottom_flat, merged_bottom_offsets) =
+            if HAS_SEGMENTS {
+                (
+                    &*structure.merged_top_flat,
+                    &*structure.merged_top_offsets,
+                    &*structure.merged_bottom_flat,
+                    &*structure.merged_bottom_offsets,
+                )
+            } else {
+                (
+                    &*structure.real_flat,
+                    &*self.real_offsets,
+                    &*structure.real_flat,
+                    &*self.real_offsets,
+                )
+            };
 
-        let mut marked: ScratchpadVec<'_, bool> = guard.vec();
-        let mut leftmost_at = guard.vec_with_capacity(height_usize);
-        let mut rightmost_at = guard.vec_with_capacity(height_usize);
+        let mut marked = guard.vec();
+        let mut marked_up = guard.vec();
+        let mut leftmost_at = guard.vec_with_capacity(height);
+        let mut rightmost_at = guard.vec_with_capacity(height);
 
-        leftmost_at.resize(height_usize, 0);
-        rightmost_at.resize(height_usize, 0);
+        leftmost_at.resize(height, 0);
+        rightmost_at.resize(height, 0);
 
         let mut closed_runs = if HAS_SEGMENTS {
             guard.vec_with_capacity(count.strict_mul(3))
         } else {
             guard.vec()
         };
-        let mut any_marked = false;
 
         if HAS_SEGMENTS {
             marked.resize(structure.down_flat.len(), false);
 
-            let mut open_run_start = guard.vec_with_capacity(count);
-
-            open_run_start.resize(count, 0);
-
+            let mut any_marked = false;
             let mut active = SlotSet::new(guard);
             let mut spanning = SlotSet::new(guard);
+            let mut open_run_start = guard.vec_with_capacity(count);
 
             active.rebuild(count);
             spanning.rebuild(count);
+            open_run_start.resize(count, 0);
 
-            for rank in 0..=height_usize {
+            for rank in 0..=height {
                 if let Some(previous) = rank.checked_sub(1) {
                     for item in bucket(merged_bottom_flat, merged_bottom_offsets, previous)
                         .iter()
@@ -829,7 +831,7 @@ where
                     }
                 }
 
-                if rank >= height_usize {
+                if rank >= height {
                     continue;
                 }
 
@@ -865,7 +867,7 @@ where
                 leftmost_at[rank] = active.first().unwrap() as u32;
                 rightmost_at[rank] = active.last().unwrap() as u32;
 
-                if rank + 1 >= height_usize {
+                if rank + 1 >= height {
                     continue;
                 }
 
@@ -896,8 +898,8 @@ where
                 {
                     let source = source as usize;
                     let base = structure.down_offsets[source] as usize;
-                    let mut before: Option<Option<usize>> = None;
-                    let mut after: Option<Option<usize>> = None;
+                    let mut before = None;
+                    let mut after = None;
 
                     for (offset, target) in
                         bucket(&structure.down_flat, &structure.down_offsets, source)
@@ -923,43 +925,43 @@ where
                     }
                 }
             }
+
+            if any_marked {
+                marked_up.resize(structure.down_flat.len(), false);
+
+                let mut cursors = guard.vec_with_capacity(count);
+
+                cursors.extend(structure.up_offsets[..count].iter().copied());
+
+                for source in merged_bottom_flat.iter().copied() {
+                    let source = source as usize;
+                    let base = structure.down_offsets[source] as usize;
+
+                    for (offset, target) in
+                        bucket(&structure.down_flat, &structure.down_offsets, source)
+                            .iter()
+                            .copied()
+                            .enumerate()
+                    {
+                        let cursor = &mut cursors[target as usize];
+
+                        marked_up[*cursor as usize] = marked[base + offset];
+                        *cursor += 1;
+                    }
+                }
+            } else {
+                marked.clear();
+            }
         } else {
-            for rank in 0..height_usize {
+            for (rank, (leftmost, rightmost)) in leftmost_at
+                .iter_mut()
+                .zip(rightmost_at.iter_mut())
+                .enumerate()
+            {
                 let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
 
-                leftmost_at[rank] = layer[0];
-                rightmost_at[rank] = *layer.last().unwrap();
-            }
-        }
-
-        if !any_marked {
-            marked.clear();
-        }
-
-        let mut marked_up: ScratchpadVec<'_, bool> = guard.vec();
-
-        if HAS_SEGMENTS && any_marked {
-            marked_up.resize(structure.down_flat.len(), false);
-
-            let mut cursors = guard.vec_with_capacity(count);
-
-            cursors.extend(structure.up_offsets[..count].iter().copied());
-
-            for source in merged_bottom_flat.iter().copied() {
-                let source = source as usize;
-                let base = structure.down_offsets[source] as usize;
-
-                for (offset, target) in
-                    bucket(&structure.down_flat, &structure.down_offsets, source)
-                        .iter()
-                        .copied()
-                        .enumerate()
-                {
-                    let cursor = cursors[target as usize];
-
-                    marked_up[cursor as usize] = marked[base + offset];
-                    cursors[target as usize] = cursor + 1;
-                }
+                *leftmost = layer[0];
+                *rightmost = *layer.last().unwrap();
             }
         }
 
@@ -976,12 +978,12 @@ where
             &structure.top,
         );
 
-        let mut left_offsets: ScratchpadVec<'_, u32> = guard.vec();
-        let mut right_offsets: ScratchpadVec<'_, u32> = guard.vec();
-        let mut left_runs: ScratchpadVec<'_, (u32, u32, u32)> = guard.vec();
-        let mut right_runs: ScratchpadVec<'_, (u32, u32, u32)> = guard.vec();
-        let mut left_single: ScratchpadVec<'_, u32> = guard.vec();
-        let mut right_single: ScratchpadVec<'_, u32> = guard.vec();
+        let mut left_offsets = guard.vec();
+        let mut right_offsets = guard.vec();
+        let mut left_runs = guard.vec();
+        let mut right_runs = guard.vec();
+        let mut left_single = guard.vec();
+        let mut right_single = guard.vec();
 
         if HAS_SEGMENTS {
             let total_runs = closed_runs.len();
@@ -1014,7 +1016,7 @@ where
             left_single.resize(count, u32::MAX);
             right_single.resize(count, u32::MAX);
 
-            for rank in 0..height_usize {
+            for rank in 0..height {
                 let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
 
                 for (left, right) in layer.iter().copied().zip(layer.iter().copied().skip(1)) {
@@ -1058,13 +1060,38 @@ where
             stack: &mut stack,
         };
 
-        let [first, second, third] = &mut candidates;
+        let mut candidates = [
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+            guard.vec_with_capacity(count),
+        ];
+
+        for candidate in &mut candidates {
+            candidate.resize(count, f32::NAN);
+        }
 
         let extents = [
-            self.coordinate_pass::<true, true, HAS_SEGMENTS>(&mut scratch, spacing, first),
-            self.coordinate_pass::<true, false, HAS_SEGMENTS>(&mut scratch, spacing, second),
-            self.coordinate_pass::<false, true, HAS_SEGMENTS>(&mut scratch, spacing, third),
-            self.coordinate_pass::<false, false, HAS_SEGMENTS>(&mut scratch, spacing, &mut fourth),
+            self.coordinate_pass::<true, true, HAS_SEGMENTS>(
+                &mut scratch,
+                spacing,
+                &mut candidates[0],
+            ),
+            self.coordinate_pass::<true, false, HAS_SEGMENTS>(
+                &mut scratch,
+                spacing,
+                &mut candidates[1],
+            ),
+            self.coordinate_pass::<false, true, HAS_SEGMENTS>(
+                &mut scratch,
+                spacing,
+                &mut candidates[2],
+            ),
+            self.coordinate_pass::<false, false, HAS_SEGMENTS>(
+                &mut scratch,
+                spacing,
+                &mut candidates[3],
+            ),
         ];
 
         let mut best = 0;
@@ -1077,8 +1104,8 @@ where
 
         let mut offsets = [0.0_f32; 4];
 
-        for (pass, (_, leftward)) in PASSES.into_iter().enumerate() {
-            offsets[pass] = if leftward {
+        for (pass, offset) in offsets.iter_mut().enumerate() {
+            *offset = if pass & 1 == 0 {
                 extents[best].0 - extents[pass].0
             } else {
                 extents[best].1 - extents[pass].1
@@ -1088,13 +1115,13 @@ where
         let mut left = f32::INFINITY;
         let mut right = f32::NEG_INFINITY;
 
-        let [first, second, third] = &candidates;
+        let [first, second, third, mut fourth] = candidates;
 
         for ((((coordinate, a), b), c), extent) in fourth
             .iter_mut()
-            .zip(first.iter().copied())
-            .zip(second.iter().copied())
-            .zip(third.iter().copied())
+            .zip(first)
+            .zip(second)
+            .zip(third)
             .zip(extent.iter().copied())
         {
             let (a, b, c, d) = (
@@ -1117,7 +1144,7 @@ where
         let mut valid = true;
 
         self.layer_ends.clear();
-        self.layer_ends.reserve(height_usize);
+        self.layer_ends.reserve(height);
 
         let mut cursor = 0.0_f32;
 
@@ -1142,7 +1169,7 @@ where
         }
 
         self.reach_prefix.clear();
-        self.reach_prefix.reserve(height_usize);
+        self.reach_prefix.reserve(height);
 
         let mut reach = 0.0_f32;
 
@@ -1177,7 +1204,7 @@ where
         );
 
         {
-            let mut permuted_keys: ScratchpadVec<'_, K> = guard.vec_with_capacity(self.keys.len());
+            let mut permuted_keys = guard.vec_with_capacity(self.keys.len());
 
             permuted_keys.extend(
                 structure
@@ -1189,8 +1216,7 @@ where
             self.keys.copy_from_slice(&permuted_keys);
         }
         {
-            let mut permuted_sizes: ScratchpadVec<'_, Vec2> =
-                guard.vec_with_capacity(self.sizes.len());
+            let mut permuted_sizes = guard.vec_with_capacity(self.sizes.len());
 
             permuted_sizes.extend(
                 structure
@@ -1203,7 +1229,7 @@ where
         }
 
         if !structure.down_flat.is_empty() {
-            let mut position_of: ScratchpadVec<'_, u32> = guard.vec_with_capacity(count);
+            let mut position_of = guard.vec_with_capacity(count);
 
             position_of.resize(count, 0);
 
@@ -1216,7 +1242,7 @@ where
 
         self.polyline_block_bounds.clear();
         self.polyline_block_bounds
-            .reserve(height_usize.div_ceil(VIEW_BLOCK));
+            .reserve(height.div_ceil(VIEW_BLOCK));
 
         for chunk in self.polyline_bounds.chunks(VIEW_BLOCK) {
             let merged = chunk.iter().copied().fold(
@@ -1337,7 +1363,7 @@ where
             let rank = reflect(step, height, DOWNWARD);
             let layer = bucket(layer_flat, layer_offsets, rank);
 
-            let mut last: Option<usize> = None;
+            let mut last = None;
             let mut process = |vertex: usize| {
                 let stored = &medians[vertex];
                 let (entries, distinct) = match stored.kind {
@@ -1505,7 +1531,7 @@ where
             } else if HAS_SEGMENTS && top_entry_raw & SEG_BIT != 0 {
                 bottom[entry]
             } else {
-                top_entry_raw & RANK_MASK
+                top_entry_raw
             } as usize;
 
             if rank != entry_rank {
@@ -1571,7 +1597,7 @@ where
                     if HAS_SEGMENTS && top_vertex_raw & SEG_BIT != 0 {
                         bottom[vertex]
                     } else {
-                        top_vertex_raw & RANK_MASK
+                        top_vertex_raw
                     }
                 } else {
                     top_vertex_raw & RANK_MASK
@@ -2025,7 +2051,7 @@ fn scan_medians<'g>(
 ) -> ScratchpadVec<'g, Medians> {
     let count = offsets.len().saturating_sub(1);
 
-    let mut medians: ScratchpadVec<'g, Medians> = guard.vec_with_capacity(count);
+    let mut medians = guard.vec_with_capacity(count);
 
     for (base, next) in offsets.iter().copied().zip(offsets.iter().copied().skip(1)) {
         let degree = next - base;
