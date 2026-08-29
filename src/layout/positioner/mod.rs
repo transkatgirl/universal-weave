@@ -1279,19 +1279,6 @@ where
 
         let height = self.height as usize;
 
-        let gaps = [spacing.node, spacing.edge];
-
-        let separation = |a: usize, b: usize| {
-            let (extent_a, extent_b) = (extent[a], extent[b]);
-            let gap = if HAS_SEGMENTS {
-                gaps[((extent_a.to_bits() | extent_b.to_bits()) >> 31_u32) as usize]
-            } else {
-                spacing.node
-            };
-
-            extent_a.abs() + extent_b.abs() + gap
-        };
-
         let (layer_flat, layer_offsets) = if DOWNWARD {
             (*merged_top_flat, *merged_top_offsets)
         } else {
@@ -1299,7 +1286,6 @@ where
         };
         let medians = if DOWNWARD { *medians_down } else { *medians_up };
         let edge_marked = if DOWNWARD { *marked_up } else { *marked };
-        let no_marks = !HAS_SEGMENTS || edge_marked.is_empty();
         let (runs_flat, runs_offsets) = if LEFTWARD {
             (*left_runs, *left_offsets)
         } else {
@@ -1350,31 +1336,30 @@ where
         shift.resize(x.len(), f32::INFINITY);
 
         for step in 0..height {
-            let rank = reflect(step, height, DOWNWARD);
-            let layer = bucket(layer_flat, layer_offsets, rank);
-
             let mut last = None;
+
             let mut process = |vertex: usize| {
-                let stored = &medians[vertex];
-                let (entries, distinct) = match stored.kind {
+                let median = &medians[vertex];
+
+                let entries: &[(u32, u32)] = match median.kind {
                     MedianKind::None => return,
-                    MedianKind::Single => (stored.entries, 1),
-                    MedianKind::Ordered if !LEFTWARD => ([stored.entries[1], stored.entries[0]], 2),
-                    MedianKind::Ordered | MedianKind::Fixed => (stored.entries, 2),
+                    MedianKind::Single => &[median.entries[0]],
+                    MedianKind::Ordered if !LEFTWARD => &[median.entries[1], median.entries[0]],
+                    MedianKind::Ordered | MedianKind::Fixed => &median.entries[..2],
                 };
 
-                for (neighbour, position) in entries[..distinct].iter().copied() {
+                for (neighbour, position) in entries.iter().copied() {
                     let neighbour = neighbour as usize;
 
-                    let admissible = last.is_none_or(|last| {
-                        if LEFTWARD {
-                            last < neighbour
-                        } else {
-                            last > neighbour
-                        }
-                    });
-
-                    if (no_marks || !edge_marked[position as usize]) && admissible {
+                    if (!HAS_SEGMENTS || edge_marked.is_empty() || !edge_marked[position as usize])
+                        && last.is_none_or(|last| {
+                            if LEFTWARD {
+                                last < neighbour
+                            } else {
+                                last > neighbour
+                            }
+                        })
+                    {
                         align[neighbour] = vertex as u32;
                         root[vertex] = root[neighbour];
                         align[vertex] = root[vertex];
@@ -1385,6 +1370,8 @@ where
                     }
                 }
             };
+
+            let layer = bucket(layer_flat, layer_offsets, reflect(step, height, DOWNWARD));
 
             if LEFTWARD {
                 for vertex in layer.iter().copied() {
@@ -1398,6 +1385,22 @@ where
         }
 
         stack.clear();
+
+        let separation = |a: usize, b: usize| {
+            let (extent_a, extent_b) = (extent[a], extent[b]);
+
+            extent_a.abs()
+                + extent_b.abs()
+                + if HAS_SEGMENTS {
+                    if extent_a.is_sign_negative() | extent_b.is_sign_negative() {
+                        spacing.edge
+                    } else {
+                        spacing.node
+                    }
+                } else {
+                    spacing.node
+                }
+        };
 
         let mut place = |start: usize| {
             if root[start] as usize != start || !x[start].is_nan() {
