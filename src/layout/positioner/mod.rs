@@ -1302,37 +1302,11 @@ where
             (*right_single, *left_single)
         };
 
-        let vertex_runs = |vertex: usize| {
-            if HAS_SEGMENTS {
-                bucket(runs_flat, runs_offsets, vertex)
-            } else {
-                &[]
-            }
-        };
-        let runs_len = |runs: &[(u32, u32, u32)], vertex: usize| {
-            if HAS_SEGMENTS {
-                runs.len()
-            } else {
-                usize::from(runs_single[vertex] != u32::MAX)
-            }
-        };
-        let run_neighbour = |runs: &[(u32, u32, u32)], vertex: usize, run: usize| {
-            if HAS_SEGMENTS {
-                runs[run].0
-            } else {
-                runs_single[vertex]
-            }
-        };
-
         let count = x.len() as u32;
 
-        root.clear();
         root.extend(0..count);
-        align.clear();
         align.extend_from_slice(root);
-        sink.clear();
         sink.extend_from_slice(root);
-        shift.clear();
         shift.resize(x.len(), f32::INFINITY);
 
         for step in 0..height {
@@ -1384,8 +1358,6 @@ where
             }
         }
 
-        stack.clear();
-
         let separation = |a: usize, b: usize| {
             let (extent_a, extent_b) = (extent[a], extent[b]);
 
@@ -1401,26 +1373,48 @@ where
                     spacing.node
                 }
         };
+        let vertex_runs = |vertex: usize| {
+            if HAS_SEGMENTS {
+                bucket(runs_flat, runs_offsets, vertex)
+            } else {
+                &[]
+            }
+        };
+        let runs_len = |runs: &[(u32, u32, u32)], vertex: usize| {
+            if HAS_SEGMENTS {
+                runs.len()
+            } else {
+                usize::from(runs_single[vertex] != u32::MAX)
+            }
+        };
+        let run_neighbour = |runs: &[(u32, u32, u32)], vertex: usize, run: usize| {
+            if HAS_SEGMENTS {
+                runs[run].0
+            } else {
+                runs_single[vertex]
+            }
+        };
 
         let mut place = |start: usize| {
-            if root[start] as usize != start || !x[start].is_nan() {
+            let x_start = &mut x[start];
+
+            if root[start] as usize != start || !x_start.is_nan() {
                 return;
             }
 
-            let narrowed = start as u32;
+            *x_start = 0.0_f32;
 
-            x[start] = 0.0_f32;
-
-            let mut frame = (narrowed, narrowed, 0);
+            let start = start as u32;
+            let mut frame = (start, start, 0);
 
             loop {
-                let (root_val, member, runs_applied) = frame;
+                let (root_val, member, applied) = frame;
+                let mut applied = applied as usize;
                 let (root_index, member_index) = (root_val as usize, member as usize);
 
                 let member_runs = vertex_runs(member_index);
                 let run_count = runs_len(member_runs, member_index);
 
-                let mut applied = runs_applied as usize;
                 let mut nested = false;
 
                 while applied < run_count {
