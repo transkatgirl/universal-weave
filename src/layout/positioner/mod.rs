@@ -695,7 +695,6 @@ where
         extent.resize(count, 0.0);
         rank_tallest.resize(height, 0.0_f32);
 
-        self.rank_half_width.clear();
         self.rank_half_width.resize(height, 0.0);
 
         if HAS_SEGMENTS {
@@ -1304,9 +1303,13 @@ where
 
         let count = x.len() as u32;
 
+        root.clear();
         root.extend(0..count);
+        align.clear();
         align.extend_from_slice(root);
+        sink.clear();
         sink.extend_from_slice(root);
+        shift.clear();
         shift.resize(x.len(), f32::INFINITY);
 
         for step in 0..height {
