@@ -56,6 +56,7 @@
 #![allow(clippy::missing_docs_in_private_items)] // TODO
 #![allow(clippy::shadow_unrelated)] // TODO
 #![allow(clippy::shadow_reuse)] // TODO
+#![allow(clippy::shadow_same)] // TODO
 
 /*
 

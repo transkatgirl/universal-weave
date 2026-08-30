@@ -697,52 +697,31 @@ where
 
         self.rank_half_width.resize(height, 0.0);
 
-        if HAS_SEGMENTS {
-            for ((top, extent), size) in structure
-                .top
-                .iter()
-                .copied()
-                .zip(extent.iter_mut())
-                .filter_map(|(top, extent)| {
-                    if top & SEG_BIT != 0 {
-                        *extent = -(spacing.corridor * 0.5);
-                        None
-                    } else {
-                        Some((top, extent))
-                    }
-                })
-                .zip(self.sizes.iter().copied())
-            {
-                let rank = top as usize;
-                let half_width = size.x * 0.5;
+        for ((top, extent), size) in structure
+            .top
+            .iter()
+            .copied()
+            .zip(extent.iter_mut())
+            .filter_map(|(top, extent)| {
+                if HAS_SEGMENTS && top & SEG_BIT != 0 {
+                    *extent = -(spacing.corridor * 0.5);
+                    None
+                } else {
+                    Some((top, extent))
+                }
+            })
+            .zip(self.sizes.iter().copied())
+        {
+            let rank = top as usize;
+            let half_width = size.x * 0.5_f32;
 
-                *extent = half_width;
+            *extent = half_width;
 
-                let rank_tallest = &mut rank_tallest[rank];
-                *rank_tallest = (*rank_tallest).max(size.y);
+            let rank_tallest = &mut rank_tallest[rank];
+            *rank_tallest = (*rank_tallest).max(size.y);
 
-                let rank_half_width = &mut self.rank_half_width[rank];
-                *rank_half_width = (*rank_half_width).max(half_width);
-            }
-        } else {
-            for ((top, extent), size) in structure
-                .top
-                .iter()
-                .copied()
-                .zip(extent.iter_mut())
-                .zip(self.sizes.iter().copied())
-            {
-                let rank = top as usize;
-                let half_width = size.x * 0.5_f32;
-
-                *extent = half_width;
-
-                let rank_tallest = &mut rank_tallest[rank];
-                *rank_tallest = (*rank_tallest).max(size.y);
-
-                let rank_half_width = &mut self.rank_half_width[rank];
-                *rank_half_width = (*rank_half_width).max(half_width);
-            }
+            let rank_half_width = &mut self.rank_half_width[rank];
+            *rank_half_width = (*rank_half_width).max(half_width);
         }
 
         let (merged_top_flat, merged_top_offsets, merged_bottom_flat, merged_bottom_offsets) =
@@ -1312,7 +1291,10 @@ where
         shift.clear();
         shift.resize(x.len(), f32::INFINITY);
 
-        for step in 0..height {
+        for layer in (0..height)
+            .into_iter()
+            .map(|i| bucket(layer_flat, layer_offsets, reflect(i, height, DOWNWARD)))
+        {
             let mut last = None;
 
             let mut process = |vertex: usize| {
@@ -1347,8 +1329,6 @@ where
                     }
                 }
             };
-
-            let layer = bucket(layer_flat, layer_offsets, reflect(step, height, DOWNWARD));
 
             if LEFTWARD {
                 for vertex in layer.iter().copied() {
@@ -1410,7 +1390,7 @@ where
             let start = start as u32;
             let mut frame = (start, start, 0);
 
-            loop {
+            'outer: loop {
                 let (root_val, member, applied) = frame;
                 let mut applied = applied as usize;
                 let (root_index, member_index) = (root_val as usize, member as usize);
@@ -1418,45 +1398,40 @@ where
                 let member_runs = vertex_runs(member_index);
                 let run_count = runs_len(member_runs, member_index);
 
-                let mut nested = false;
-
                 while applied < run_count {
-                    let run = reflect(applied, run_count, DOWNWARD);
-                    let neighbour = run_neighbour(member_runs, member_index, run);
+                    let neighbour = run_neighbour(
+                        member_runs,
+                        member_index,
+                        reflect(applied, run_count, DOWNWARD),
+                    );
                     let neighbour_root = root[neighbour as usize];
-                    let neighbour_x = x[neighbour_root as usize];
+                    let neighbour_x = &mut x[neighbour_root as usize];
 
                     if neighbour_x.is_nan() {
                         frame.2 = applied as u32;
                         stack.push(frame);
-
-                        x[neighbour_root as usize] = 0.0_f32;
                         frame = (neighbour_root, neighbour_root, 0);
 
-                        nested = true;
-                        break;
+                        *neighbour_x = 0.0_f32;
+
+                        continue 'outer;
                     }
 
+                    let neighbour_x = *neighbour_x;
                     let neighbour_sink = sink[neighbour_root as usize];
-                    let sink_root = sink[root_index];
-                    let sink_root = if sink_root == root_val {
-                        sink[root_index] = neighbour_sink;
+                    let sink_root = &mut sink[root_index];
+                    if sink_root == &root_val {
+                        *sink_root = neighbour_sink;
+                    }
 
-                        neighbour_sink
-                    } else {
-                        sink_root
-                    };
+                    if *sink_root == neighbour_sink {
+                        let x_root = &mut x[root_index];
 
-                    if sink_root == neighbour_sink {
-                        x[root_index] = x[root_index]
-                            .max(neighbour_x + separation(neighbour as usize, member_index));
+                        *x_root =
+                            x_root.max(neighbour_x + separation(neighbour as usize, member_index));
                     }
 
                     applied += 1;
-                }
-
-                if nested {
-                    continue;
                 }
 
                 let next = align[member_index];
@@ -1471,11 +1446,11 @@ where
                         sink[member] = sink[root_index];
                     }
 
-                    let Some(parent) = stack.pop() else {
+                    if let Some(parent) = stack.pop() {
+                        frame = parent;
+                    } else {
                         break;
-                    };
-
-                    frame = parent;
+                    }
                 } else {
                     frame = (root_val, next, 0);
                 }
@@ -1500,22 +1475,21 @@ where
             }
         }
 
-        for step in 0..height {
-            let rank = reflect(step, height, DOWNWARD);
-
+        for rank in (0..height)
+            .into_iter()
+            .map(|i| reflect(i, height, DOWNWARD))
+        {
             let entry = if LEFTWARD {
                 leftmost_at[rank]
             } else {
                 rightmost_at[rank]
-            };
-            let entry = entry as usize;
+            } as usize;
 
             if sink[entry] as usize != entry {
                 continue;
             }
 
             let top_entry_raw = top[entry];
-
             let entry_rank = if DOWNWARD {
                 top_entry_raw & RANK_MASK
             } else if HAS_SEGMENTS && top_entry_raw & SEG_BIT != 0 {
@@ -1528,8 +1502,9 @@ where
                 continue;
             }
 
-            if !shift[entry].is_finite() {
-                shift[entry] = 0.0_f32;
+            let shift_entry = &mut shift[entry];
+            if !shift_entry.is_finite() {
+                *shift_entry = 0.0_f32;
             }
 
             let mut vertex = entry;
