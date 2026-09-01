@@ -1586,17 +1586,18 @@ where
                     (neighbour != u32::MAX).then_some(neighbour)
                 };
 
-                let Some(next) = next else {
-                    break;
-                };
-                let next = next as usize;
+                if let Some(next) = next {
+                    let next = next as usize;
 
-                if sink[next] != sink[vertex] {
+                    if sink[next] != sink[vertex] {
+                        break;
+                    }
+
+                    vertex = next;
+                    from = across;
+                } else {
                     break;
                 }
-
-                vertex = next;
-                from = across;
             }
         }
 
@@ -1639,19 +1640,6 @@ where
     #[inline]
     fn layer_center(&self, rank: usize) -> f32 {
         f32::midpoint(self.layer_start(rank), self.layer_ends[rank])
-    }
-    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    #[inline]
-    fn ranks_started_by(&self, y: f32) -> usize {
-        let Some(interior) = self.layer_ends.len().checked_sub(1) else {
-            return 0;
-        };
-
-        if 0.0_f32 <= y {
-            1 + self.layer_ends[..interior].partition_point(|&end| end + self.layer_gap <= y)
-        } else {
-            0
-        }
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn build_polylines<const HAS_SEGMENTS: bool>(
@@ -1770,7 +1758,14 @@ where
 
         let first = self.layer_ends.partition_point(|&end| end < min.y);
         let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
-        let last = self.ranks_started_by(max.y);
+        let last = self.layer_ends.len().checked_sub(1).map_or(0, |interior| {
+            if 0.0_f32 <= max.y {
+                1 + self.layer_ends[..interior]
+                    .partition_point(|&end| end + self.layer_gap <= max.y)
+            } else {
+                0
+            }
+        });
 
         let mut next_rank = first_reaching;
 
