@@ -638,7 +638,7 @@ where
         self.polyline_segment_offsets.resize(height_usize + 1, 0);
         self.polyline_bounds
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
-        self.polyline_reach.resize(height_usize, (0.0_f32, 0.0_f32));
+        self.polyline_reach.resize(height_usize, (0.0, 0.0));
 
         LayoutCSR {
             top,
@@ -713,7 +713,7 @@ where
             .zip(self.sizes.iter().copied())
         {
             let rank = top as usize;
-            let half_width = size.x * 0.5_f32;
+            let half_width = size.x * 0.5;
 
             *extent = half_width;
 
@@ -1224,7 +1224,7 @@ where
                 let next_rank = rank + 1;
                 let rank_center = self.layer_center(rank);
                 let next_center = if next_rank == self.layer_ends.len() {
-                    0.0_f32
+                    0.0
                 } else {
                     self.layer_center(next_rank)
                 };
@@ -1236,7 +1236,7 @@ where
                 {
                     let source_position = position_of[source] as usize;
                     let source_x = fourth[source];
-                    let source_border = rank_center + self.sizes[source_position].y * 0.5_f32;
+                    let source_border = rank_center + self.sizes[source_position].y * 0.5;
 
                     for target in bucket(&structure.down_flat, &structure.down_offsets, source)
                         .iter()
@@ -1264,7 +1264,7 @@ where
 
                         let target_x = fourth[real_target];
                         let target_border =
-                            target_center - self.sizes[target_position as usize].y * 0.5_f32;
+                            target_center - self.sizes[target_position as usize].y * 0.5;
 
                         let (min_x, max_x) = if let Some((seg_x, seg_last)) = segment {
                             self.polyline_segments.push((
@@ -1477,7 +1477,7 @@ where
                 return;
             }
 
-            *x_start = 0.0_f32;
+            *x_start = 0.0;
 
             let start = start as u32;
             let mut frame = (start, start, 0);
@@ -1504,7 +1504,7 @@ where
                         stack.push(frame);
                         frame = (neighbour_root, neighbour_root, 0);
 
-                        *neighbour_x = 0.0_f32;
+                        *neighbour_x = 0.0;
 
                         continue 'outer;
                     }
@@ -1596,7 +1596,7 @@ where
 
             let shift_entry = &mut shift[entry];
             if !shift_entry.is_finite() {
-                *shift_entry = 0.0_f32;
+                *shift_entry = 0.0;
             }
 
             let mut vertex = entry;
@@ -1724,9 +1724,8 @@ where
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     #[inline]
     fn layer_start(&self, rank: usize) -> f32 {
-        rank.checked_sub(1).map_or(0.0_f32, |previous| {
-            self.layer_ends[previous] + self.layer_gap
-        })
+        rank.checked_sub(1)
+            .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap)
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     #[inline]
@@ -1751,7 +1750,7 @@ where
         let first = self.layer_ends.partition_point(|&end| end < min.y);
         let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
         let last = self.layer_ends.len().checked_sub(1).map_or(0, |interior| {
-            if 0.0_f32 <= max.y {
+            if 0.0 <= max.y {
                 1 + self.layer_ends[..interior]
                     .partition_point(|&end| end + self.layer_gap <= max.y)
             } else {
@@ -1799,7 +1798,7 @@ where
                 let (next_center, next_band_start) = if rank + 1 < self.layer_ends.len() {
                     (self.layer_center(rank + 1), self.layer_start(rank + 1))
                 } else {
-                    (0.0_f32, 0.0_f32)
+                    (0.0, 0.0)
                 };
 
                 let segment_start = self.polyline_segment_offsets[rank] as usize;
@@ -1835,7 +1834,7 @@ where
                         (source_x.min(target_x), source_x.max(target_x))
                     };
 
-                    let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5_f32;
+                    let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5;
                     let (target_center, target_band_start) =
                         if let Some((_, seg_last)) = segment_info {
                             let target_rank = seg_last as usize + 1;
@@ -1847,7 +1846,7 @@ where
                         } else {
                             (next_center, next_band_start)
                         };
-                    let target_border = target_center - self.sizes[line.1 as usize].y * 0.5_f32;
+                    let target_border = target_center - self.sizes[line.1 as usize].y * 0.5;
 
                     if line_min_x <= max.x
                         && line_max_x >= min.x
@@ -1897,7 +1896,7 @@ where
                 .zip(self.keys[begin..end].iter().copied())
             {
                 let center = Vec2::new(x, y);
-                let half = size * 0.5_f32;
+                let half = size * 0.5;
 
                 if center.x - half.x > max.x {
                     break;
