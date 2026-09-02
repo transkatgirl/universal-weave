@@ -1206,7 +1206,99 @@ where
                 position_of[vertex as usize] = position as u32;
             }
 
-            self.build_polylines::<HAS_SEGMENTS>(structure, &position_of, &fourth);
+            let segment_count = structure.top.len() - self.keys.len();
+            let edge_count = structure.down_flat.len() - segment_count;
+
+            self.polylines.reserve(edge_count);
+            self.polyline_source_x.reserve(edge_count);
+
+            if HAS_SEGMENTS {
+                self.polyline_segments.reserve(segment_count);
+            }
+
+            for rank in 0..self.height as usize {
+                let mut rank_min = Vec2::INFINITY;
+                let mut rank_max = Vec2::NEG_INFINITY;
+                let mut rank_reach = (0.0_f32, 0.0_f32);
+
+                let next_rank = rank + 1;
+                let rank_center = self.layer_center(rank);
+                let next_center = if next_rank == self.layer_ends.len() {
+                    0.0_f32
+                } else {
+                    self.layer_center(next_rank)
+                };
+
+                for source in bucket(&structure.real_flat, &self.real_offsets, rank)
+                    .iter()
+                    .copied()
+                    .map(|i| i as usize)
+                {
+                    let source_position = position_of[source] as usize;
+                    let source_x = fourth[source];
+                    let source_border = rank_center + self.sizes[source_position].y * 0.5_f32;
+
+                    for target in bucket(&structure.down_flat, &structure.down_offsets, source)
+                        .iter()
+                        .copied()
+                        .map(|i| i as usize)
+                    {
+                        let (real_target, segment) =
+                            if HAS_SEGMENTS && structure.top[target] & SEG_BIT != 0 {
+                                (
+                                    structure.down_flat[structure.down_offsets[target] as usize]
+                                        as usize,
+                                    Some((fourth[target], structure.bottom[target])),
+                                )
+                            } else {
+                                (target, None)
+                            };
+                        let target_position = position_of[real_target];
+                        let target_top = (structure.top[real_target] & RANK_MASK) as usize;
+
+                        let target_center = if target_top == next_rank {
+                            next_center
+                        } else {
+                            self.layer_center(target_top)
+                        };
+
+                        let target_x = fourth[real_target];
+                        let target_border =
+                            target_center - self.sizes[target_position as usize].y * 0.5_f32;
+
+                        let (min_x, max_x) = if let Some((seg_x, seg_last)) = segment {
+                            self.polyline_segments.push((
+                                self.polylines.len() as u32,
+                                seg_x,
+                                seg_last,
+                            ));
+
+                            (
+                                source_x.min(target_x).min(seg_x),
+                                source_x.max(target_x).max(seg_x),
+                            )
+                        } else {
+                            (source_x.min(target_x), source_x.max(target_x))
+                        };
+
+                        rank_min = rank_min.min(Vec2::new(min_x, source_border));
+                        rank_max = rank_max.max(Vec2::new(max_x, target_border));
+                        rank_reach = (
+                            rank_reach.0.max(source_x - min_x),
+                            rank_reach.1.max(max_x - source_x),
+                        );
+
+                        self.polylines
+                            .push((source_position as u32, target_position));
+                        self.polyline_source_x.push(source_x);
+                    }
+                }
+
+                self.polyline_offsets[next_rank] = self.polylines.len() as u32;
+                self.polyline_segment_offsets[next_rank] = self.polyline_segments.len() as u32;
+                self.polyline_bounds[rank] = (rank_min, rank_max);
+                self.polyline_reach[rank] = rank_reach;
+            }
         }
 
         self.polyline_block_bounds.clear();
@@ -1641,106 +1733,6 @@ where
     fn layer_center(&self, rank: usize) -> f32 {
         f32::midpoint(self.layer_start(rank), self.layer_ends[rank])
     }
-    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    fn build_polylines<const HAS_SEGMENTS: bool>(
-        &mut self,
-        structure: &LayoutCSR<'_>,
-        position_of: &[u32],
-        x_coordinates: &[f32],
-    ) {
-        let LayoutCSR {
-            top,
-            bottom,
-            real_flat,
-            down_offsets,
-            down_flat,
-            ..
-        } = structure;
-
-        let segment_count = top.len() - self.keys.len();
-        let edge_count = down_flat.len() - segment_count;
-
-        self.polylines.reserve(edge_count);
-        self.polyline_source_x.reserve(edge_count);
-
-        if HAS_SEGMENTS {
-            self.polyline_segments.reserve(segment_count);
-        }
-
-        for rank in 0..self.height as usize {
-            let mut rank_min = Vec2::INFINITY;
-            let mut rank_max = Vec2::NEG_INFINITY;
-            let mut left_reach = 0.0_f32;
-            let mut right_reach = 0.0_f32;
-
-            let rank_center = self.layer_center(rank);
-            let next_rank = rank + 1;
-            let next_center = if next_rank < self.layer_ends.len() {
-                self.layer_center(next_rank)
-            } else {
-                0.0_f32
-            };
-
-            for source in bucket(real_flat, &self.real_offsets, rank).iter().copied() {
-                let source = source as usize;
-                let source_position = position_of[source] as usize;
-
-                let source_x = x_coordinates[source];
-                let source_border = rank_center + self.sizes[source_position].y * 0.5_f32;
-
-                for target in bucket(down_flat, down_offsets, source).iter().copied() {
-                    let target = target as usize;
-                    let (real_target, segment) = if HAS_SEGMENTS && top[target] & SEG_BIT != 0 {
-                        (
-                            down_flat[down_offsets[target] as usize] as usize,
-                            Some((x_coordinates[target], bottom[target])),
-                        )
-                    } else {
-                        (target, None)
-                    };
-                    let target_position = position_of[real_target] as usize;
-                    let target_top = (top[real_target] & RANK_MASK) as usize;
-
-                    let target_center = if target_top == next_rank {
-                        next_center
-                    } else {
-                        self.layer_center(target_top)
-                    };
-
-                    let target_x = x_coordinates[real_target];
-                    let target_border = target_center - self.sizes[target_position].y * 0.5_f32;
-
-                    let (min_x, max_x) = if let Some((seg_x, _)) = segment {
-                        (
-                            source_x.min(target_x).min(seg_x),
-                            source_x.max(target_x).max(seg_x),
-                        )
-                    } else {
-                        (source_x.min(target_x), source_x.max(target_x))
-                    };
-
-                    rank_min = rank_min.min(Vec2::new(min_x, source_border));
-                    rank_max = rank_max.max(Vec2::new(max_x, target_border));
-                    left_reach = left_reach.max(source_x - min_x);
-                    right_reach = right_reach.max(max_x - source_x);
-
-                    if let Some((seg_x, seg_last)) = segment {
-                        self.polyline_segments
-                            .push((self.polylines.len() as u32, seg_x, seg_last));
-                    }
-
-                    self.polylines
-                        .push((source_position as u32, target_position as u32));
-                    self.polyline_source_x.push(source_x);
-                }
-            }
-
-            self.polyline_offsets[rank + 1] = self.polylines.len() as u32;
-            self.polyline_segment_offsets[rank + 1] = self.polyline_segments.len() as u32;
-            self.polyline_bounds[rank] = (rank_min, rank_max);
-            self.polyline_reach[rank] = (left_reach, right_reach);
-        }
-    }
     #[must_use]
     pub const fn size(&self) -> Vec2 {
         self.size
@@ -1884,17 +1876,6 @@ where
             next_rank = block_end;
         }
 
-        self.view_nodes(min, max, first, last, callback);
-    }
-    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    fn view_nodes(
-        &self,
-        min: Vec2,
-        max: Vec2,
-        first: usize,
-        last: usize,
-        mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
-    ) {
         for (rank, ((start, end), half_width)) in self.real_offsets[first..last.max(first)]
             .iter()
             .copied()
