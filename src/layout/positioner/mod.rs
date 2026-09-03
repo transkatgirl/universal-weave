@@ -10,7 +10,7 @@
 )]
 #![allow(clippy::impl_trait_in_params, reason = "Readability")]
 
-// TODO: Substantial clean-up work
+// TODO: Split functions into subfunctions, final correctness review
 
 use core::{
     hash::{BuildHasher, Hash},
