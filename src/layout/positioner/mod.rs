@@ -33,6 +33,11 @@ use crate::{
 
 mod slotset;
 
+const SEG_BIT: u32 = 1 << 31_u32;
+const RANK_MASK: u32 = SEG_BIT - 1;
+const VIEW_BLOCK_SHIFT: u32 = 6;
+const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
+
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct Layout2D<K>
@@ -87,11 +92,6 @@ where
         }
     }
 }
-
-const SEG_BIT: u32 = 1 << 31_u32;
-const RANK_MASK: u32 = SEG_BIT - 1;
-const VIEW_BLOCK_SHIFT: u32 = 6;
-const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
 
 impl<K> Layout2D<K>
 where
@@ -396,8 +396,8 @@ struct PassScratch<'a, 'g> {
     marked: &'a [bool],
     marked_up: &'a [bool],
     extent: &'a [f32],
-    leftmost_at: &'a [u32],
-    rightmost_at: &'a [u32],
+    leftmost: &'a [u32],
+    rightmost: &'a [u32],
     left_offsets: &'a [u32],
     left_runs: &'a [(u32, u32, u32)],
     right_offsets: &'a [u32],
@@ -681,11 +681,11 @@ where
 
         let mut marked = guard.vec();
         let mut marked_up = guard.vec();
-        let mut leftmost_at = guard.vec_with_capacity(height);
-        let mut rightmost_at = guard.vec_with_capacity(height);
+        let mut leftmost = guard.vec_with_capacity(height);
+        let mut rightmost = guard.vec_with_capacity(height);
 
-        leftmost_at.resize(height, 0);
-        rightmost_at.resize(height, 0);
+        leftmost.resize(height, 0);
+        rightmost.resize(height, 0);
 
         let mut closed_runs = if HAS_SEGMENTS {
             guard.vec_with_capacity(count.strict_mul(3))
@@ -703,9 +703,9 @@ where
             active.rebuild(count);
             open_run_start.resize(count, 0);
 
-            for ((rank, (leftmost, rightmost)), (top_layer, bottom_layer)) in leftmost_at
+            for ((rank, (leftmost, rightmost)), (top_layer, bottom_layer)) in leftmost
                 .iter_mut()
-                .zip(rightmost_at.iter_mut())
+                .zip(rightmost.iter_mut())
                 .enumerate()
                 .zip(
                     buckets(merged_top_flat, merged_top_offsets)
@@ -822,9 +822,9 @@ where
                 marked.clear();
             }
         } else {
-            for ((leftmost, rightmost), layer) in leftmost_at
+            for ((leftmost, rightmost), layer) in leftmost
                 .iter_mut()
-                .zip(rightmost_at.iter_mut())
+                .zip(rightmost.iter_mut())
                 .zip(buckets(&structure.real_flat, &self.real_offsets))
             {
                 *leftmost = layer[0];
@@ -910,8 +910,8 @@ where
             marked: &marked,
             marked_up: &marked_up,
             extent: &extent,
-            leftmost_at: &leftmost_at,
-            rightmost_at: &rightmost_at,
+            leftmost: &leftmost,
+            rightmost: &rightmost,
             left_offsets: &left_offsets,
             left_runs: &left_runs,
             right_offsets: &right_offsets,
@@ -1079,10 +1079,7 @@ where
             let mut band_start = 0.0_f32;
             let mut next_ends = self.layer_ends.iter().copied().skip(1);
 
-            for (
-                (((((start, end), band_end), offset_out), segment_offset_out), bounds_out),
-                reach_out,
-            ) in self
+            for ((((((start, end), band_end), offset), segment_offset), bounds), reach) in self
                 .real_offsets
                 .iter()
                 .copied()
@@ -1173,10 +1170,10 @@ where
                     }
                 }
 
-                *offset_out = self.polylines.len() as u32;
-                *segment_offset_out = self.polyline_segments.len() as u32;
-                *bounds_out = (rank_min, rank_max);
-                *reach_out = rank_reach;
+                *offset = self.polylines.len() as u32;
+                *segment_offset = self.polyline_segments.len() as u32;
+                *bounds = (rank_min, rank_max);
+                *reach = rank_reach;
             }
         }
 
@@ -1213,8 +1210,8 @@ where
             marked,
             marked_up,
             extent,
-            leftmost_at,
-            rightmost_at,
+            leftmost,
+            rightmost,
             left_offsets,
             left_runs,
             right_offsets,
@@ -1287,23 +1284,23 @@ where
                     MedianKind::Ordered | MedianKind::Fixed => &median.entries[..2],
                 };
 
-                for (neighbour, position) in entries.iter().copied() {
-                    let neighbour = neighbour as usize;
+                for (neighbor, position) in entries.iter().copied() {
+                    let neighbor = neighbor as usize;
 
                     if (!HAS_SEGMENTS || edge_marked.is_empty() || !edge_marked[position as usize])
                         && last.is_none_or(|last| {
                             if LEFTWARD {
-                                last < neighbour
+                                last < neighbor
                             } else {
-                                last > neighbour
+                                last > neighbor
                             }
                         })
                     {
-                        align[neighbour] = vertex as u32;
-                        root[vertex] = root[neighbour];
+                        align[neighbor] = vertex as u32;
+                        root[vertex] = root[neighbor];
                         align[vertex] = root[vertex];
 
-                        last = Some(neighbour);
+                        last = Some(neighbor);
 
                         break;
                     }
@@ -1340,7 +1337,7 @@ where
             if HAS_SEGMENTS {
                 Runs::Segments(bucket(runs_flat, runs_offsets, vertex).iter())
             } else {
-                Runs::Single(Some(runs_single[vertex]).filter(|neighbour| *neighbour != u32::MAX))
+                Runs::Single(Some(runs_single[vertex]).filter(|neighbor| *neighbor != u32::MAX))
             }
         };
 
@@ -1361,32 +1358,32 @@ where
                 let (root_index, member_index) = (root_val as usize, member as usize);
                 let mut pending = runs_of(member_index).skip(applied as usize, DOWNWARD);
 
-                while let Some(neighbour) = pending.next(DOWNWARD) {
-                    let neighbour_root = root[neighbour as usize];
-                    let neighbour_x = &mut x[neighbour_root as usize];
+                while let Some(neighbor) = pending.next(DOWNWARD) {
+                    let neighbor_root = root[neighbor as usize];
+                    let neighbor_x = &mut x[neighbor_root as usize];
 
-                    if neighbour_x.is_nan() {
+                    if neighbor_x.is_nan() {
                         frame.2 = applied;
                         stack.push(frame);
-                        frame = (neighbour_root, neighbour_root, 0);
+                        frame = (neighbor_root, neighbor_root, 0);
 
-                        *neighbour_x = 0.0;
+                        *neighbor_x = 0.0;
 
                         continue 'outer;
                     }
 
-                    let neighbour_x = *neighbour_x;
-                    let neighbour_sink = sink[neighbour_root as usize];
+                    let neighbor_x = *neighbor_x;
+                    let neighbor_sink = sink[neighbor_root as usize];
                     let sink_root = &mut sink[root_index];
                     if sink_root == &root_val {
-                        *sink_root = neighbour_sink;
+                        *sink_root = neighbor_sink;
                     }
 
-                    if *sink_root == neighbour_sink {
+                    if *sink_root == neighbor_sink {
                         let x_root = &mut x[root_index];
 
                         *x_root =
-                            x_root.max(neighbour_x + separation(neighbour as usize, member_index));
+                            x_root.max(neighbor_x + separation(neighbor as usize, member_index));
                     }
 
                     applied += 1;
@@ -1427,15 +1424,11 @@ where
             }
         }
 
-        let mut entries = if LEFTWARD {
-            *leftmost_at
-        } else {
-            *rightmost_at
-        }
-        .iter()
-        .copied()
-        .map(|i| i as usize)
-        .enumerate();
+        let mut entries = if LEFTWARD { *leftmost } else { *rightmost }
+            .iter()
+            .copied()
+            .map(|i| i as usize)
+            .enumerate();
 
         while let Some((rank, entry)) = if DOWNWARD {
             entries.next()
@@ -1472,7 +1465,7 @@ where
                     let vertex_sink = sink[vertex] as usize;
                     let vertex_x = x[vertex];
 
-                    for (neighbour, start, end) in
+                    for (neighbor, start, end) in
                         bucket(runs_flat, runs_offsets, vertex).iter().copied()
                     {
                         let forward = if DOWNWARD {
@@ -1485,12 +1478,12 @@ where
                             continue;
                         }
 
-                        let neighbour = neighbour as usize;
-                        let neighbour_sink = sink[neighbour] as usize;
+                        let neighbor = neighbor as usize;
+                        let neighbor_sink = sink[neighbor] as usize;
 
-                        shift[neighbour_sink] = shift[neighbour_sink].min(
+                        shift[neighbor_sink] = shift[neighbor_sink].min(
                             shift[vertex_sink] + vertex_x
-                                - (x[neighbour] + separation(neighbour, vertex)),
+                                - (x[neighbor] + separation(neighbor, vertex)),
                         );
                     }
                 }
@@ -1502,12 +1495,12 @@ where
                     let vertex_x = x[vertex];
                     let mut runs = runs_of(vertex);
 
-                    while let Some(neighbour) = runs.next(true).map(|i| i as usize) {
-                        let neighbour_sink = sink[neighbour] as usize;
+                    while let Some(neighbor) = runs.next(true).map(|i| i as usize) {
+                        let neighbor_sink = sink[neighbor] as usize;
 
-                        shift[neighbour_sink] = shift[neighbour_sink].min(
+                        shift[neighbor_sink] = shift[neighbor_sink].min(
                             shift[vertex_sink] + vertex_x
-                                - (x[neighbour] + separation(neighbour, vertex)),
+                                - (x[neighbor] + separation(neighbor, vertex)),
                         );
                     }
                 }
@@ -1528,18 +1521,18 @@ where
                     let runs = bucket(across_flat, across_offsets, vertex);
 
                     if DOWNWARD {
-                        runs.last().and_then(|&(neighbour, _, end)| {
-                            (end as usize == across).then_some(neighbour)
+                        runs.last().and_then(|&(neighbor, _, end)| {
+                            (end as usize == across).then_some(neighbor)
                         })
                     } else {
-                        runs.first().and_then(|&(neighbour, start, _)| {
-                            (start as usize == across).then_some(neighbour)
+                        runs.first().and_then(|&(neighbor, start, _)| {
+                            (start as usize == across).then_some(neighbor)
                         })
                     }
                 } else {
-                    let neighbour = across_single[vertex];
+                    let neighbor = across_single[vertex];
 
-                    (neighbour != u32::MAX).then_some(neighbour)
+                    (neighbor != u32::MAX).then_some(neighbor)
                 };
 
                 if let Some(next) = next {
@@ -1887,7 +1880,7 @@ impl Runs<'_> {
 
                 Self::Segments(remaining.iter())
             }
-            Self::Single(neighbour) => Self::Single(if applied == 0 { neighbour } else { None }),
+            Self::Single(neighbor) => Self::Single(if applied == 0 { neighbor } else { None }),
         }
     }
     #[inline(always)]
@@ -1900,9 +1893,9 @@ impl Runs<'_> {
                     runs.next_back()
                 };
 
-                run.map(|&(neighbour, _, _)| neighbour)
+                run.map(|&(neighbor, _, _)| neighbor)
             }
-            Self::Single(neighbour) => neighbour.take(),
+            Self::Single(neighbor) => neighbor.take(),
         }
     }
 }
