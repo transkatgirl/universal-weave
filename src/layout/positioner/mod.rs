@@ -206,7 +206,7 @@ where
                 guard.vec_with_capacity(weave.nodes.len().strict_mul(2));
             let mut stack = guard.vec_with_capacity(weave.roots.len());
 
-            stack.extend(weave.roots.iter().rev().map(|&id| (id, u32::MAX, 0)));
+            stack.extend(weave.roots.iter().rev().map(|id| (*id, u32::MAX, 0)));
 
             while let Some((id, parent, rank)) = stack.pop() {
                 let index = self.push_real_unsegmentable(&mut top, id, rank, sizes(&id));
@@ -377,11 +377,6 @@ struct LayoutCSR<'g> {
     real_flat: ScratchpadVec<'g, u32>,
     down_offsets: ScratchpadVec<'g, u32>,
     down_flat: ScratchpadVec<'g, u32>,
-    deepest: ScratchpadVec<'g, u32>,
-    seg_top_offsets: ScratchpadVec<'g, u32>,
-    seg_top_flat: ScratchpadVec<'g, u32>,
-    seg_bottom_offsets: ScratchpadVec<'g, u32>,
-    seg_bottom_flat: ScratchpadVec<'g, u32>,
     merged_top_offsets: ScratchpadVec<'g, u32>,
     merged_top_flat: ScratchpadVec<'g, u32>,
     merged_bottom_offsets: ScratchpadVec<'g, u32>,
@@ -449,41 +444,25 @@ where
 
         self.real_offsets.resize(ranks, 0);
 
-        let mut seg_top_offsets = guard.vec();
-        let mut seg_bottom_offsets = guard.vec();
         let mut merged_top_offsets = guard.vec();
         let mut merged_bottom_offsets = guard.vec();
 
         if HAS_SEGMENTS {
-            seg_top_offsets.resize(ranks, 0);
-            seg_bottom_offsets.resize(ranks, 0);
+            merged_top_offsets.resize(ranks, 0);
+            merged_bottom_offsets.resize(ranks, 0);
 
             for (top, bottom) in top.iter().copied().zip(bottom.iter().copied()) {
                 let segment = top & SEG_BIT != 0;
                 let top = (top & RANK_MASK) as usize;
+                let bottom = if segment { bottom as usize } else { top };
 
-                if segment {
-                    seg_top_offsets[top] += 1;
-                    seg_bottom_offsets[bottom as usize] += 1;
-                } else {
+                if !segment {
                     self.real_offsets[top] += 1;
                 }
-            }
 
-            merged_top_offsets.extend(
-                self.real_offsets
-                    .iter()
-                    .copied()
-                    .zip(seg_top_offsets.iter().copied())
-                    .map(|(real, seg)| real + seg),
-            );
-            merged_bottom_offsets.extend(
-                self.real_offsets
-                    .iter()
-                    .copied()
-                    .zip(seg_bottom_offsets.iter().copied())
-                    .map(|(real, seg)| real + seg),
-            );
+                merged_top_offsets[top] += 1;
+                merged_bottom_offsets[bottom] += 1;
+            }
         } else {
             for top in top.iter().copied() {
                 self.real_offsets[top as usize] += 1;
@@ -491,20 +470,14 @@ where
         }
 
         let real_total = ends_from_counts(&mut self.real_offsets);
-        let segment_total = ends_from_counts(&mut seg_top_offsets);
-        ends_from_counts(&mut seg_bottom_offsets);
         ends_from_counts(&mut merged_top_offsets);
         ends_from_counts(&mut merged_bottom_offsets);
 
         let mut real_flat = guard.vec_with_capacity(real_total);
-        let mut seg_top_flat = guard.vec_with_capacity(segment_total);
-        let mut seg_bottom_flat = guard.vec_with_capacity(segment_total);
         let mut merged_top_flat = guard.vec();
         let mut merged_bottom_flat = guard.vec();
 
         real_flat.resize(real_total, 0);
-        seg_top_flat.resize(segment_total, 0);
-        seg_bottom_flat.resize(segment_total, 0);
 
         if HAS_SEGMENTS {
             merged_top_flat.resize(count, 0);
@@ -522,17 +495,7 @@ where
                 let top = (top & RANK_MASK) as usize;
                 let bottom = if segment { bottom as usize } else { top };
 
-                if segment {
-                    let cursor = &mut seg_top_offsets[top];
-
-                    *cursor -= 1;
-                    seg_top_flat[*cursor as usize] = index;
-
-                    let cursor = &mut seg_bottom_offsets[bottom];
-
-                    *cursor -= 1;
-                    seg_bottom_flat[*cursor as usize] = index;
-                } else {
+                if !segment {
                     let cursor = &mut self.real_offsets[top];
 
                     *cursor -= 1;
@@ -575,35 +538,14 @@ where
         ends_from_counts(&mut down_offsets);
 
         let mut down_flat = guard.vec_with_capacity(edge_count);
-        let mut deepest = guard.vec_with_capacity(self.height as usize);
 
         down_flat.resize(edge_count, 0);
-        deepest.extend(0..self.height);
 
         for [source, target] in pairs.iter().copied().rev() {
-            let source = source as usize;
-
-            let cursor = &mut down_offsets[source];
+            let cursor = &mut down_offsets[source as usize];
 
             *cursor -= 1;
             down_flat[*cursor as usize] = target;
-
-            let top_source_raw = top[source];
-
-            if !HAS_SEGMENTS || top_source_raw & SEG_BIT == 0 {
-                let target = target as usize;
-                let top_target_raw = top[target];
-
-                let child = if HAS_SEGMENTS && top_target_raw & SEG_BIT != 0 {
-                    bottom[target] + 1
-                } else {
-                    top_target_raw
-                };
-                let rank = (top_source_raw & RANK_MASK) as usize;
-
-                let deepest_rank = &mut deepest[rank];
-                *deepest_rank = (*deepest_rank).max(child);
-            }
         }
 
         edges.clear();
@@ -622,9 +564,8 @@ where
                 .iter()
                 .copied()
                 .rev()
+                .map(|i| i as usize)
             {
-                let target = target as usize;
-
                 let cursor = &mut up_offsets[target];
 
                 *cursor -= 1;
@@ -646,11 +587,6 @@ where
             real_flat,
             down_offsets,
             down_flat,
-            deepest,
-            seg_top_offsets,
-            seg_top_flat,
-            seg_bottom_offsets,
-            seg_bottom_flat,
             merged_top_offsets,
             merged_top_flat,
             merged_bottom_offsets,
@@ -690,14 +626,12 @@ where
         }
 
         let mut extent = guard.vec_with_capacity(count);
-        let mut rank_tallest = guard.vec_with_capacity(height);
-
         extent.resize(count, 0.0);
-        rank_tallest.resize(height, 0.0_f32);
 
         self.rank_half_width.resize(height, 0.0);
+        self.layer_ends.resize(height, 0.0);
 
-        for ((top, extent), size) in structure
+        for ((rank, extent), size) in structure
             .top
             .iter()
             .copied()
@@ -707,18 +641,17 @@ where
                     *extent = -(spacing.corridor * 0.5);
                     None
                 } else {
-                    Some((top, extent))
+                    Some((top as usize, extent))
                 }
             })
             .zip(self.sizes.iter().copied())
         {
-            let rank = top as usize;
             let half_width = size.x * 0.5;
 
             *extent = half_width;
 
-            let rank_tallest = &mut rank_tallest[rank];
-            *rank_tallest = (*rank_tallest).max(size.y);
+            let tallest = &mut self.layer_ends[rank];
+            *tallest = (*tallest).max(size.y);
 
             let rank_half_width = &mut self.rank_half_width[rank];
             *rank_half_width = (*rank_half_width).max(half_width);
@@ -760,135 +693,85 @@ where
 
             let mut any_marked = false;
             let mut active = SlotSet::new(guard);
-            let mut spanning = SlotSet::new(guard);
             let mut open_run_start = guard.vec_with_capacity(count);
 
             active.rebuild(count);
-            spanning.rebuild(count);
             open_run_start.resize(count, 0);
 
-            for rank in 0..=height {
-                if let Some(previous) = rank.checked_sub(1) {
-                    let end = previous as u32;
+            for (rank, (leftmost, rightmost)) in leftmost_at
+                .iter_mut()
+                .zip(rightmost_at.iter_mut())
+                .enumerate()
+            {
+                let current = rank as u32;
 
-                    for item in bucket(merged_bottom_flat, merged_bottom_offsets, previous)
-                        .iter()
-                        .copied()
-                    {
-                        let item = item as usize;
-                        let before = active.predecessor(item);
-                        let after = active.successor(item);
-
-                        active.remove(item);
-
-                        if let Some(left) = before {
-                            let start = open_run_start[left];
-                            let right = item;
-
-                            if end >= start {
-                                closed_runs.push((left as u32, right as u32, start, end));
-                            }
-                        }
-                        if let Some(right) = after {
-                            let left = item;
-                            let start = open_run_start[item];
-
-                            if end >= start {
-                                closed_runs.push((left as u32, right as u32, start, end));
-                            }
-                        }
-                        if let (Some(left), Some(_)) = (before, after) {
-                            open_run_start[left] = rank as u32;
-                        }
-                    }
-                }
-
-                if rank == height {
-                    continue;
-                }
-
-                if let Some(previous) = rank.checked_sub(1) {
-                    let end = previous as u32;
-
-                    for item in bucket(merged_top_flat, merged_top_offsets, rank)
-                        .iter()
-                        .copied()
-                    {
-                        let item = item as usize;
-                        let rank = rank as u32;
-                        let before = active.predecessor(item);
-                        let after = active.successor(item);
-
-                        active.insert(item);
-
-                        if let (Some(left), Some(right)) = (before, after) {
-                            let start = open_run_start[left];
-
-                            if end >= start {
-                                closed_runs.push((left as u32, right as u32, start, end));
-                            }
-                        }
-
-                        if let Some(left) = before {
-                            open_run_start[left] = rank;
-                        }
-                        if after.is_some() {
-                            open_run_start[item] = rank;
-                        }
-                    }
-                } else {
-                    for item in bucket(merged_top_flat, merged_top_offsets, rank)
-                        .iter()
-                        .copied()
-                    {
-                        let item = item as usize;
-                        let rank = rank as u32;
-
-                        if let Some(left) = active.predecessor(item) {
-                            open_run_start[left] = rank;
-                        }
-                        if active.successor(item).is_some() {
-                            open_run_start[item] = rank;
-                        }
-
-                        active.insert(item);
-                    }
-                }
-
-                leftmost_at[rank] = active.first().unwrap() as u32;
-                rightmost_at[rank] = active.last().unwrap() as u32;
-
-                if rank + 1 == height {
-                    continue;
-                }
-
-                for segment in bucket(&structure.seg_top_flat, &structure.seg_top_offsets, rank)
+                for item in bucket(merged_top_flat, merged_top_offsets, rank)
                     .iter()
                     .copied()
+                    .map(|i| i as usize)
                 {
-                    spanning.insert(segment as usize);
+                    let before = active.predecessor(item);
+                    let after = active.successor(item);
+
+                    active.insert(item);
+
+                    if let (Some(left), Some(right)) = (before, after) {
+                        let start = open_run_start[left];
+
+                        if start < current {
+                            closed_runs.push((left as u32, right as u32, start, current - 1));
+                        }
+                    }
+
+                    if let Some(left) = before {
+                        open_run_start[left] = current;
+                    }
+                    if after.is_some() {
+                        open_run_start[item] = current;
+                    }
                 }
 
-                for segment in bucket(
-                    &structure.seg_bottom_flat,
-                    &structure.seg_bottom_offsets,
-                    rank,
-                )
-                .iter()
-                .copied()
+                *leftmost = active.first().unwrap() as u32;
+                *rightmost = active.last().unwrap() as u32;
+
+                for item in bucket(merged_bottom_flat, merged_bottom_offsets, rank)
+                    .iter()
+                    .copied()
+                    .map(|i| i as usize)
                 {
-                    spanning.remove(segment as usize);
+                    let before = active.predecessor(item);
+                    let after = active.successor(item);
+
+                    active.remove(item);
+
+                    if let Some(left) = before {
+                        let start = open_run_start[left];
+
+                        if start <= current {
+                            closed_runs.push((left as u32, item as u32, start, current));
+                        }
+                    }
+                    if let Some(right) = after {
+                        let start = open_run_start[item];
+
+                        if start <= current {
+                            closed_runs.push((item as u32, right as u32, start, current));
+                        }
+                    }
+                    if let (Some(left), Some(_)) = (before, after) {
+                        open_run_start[left] = current + 1;
+                    }
                 }
 
-                if spanning.is_empty() {
+                if active.is_empty() {
                     continue;
                 }
 
                 for source in bucket(merged_bottom_flat, merged_bottom_offsets, rank)
                     .iter()
                     .copied()
+                    .map(|i| i as usize)
                 {
-                    let source = source as usize;
                     let base = structure.down_offsets[source] as usize;
                     let mut before = None;
                     let mut after = None;
@@ -897,16 +780,16 @@ where
                         bucket(&structure.down_flat, &structure.down_offsets, source)
                             .iter()
                             .copied()
+                            .map(|i| i as usize)
                             .enumerate()
                     {
-                        let target = target as usize;
                         let crossed = if target > source {
                             after
-                                .get_or_insert_with(|| spanning.successor(source))
+                                .get_or_insert_with(|| active.successor(source))
                                 .is_some_and(|found| found < target)
                         } else {
                             before
-                                .get_or_insert_with(|| spanning.predecessor(source))
+                                .get_or_insert_with(|| active.predecessor(source))
                                 .is_some_and(|found| found > target)
                         };
 
@@ -925,8 +808,7 @@ where
 
                 cursors.extend(structure.up_offsets[..count].iter().copied());
 
-                for source in merged_bottom_flat.iter().copied() {
-                    let source = source as usize;
+                for source in merged_bottom_flat.iter().copied().map(|i| i as usize) {
                     let base = structure.down_offsets[source] as usize;
 
                     for (offset, target) in
@@ -1126,19 +1008,15 @@ where
             right = right.max(combined + extent);
         }
 
-        let mut cursor = rank_tallest[0];
+        let mut cursor = self.layer_ends[0];
         let mut valid = validate_output_float(cursor);
 
-        self.layer_ends.clear();
-        self.layer_ends.reserve(rank_tallest.len());
-        self.layer_ends.push(cursor);
-        self.layer_ends
-            .extend(rank_tallest.into_iter().skip(1).map(|tallest| {
-                cursor += spacing.layer + tallest;
-                valid &= validate_output_float(cursor);
+        for end in &mut self.layer_ends[1..] {
+            cursor += spacing.layer + *end;
+            valid &= validate_output_float(cursor);
 
-                cursor
-            }));
+            *end = cursor;
+        }
 
         self.size = Vec2::new(right - left, cursor);
         valid &= validate_output_float(self.size.x);
@@ -1149,15 +1027,6 @@ where
         }
 
         assert!(valid, "Output is not normal and positive");
-
-        let mut reach = 0.0_f32;
-
-        self.reach_prefix.clear();
-        self.reach_prefix
-            .extend(structure.deepest.iter().copied().map(|deep| {
-                reach = reach.max(self.layer_ends[deep as usize]);
-                reach
-            }));
 
         self.x_coordinates.clear();
         self.x_coordinates.extend(
@@ -1223,11 +1092,6 @@ where
 
                 let next_rank = rank + 1;
                 let rank_center = self.layer_center(rank);
-                let next_center = if next_rank == self.layer_ends.len() {
-                    0.0
-                } else {
-                    self.layer_center(next_rank)
-                };
 
                 for source in bucket(&structure.real_flat, &self.real_offsets, rank)
                     .iter()
@@ -1256,11 +1120,7 @@ where
                         let target_position = position_of[real_target];
                         let target_top = (structure.top[real_target] & RANK_MASK) as usize;
 
-                        let target_center = if target_top == next_rank {
-                            next_center
-                        } else {
-                            self.layer_center(target_top)
-                        };
+                        let target_center = self.layer_center(target_top);
 
                         let target_x = fourth[real_target];
                         let target_border =
@@ -1300,6 +1160,15 @@ where
                 self.polyline_reach[rank] = rank_reach;
             }
         }
+
+        let mut reach = f32::NEG_INFINITY;
+
+        self.reach_prefix.clear();
+        self.reach_prefix
+            .extend(self.polyline_bounds.iter().map(|(_, bound_max)| {
+                reach = reach.max(bound_max.y);
+                reach
+            }));
 
         self.polyline_block_bounds.clear();
         self.polyline_block_bounds
@@ -1747,18 +1616,16 @@ where
             return;
         }
 
-        let first = self.layer_ends.partition_point(|&end| end < min.y);
-        let first_reaching = self.reach_prefix.partition_point(|&reach| reach < min.y);
+        let first = self.layer_ends.partition_point(|end| end < &min.y);
         let last = self.layer_ends.len().checked_sub(1).map_or(0, |interior| {
-            if 0.0 <= max.y {
-                1 + self.layer_ends[..interior]
-                    .partition_point(|&end| end + self.layer_gap <= max.y)
+            if max.y >= 0.0 {
+                1 + self.layer_ends[..interior].partition_point(|end| end + self.layer_gap <= max.y)
             } else {
                 0
             }
         });
 
-        let mut next_rank = first_reaching;
+        let mut next_rank = self.reach_prefix.partition_point(|reach| reach < &min.y);
 
         while next_rank < last {
             let block = next_rank >> VIEW_BLOCK_SHIFT;
@@ -1791,7 +1658,7 @@ where
 
                 let begin = range_start as usize
                     + self.polyline_source_x[range_start as usize..range_end as usize]
-                        .partition_point(|&x| x < min.x - right_reach);
+                        .partition_point(|x| *x < min.x - right_reach);
 
                 let rank_center = self.layer_center(rank);
                 let source_band_end = self.layer_ends[rank];
@@ -1805,7 +1672,7 @@ where
                 let segment_end = self.polyline_segment_offsets[rank + 1] as usize;
                 let mut segment_cursor = segment_start
                     + self.polyline_segments[segment_start..segment_end]
-                        .partition_point(|&(polyline, _, _)| (polyline as usize) < begin);
+                        .partition_point(|(polyline, _, _)| (*polyline as usize) < begin);
 
                 for index in begin..range_end as usize {
                     let line = self.polylines[index];
@@ -1887,7 +1754,7 @@ where
             let y = self.layer_center(rank);
 
             let cutoff = min.x - half_width;
-            let begin = start + self.x_coordinates[start..end].partition_point(|&x| x < cutoff);
+            let begin = start + self.x_coordinates[start..end].partition_point(|x| x < &cutoff);
 
             for ((x, size), id) in self.x_coordinates[begin..end]
                 .iter()
