@@ -1680,8 +1680,12 @@ where
 
                 let rank_segments =
                     &self.polyline_segments[segment_start as usize..segment_end as usize];
-                let mut segments = &rank_segments[rank_segments
-                    .partition_point(|(polyline, _, _)| (*polyline as usize) < begin)..];
+                #[allow(clippy::unused_peekable, reason = "Bad lint")]
+                let mut segments = rank_segments[rank_segments
+                    .partition_point(|(polyline, _, _)| (*polyline as usize) < begin)..]
+                    .iter()
+                    .copied()
+                    .peekable();
 
                 for (index, (line, source_x)) in self.polylines[begin..range_end]
                     .iter()
@@ -1694,18 +1698,15 @@ where
                         break;
                     }
 
-                    let target_x = self.x_coordinates[line.1 as usize];
-                    let segment_info = match segments.split_first() {
-                        Some((&(polyline, seg_x, seg_last), rest))
-                            if polyline as usize == index =>
-                        {
-                            segments = rest;
-
-                            Some((seg_x, seg_last))
+                    let segment_info = segments.next_if_map(|(i, seg_x, seg_last)| {
+                        if i as usize == index {
+                            Ok((seg_x, seg_last))
+                        } else {
+                            Err((i, seg_x, seg_last))
                         }
-                        _ => None,
-                    };
+                    });
 
+                    let target_x = self.x_coordinates[line.1 as usize];
                     let (line_min_x, line_max_x) = if let Some((seg_x, _)) = segment_info {
                         (
                             source_x.min(target_x).min(seg_x),
