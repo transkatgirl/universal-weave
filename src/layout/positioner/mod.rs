@@ -1624,16 +1624,11 @@ where
             let mut band_start = next_rank
                 .checked_sub(1)
                 .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap);
+            let mut next_ends = self.layer_ends[next_rank + 1..].iter();
 
             for (
-                rank,
-                (
-                    (
-                        ((rank_min, rank_max), (range_start, range_end)),
-                        (segment_start, segment_end),
-                    ),
-                    ((left_reach, right_reach), source_band_end),
-                ),
+                (((rank_min, rank_max), (range_start, range_end)), (segment_start, segment_end)),
+                ((left_reach, right_reach), source_band_end),
             ) in self.polyline_bounds[block_ranks.clone()]
                 .iter()
                 .copied()
@@ -1661,11 +1656,10 @@ where
                         .copied()
                         .zip(self.layer_ends[block_ranks].iter().copied()),
                 )
-                .enumerate()
-                .map(|(offset, item)| (next_rank + offset, item))
             {
                 let rank_band_start =
                     mem::replace(&mut band_start, source_band_end + self.layer_gap);
+                let next_end = next_ends.next().copied();
 
                 if !(rank_min.x <= max.x
                     && rank_max.x >= min.x
@@ -1680,12 +1674,9 @@ where
                         .partition_point(|x| *x < min.x - right_reach);
 
                 let rank_center = f32::midpoint(rank_band_start, source_band_end);
-                let (next_center, next_band_start) = self
-                    .layer_ends
-                    .get(rank + 1)
-                    .map_or((0.0, 0.0), |&next_end| {
-                        (f32::midpoint(band_start, next_end), band_start)
-                    });
+                let (next_center, next_band_start) = next_end.map_or((0.0, 0.0), |next_end| {
+                    (f32::midpoint(band_start, next_end), band_start)
+                });
 
                 let rank_segments =
                     &self.polyline_segments[segment_start as usize..segment_end as usize];
@@ -1746,16 +1737,13 @@ where
                         && source_border <= max.y
                         && target_border >= min.y
                     {
-                        let segment =
-                            segment_info.map(|(seg_x, _)| (seg_x, next_band_start, span_end));
-
                         callback(LayoutItem::Polyline {
                             from: self.keys[line.0 as usize],
                             to: self.keys[line.1 as usize],
                             points: line_points(
                                 Vec2::new(source_x, source_border),
                                 source_band_end,
-                                segment,
+                                segment_info.map(|(seg_x, _)| (seg_x, next_band_start, span_end)),
                                 Vec2::new(target_x, target_border),
                                 target_band_start,
                             ),
