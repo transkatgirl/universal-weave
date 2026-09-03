@@ -12,7 +12,12 @@
 
 // TODO: Substantial clean-up work
 
-use core::hash::{BuildHasher, Hash};
+use core::{
+    hash::{BuildHasher, Hash},
+    mem,
+    ops::Range,
+    slice,
+};
 
 use alloc::vec::Vec;
 use glam::Vec2;
@@ -698,18 +703,18 @@ where
             active.rebuild(count);
             open_run_start.resize(count, 0);
 
-            for (rank, (leftmost, rightmost)) in leftmost_at
+            for ((rank, (leftmost, rightmost)), (top_layer, bottom_layer)) in leftmost_at
                 .iter_mut()
                 .zip(rightmost_at.iter_mut())
                 .enumerate()
+                .zip(
+                    buckets(merged_top_flat, merged_top_offsets)
+                        .zip(buckets(merged_bottom_flat, merged_bottom_offsets)),
+                )
             {
                 let current = rank as u32;
 
-                for item in bucket(merged_top_flat, merged_top_offsets, rank)
-                    .iter()
-                    .copied()
-                    .map(|i| i as usize)
-                {
+                for item in top_layer.iter().copied().map(|i| i as usize) {
                     let before = active.predecessor(item);
                     let after = active.successor(item);
 
@@ -734,11 +739,7 @@ where
                 *leftmost = active.first().unwrap() as u32;
                 *rightmost = active.last().unwrap() as u32;
 
-                for item in bucket(merged_bottom_flat, merged_bottom_offsets, rank)
-                    .iter()
-                    .copied()
-                    .map(|i| i as usize)
-                {
+                for item in bottom_layer.iter().copied().map(|i| i as usize) {
                     let before = active.predecessor(item);
                     let after = active.successor(item);
 
@@ -767,21 +768,16 @@ where
                     continue;
                 }
 
-                for source in bucket(merged_bottom_flat, merged_bottom_offsets, rank)
-                    .iter()
-                    .copied()
-                    .map(|i| i as usize)
-                {
-                    let base = structure.down_offsets[source] as usize;
+                for source in bottom_layer.iter().copied().map(|i| i as usize) {
+                    let range = bucket_range(&structure.down_offsets, source);
                     let mut before = None;
                     let mut after = None;
 
-                    for (offset, target) in
-                        bucket(&structure.down_flat, &structure.down_offsets, source)
-                            .iter()
-                            .copied()
-                            .map(|i| i as usize)
-                            .enumerate()
+                    for (target, mark) in structure.down_flat[range.clone()]
+                        .iter()
+                        .copied()
+                        .map(|i| i as usize)
+                        .zip(marked[range].iter_mut())
                     {
                         let crossed = if target > source {
                             after
@@ -794,7 +790,7 @@ where
                         };
 
                         if crossed {
-                            marked[base + offset] = true;
+                            *mark = true;
                             any_marked = true;
                         }
                     }
@@ -809,17 +805,16 @@ where
                 cursors.extend(structure.up_offsets[..count].iter().copied());
 
                 for source in merged_bottom_flat.iter().copied().map(|i| i as usize) {
-                    let base = structure.down_offsets[source] as usize;
+                    let range = bucket_range(&structure.down_offsets, source);
 
-                    for (offset, target) in
-                        bucket(&structure.down_flat, &structure.down_offsets, source)
-                            .iter()
-                            .copied()
-                            .enumerate()
+                    for (target, mark) in structure.down_flat[range.clone()]
+                        .iter()
+                        .copied()
+                        .zip(marked[range].iter().copied())
                     {
                         let cursor = &mut cursors[target as usize];
 
-                        marked_up[*cursor as usize] = marked[base + offset];
+                        marked_up[*cursor as usize] = mark;
                         *cursor += 1;
                     }
                 }
@@ -827,13 +822,11 @@ where
                 marked.clear();
             }
         } else {
-            for (rank, (leftmost, rightmost)) in leftmost_at
+            for ((leftmost, rightmost), layer) in leftmost_at
                 .iter_mut()
                 .zip(rightmost_at.iter_mut())
-                .enumerate()
+                .zip(buckets(&structure.real_flat, &self.real_offsets))
             {
-                let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
-
                 *leftmost = layer[0];
                 *rightmost = *layer.last().unwrap();
             }
@@ -890,9 +883,7 @@ where
             left_single.resize(count, u32::MAX);
             right_single.resize(count, u32::MAX);
 
-            for rank in 0..height {
-                let layer = bucket(&structure.real_flat, &self.real_offsets, rank);
-
+            for layer in buckets(&structure.real_flat, &self.real_offsets) {
                 for (left, right) in layer.iter().copied().zip(layer.iter().copied().skip(1)) {
                     left_single[right as usize] = left;
                     right_single[left as usize] = right;
@@ -941,22 +932,22 @@ where
         };
 
         let extents = [
-            self.coordinate_pass::<true, true, HAS_SEGMENTS>(
+            Self::coordinate_pass::<true, true, HAS_SEGMENTS>(
                 &mut scratch,
                 spacing,
                 &mut candidates[0],
             ),
-            self.coordinate_pass::<true, false, HAS_SEGMENTS>(
+            Self::coordinate_pass::<true, false, HAS_SEGMENTS>(
                 &mut scratch,
                 spacing,
                 &mut candidates[1],
             ),
-            self.coordinate_pass::<false, true, HAS_SEGMENTS>(
+            Self::coordinate_pass::<false, true, HAS_SEGMENTS>(
                 &mut scratch,
                 spacing,
                 &mut candidates[2],
             ),
-            self.coordinate_pass::<false, false, HAS_SEGMENTS>(
+            Self::coordinate_pass::<false, false, HAS_SEGMENTS>(
                 &mut scratch,
                 spacing,
                 &mut candidates[3],
@@ -1085,22 +1076,45 @@ where
                 self.polyline_segments.reserve(segment_count);
             }
 
-            for rank in 0..self.height as usize {
+            let mut band_start = 0.0_f32;
+            let mut next_ends = self.layer_ends.iter().copied().skip(1);
+
+            for (
+                (((((start, end), band_end), offset_out), segment_offset_out), bounds_out),
+                reach_out,
+            ) in self
+                .real_offsets
+                .iter()
+                .copied()
+                .map(|i| i as usize)
+                .zip(self.real_offsets[1..].iter().copied().map(|i| i as usize))
+                .zip(self.layer_ends.iter().copied())
+                .zip(self.polyline_offsets[1..].iter_mut())
+                .zip(self.polyline_segment_offsets[1..].iter_mut())
+                .zip(self.polyline_bounds.iter_mut())
+                .zip(self.polyline_reach.iter_mut())
+            {
                 let mut rank_min = Vec2::INFINITY;
                 let mut rank_max = Vec2::NEG_INFINITY;
                 let mut rank_reach = (0.0_f32, 0.0_f32);
 
-                let next_rank = rank + 1;
-                let rank_center = self.layer_center(rank);
+                let rank_center = f32::midpoint(band_start, band_end);
+                let next_band_start = band_end + self.layer_gap;
+                let next_center = next_ends
+                    .next()
+                    .map_or(0.0, |next_end| f32::midpoint(next_band_start, next_end));
 
-                for source in bucket(&structure.real_flat, &self.real_offsets, rank)
+                band_start = next_band_start;
+
+                for ((source, source_size), source_position) in structure.real_flat[start..end]
                     .iter()
                     .copied()
                     .map(|i| i as usize)
+                    .zip(self.sizes[start..end].iter().copied())
+                    .zip(start..)
                 {
-                    let source_position = position_of[source] as usize;
                     let source_x = fourth[source];
-                    let source_border = rank_center + self.sizes[source_position].y * 0.5;
+                    let source_border = rank_center + source_size.y * 0.5;
 
                     for target in bucket(&structure.down_flat, &structure.down_offsets, source)
                         .iter()
@@ -1118,9 +1132,14 @@ where
                                 (target, None)
                             };
                         let target_position = position_of[real_target];
-                        let target_top = (structure.top[real_target] & RANK_MASK) as usize;
 
-                        let target_center = self.layer_center(target_top);
+                        let target_center = if let Some((_, seg_last)) = segment {
+                            let [span_end, target_end] =
+                                adjacent(&self.layer_ends, seg_last as usize);
+                            f32::midpoint(span_end + self.layer_gap, target_end)
+                        } else {
+                            next_center
+                        };
 
                         let target_x = fourth[real_target];
                         let target_border =
@@ -1154,10 +1173,10 @@ where
                     }
                 }
 
-                self.polyline_offsets[next_rank] = self.polylines.len() as u32;
-                self.polyline_segment_offsets[next_rank] = self.polyline_segments.len() as u32;
-                self.polyline_bounds[rank] = (rank_min, rank_max);
-                self.polyline_reach[rank] = rank_reach;
+                *offset_out = self.polylines.len() as u32;
+                *segment_offset_out = self.polyline_segments.len() as u32;
+                *bounds_out = (rank_min, rank_max);
+                *reach_out = rank_reach;
             }
         }
 
@@ -1184,7 +1203,6 @@ where
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     fn coordinate_pass<const DOWNWARD: bool, const LEFTWARD: bool, const HAS_SEGMENTS: bool>(
-        &self,
         scratch: &mut PassScratch<'_, '_>,
         spacing: &Spacing,
         x: &mut [f32],
@@ -1215,8 +1233,6 @@ where
             shift,
             stack,
         } = scratch;
-
-        let height = self.height as usize;
 
         let (layer_flat, layer_offsets) = if DOWNWARD {
             (*merged_top_flat, *merged_top_offsets)
@@ -1252,10 +1268,13 @@ where
         shift.clear();
         shift.resize(x.len(), f32::INFINITY);
 
-        for layer in (0..height)
-            .into_iter()
-            .map(|i| bucket(layer_flat, layer_offsets, reflect(i, height, DOWNWARD)))
-        {
+        let mut layers = buckets(layer_flat, layer_offsets);
+
+        while let Some(layer) = if DOWNWARD {
+            layers.next()
+        } else {
+            layers.next_back()
+        } {
             let mut last = None;
 
             let mut process = |vertex: usize| {
@@ -1317,25 +1336,11 @@ where
                     spacing.node
                 }
         };
-        let vertex_runs = |vertex: usize| {
+        let runs_of = |vertex: usize| {
             if HAS_SEGMENTS {
-                bucket(runs_flat, runs_offsets, vertex)
+                Runs::Segments(bucket(runs_flat, runs_offsets, vertex).iter())
             } else {
-                &[]
-            }
-        };
-        let runs_len = |runs: &[(u32, u32, u32)], vertex: usize| {
-            if HAS_SEGMENTS {
-                runs.len()
-            } else {
-                usize::from(runs_single[vertex] != u32::MAX)
-            }
-        };
-        let run_neighbour = |runs: &[(u32, u32, u32)], vertex: usize, run: usize| {
-            if HAS_SEGMENTS {
-                runs[run].0
-            } else {
-                runs_single[vertex]
+                Runs::Single(Some(runs_single[vertex]).filter(|neighbour| *neighbour != u32::MAX))
             }
         };
 
@@ -1352,24 +1357,16 @@ where
             let mut frame = (start, start, 0);
 
             'outer: loop {
-                let (root_val, member, applied) = frame;
-                let mut applied = applied as usize;
+                let (root_val, member, mut applied) = frame;
                 let (root_index, member_index) = (root_val as usize, member as usize);
+                let mut pending = runs_of(member_index).skip(applied as usize, DOWNWARD);
 
-                let member_runs = vertex_runs(member_index);
-                let run_count = runs_len(member_runs, member_index);
-
-                while applied < run_count {
-                    let neighbour = run_neighbour(
-                        member_runs,
-                        member_index,
-                        reflect(applied, run_count, DOWNWARD),
-                    );
+                while let Some(neighbour) = pending.next(DOWNWARD) {
                     let neighbour_root = root[neighbour as usize];
                     let neighbour_x = &mut x[neighbour_root as usize];
 
                     if neighbour_x.is_nan() {
-                        frame.2 = applied as u32;
+                        frame.2 = applied;
                         stack.push(frame);
                         frame = (neighbour_root, neighbour_root, 0);
 
@@ -1418,13 +1415,7 @@ where
             }
         };
 
-        for (layer_start, layer_end) in merged_top_offsets
-            .iter()
-            .copied()
-            .zip(merged_top_offsets.iter().copied().skip(1))
-        {
-            let layer = &merged_top_flat[layer_start as usize..layer_end as usize];
-
+        for layer in buckets(merged_top_flat, merged_top_offsets) {
             if LEFTWARD {
                 for start in layer.iter().copied() {
                     place(start as usize);
@@ -1436,16 +1427,21 @@ where
             }
         }
 
-        for rank in (0..height)
-            .into_iter()
-            .map(|i| reflect(i, height, DOWNWARD))
-        {
-            let entry = if LEFTWARD {
-                leftmost_at[rank]
-            } else {
-                rightmost_at[rank]
-            } as usize;
+        let mut entries = if LEFTWARD {
+            *leftmost_at
+        } else {
+            *rightmost_at
+        }
+        .iter()
+        .copied()
+        .map(|i| i as usize)
+        .enumerate();
 
+        while let Some((rank, entry)) = if DOWNWARD {
+            entries.next()
+        } else {
+            entries.next_back()
+        } {
             if sink[entry] as usize != entry {
                 continue;
             }
@@ -1504,10 +1500,9 @@ where
 
                     let vertex_sink = sink[vertex] as usize;
                     let vertex_x = x[vertex];
-                    let runs = vertex_runs(vertex);
+                    let mut runs = runs_of(vertex);
 
-                    for run in 0..runs_len(runs, vertex) {
-                        let neighbour = run_neighbour(runs, vertex, run) as usize;
+                    while let Some(neighbour) = runs.next(true).map(|i| i as usize) {
                         let neighbour_sink = sink[neighbour] as usize;
 
                         shift[neighbour_sink] = shift[neighbour_sink].min(
@@ -1590,17 +1585,6 @@ impl<K> Layout2D<K>
 where
     K: Hash + Copy + Eq + Ord,
 {
-    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    #[inline]
-    fn layer_start(&self, rank: usize) -> f32 {
-        rank.checked_sub(1)
-            .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap)
-    }
-    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
-    #[inline]
-    fn layer_center(&self, rank: usize) -> f32 {
-        f32::midpoint(self.layer_start(rank), self.layer_ends[rank])
-    }
     #[must_use]
     pub const fn size(&self) -> Vec2 {
         self.size
@@ -1641,8 +1625,54 @@ where
                 continue;
             }
 
-            for rank in next_rank..block_end {
-                let (rank_min, rank_max) = self.polyline_bounds[rank];
+            let block_ranks = next_rank..block_end;
+            let block_after = next_rank + 1..=block_end;
+
+            let mut band_start = next_rank
+                .checked_sub(1)
+                .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap);
+
+            for (
+                rank,
+                (
+                    (
+                        ((rank_min, rank_max), (range_start, range_end)),
+                        (segment_start, segment_end),
+                    ),
+                    ((left_reach, right_reach), source_band_end),
+                ),
+            ) in self.polyline_bounds[block_ranks.clone()]
+                .iter()
+                .copied()
+                .zip(
+                    self.polyline_offsets[block_ranks.clone()]
+                        .iter()
+                        .copied()
+                        .map(|i| i as usize)
+                        .zip(
+                            self.polyline_offsets[block_after.clone()]
+                                .iter()
+                                .copied()
+                                .map(|i| i as usize),
+                        ),
+                )
+                .zip(
+                    self.polyline_segment_offsets[block_ranks.clone()]
+                        .iter()
+                        .copied()
+                        .zip(self.polyline_segment_offsets[block_after].iter().copied()),
+                )
+                .zip(
+                    self.polyline_reach[block_ranks.clone()]
+                        .iter()
+                        .copied()
+                        .zip(self.layer_ends[block_ranks].iter().copied()),
+                )
+                .enumerate()
+                .map(|(offset, item)| (next_rank + offset, item))
+            {
+                let rank_band_start =
+                    mem::replace(&mut band_start, source_band_end + self.layer_gap);
 
                 if !(rank_min.x <= max.x
                     && rank_max.x >= min.x
@@ -1652,40 +1682,40 @@ where
                     continue;
                 }
 
-                let (range_start, range_end) =
-                    (self.polyline_offsets[rank], self.polyline_offsets[rank + 1]);
-                let (left_reach, right_reach) = self.polyline_reach[rank];
-
-                let begin = range_start as usize
-                    + self.polyline_source_x[range_start as usize..range_end as usize]
+                let begin = range_start
+                    + self.polyline_source_x[range_start..range_end]
                         .partition_point(|x| *x < min.x - right_reach);
 
-                let rank_center = self.layer_center(rank);
-                let source_band_end = self.layer_ends[rank];
-                let (next_center, next_band_start) = if rank + 1 < self.layer_ends.len() {
-                    (self.layer_center(rank + 1), self.layer_start(rank + 1))
-                } else {
-                    (0.0, 0.0)
-                };
+                let rank_center = f32::midpoint(rank_band_start, source_band_end);
+                let (next_center, next_band_start) = self
+                    .layer_ends
+                    .get(rank + 1)
+                    .map_or((0.0, 0.0), |&next_end| {
+                        (f32::midpoint(band_start, next_end), band_start)
+                    });
 
-                let segment_start = self.polyline_segment_offsets[rank] as usize;
-                let segment_end = self.polyline_segment_offsets[rank + 1] as usize;
-                let mut segment_cursor = segment_start
-                    + self.polyline_segments[segment_start..segment_end]
-                        .partition_point(|(polyline, _, _)| (*polyline as usize) < begin);
+                let rank_segments =
+                    &self.polyline_segments[segment_start as usize..segment_end as usize];
+                let mut segments = &rank_segments[rank_segments
+                    .partition_point(|(polyline, _, _)| (*polyline as usize) < begin)..];
 
-                for index in begin..range_end as usize {
-                    let line = self.polylines[index];
-                    let source_x = self.polyline_source_x[index];
-
+                for (index, (line, source_x)) in self.polylines[begin..range_end]
+                    .iter()
+                    .copied()
+                    .zip(self.polyline_source_x[begin..range_end].iter().copied())
+                    .enumerate()
+                    .map(|(offset, item)| (begin + offset, item))
+                {
                     if source_x - left_reach > max.x {
                         break;
                     }
 
                     let target_x = self.x_coordinates[line.1 as usize];
-                    let segment_info = match self.polyline_segments.get(segment_cursor) {
-                        Some(&(polyline, seg_x, seg_last)) if polyline as usize == index => {
-                            segment_cursor += 1;
+                    let segment_info = match segments.split_first() {
+                        Some((&(polyline, seg_x, seg_last), rest))
+                            if polyline as usize == index =>
+                        {
+                            segments = rest;
 
                             Some((seg_x, seg_last))
                         }
@@ -1702,17 +1732,20 @@ where
                     };
 
                     let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5;
-                    let (target_center, target_band_start) =
-                        if let Some((_, seg_last)) = segment_info {
-                            let target_rank = seg_last as usize + 1;
+                    let (target_center, target_band_start, span_end) = if let Some((_, seg_last)) =
+                        segment_info
+                    {
+                        let [span_end, target_end] = adjacent(&self.layer_ends, seg_last as usize);
+                        let target_band_start = span_end + self.layer_gap;
 
-                            (
-                                self.layer_center(target_rank),
-                                self.layer_start(target_rank),
-                            )
-                        } else {
-                            (next_center, next_band_start)
-                        };
+                        (
+                            f32::midpoint(target_band_start, target_end),
+                            target_band_start,
+                            span_end,
+                        )
+                    } else {
+                        (next_center, next_band_start, 0.0)
+                    };
                     let target_border = target_center - self.sizes[line.1 as usize].y * 0.5;
 
                     if line_min_x <= max.x
@@ -1720,9 +1753,8 @@ where
                         && source_border <= max.y
                         && target_border >= min.y
                     {
-                        let segment = segment_info.map(|(seg_x, seg_last)| {
-                            (seg_x, next_band_start, self.layer_ends[seg_last as usize])
-                        });
+                        let segment =
+                            segment_info.map(|(seg_x, _)| (seg_x, next_band_start, span_end));
 
                         callback(LayoutItem::Polyline {
                             from: self.keys[line.0 as usize],
@@ -1742,16 +1774,21 @@ where
             next_rank = block_end;
         }
 
-        for (rank, ((start, end), half_width)) in self.real_offsets[first..last.max(first)]
+        let mut band_start = first
+            .checked_sub(1)
+            .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap);
+
+        for (((start, end), half_width), band_end) in self.real_offsets[first..last.max(first)]
             .iter()
             .copied()
             .zip(self.real_offsets[first + 1..].iter().copied())
             .zip(self.rank_half_width[first..].iter().copied())
-            .enumerate()
+            .zip(self.layer_ends[first..].iter().copied())
         {
-            let rank = rank + first;
             let (start, end) = (start as usize, end as usize);
-            let y = self.layer_center(rank);
+            let y = f32::midpoint(band_start, band_end);
+
+            band_start = band_end + self.layer_gap;
 
             let cutoff = min.x - half_width;
             let begin = start + self.x_coordinates[start..end].partition_point(|x| x < &cutoff);
@@ -1762,18 +1799,18 @@ where
                 .zip(self.sizes[begin..end].iter().copied())
                 .zip(self.keys[begin..end].iter().copied())
             {
-                let center = Vec2::new(x, y);
                 let half = size * 0.5;
 
-                if center.x - half.x > max.x {
+                if x - half.x > max.x {
                     break;
                 }
 
-                if center.x + half.x >= min.x
-                    && center.y - half.y <= max.y
-                    && center.y + half.y >= min.y
-                {
-                    callback(LayoutItem::Node { id, center, size });
+                if x + half.x >= min.x && y - half.y <= max.y && y + half.y >= min.y {
+                    callback(LayoutItem::Node {
+                        id,
+                        center: Vec2::new(x, y),
+                        size,
+                    });
                 }
             }
         }
@@ -1831,9 +1868,43 @@ fn line_points(
     ArrayVec::from_array_len(points, len)
 }
 
-#[inline]
-const fn reflect(index: usize, len: usize, forward: bool) -> usize {
-    if forward { index } else { len - 1 - index }
+enum Runs<'a> {
+    Segments(slice::Iter<'a, (u32, u32, u32)>),
+    Single(Option<u32>),
+}
+
+impl Runs<'_> {
+    #[inline(always)]
+    fn skip(self, applied: usize, forward: bool) -> Self {
+        match self {
+            Self::Segments(runs) => {
+                let runs = runs.as_slice();
+                let remaining = if forward {
+                    &runs[applied..]
+                } else {
+                    &runs[..runs.len() - applied]
+                };
+
+                Self::Segments(remaining.iter())
+            }
+            Self::Single(neighbour) => Self::Single(if applied == 0 { neighbour } else { None }),
+        }
+    }
+    #[inline(always)]
+    fn next(&mut self, forward: bool) -> Option<u32> {
+        match self {
+            Self::Segments(runs) => {
+                let run = if forward {
+                    runs.next()
+                } else {
+                    runs.next_back()
+                };
+
+                run.map(|&(neighbour, _, _)| neighbour)
+            }
+            Self::Single(neighbour) => neighbour.take(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1918,10 +1989,36 @@ fn ends_from_counts(offsets: &mut [u32]) -> usize {
 }
 
 #[allow(clippy::unreachable, reason = "Compiler limitation")]
-#[inline]
-fn bucket<'a, T>(flat: &'a [T], offsets: &[u32], index: usize) -> &'a [T] {
-    let [left, right] = offsets[index..=index + 1] else {
+#[inline(always)]
+fn adjacent<T>(slice: &[T], index: usize) -> [T; 2]
+where
+    T: Copy,
+{
+    let [first, second] = slice[index..=index + 1] else {
         unreachable!()
     };
-    &flat[left as usize..right as usize]
+    [first, second]
+}
+
+#[inline(always)]
+fn bucket_range(offsets: &[u32], index: usize) -> Range<usize> {
+    let [left, right] = adjacent(offsets, index);
+    left as usize..right as usize
+}
+
+#[inline(always)]
+fn bucket<'a, T>(flat: &'a [T], offsets: &[u32], index: usize) -> &'a [T] {
+    &flat[bucket_range(offsets, index)]
+}
+
+#[inline(always)]
+fn buckets<'a, T>(
+    flat: &'a [T],
+    offsets: &'a [u32],
+) -> impl DoubleEndedIterator<Item = &'a [T]> + ExactSizeIterator {
+    offsets
+        .iter()
+        .copied()
+        .zip(offsets.iter().copied().skip(1))
+        .map(move |(left, right)| &flat[left as usize..right as usize])
 }

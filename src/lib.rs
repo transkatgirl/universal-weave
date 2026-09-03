@@ -32,6 +32,7 @@
     clippy::missing_inline_in_public_items,
     reason = "Reasonable candidates have already been inlined"
 )]
+#![allow(clippy::inline_always, reason = "Performance")]
 #![allow(clippy::exhaustive_enums, reason = "API")]
 #![allow(clippy::exhaustive_structs, reason = "API")]
 #![allow(clippy::little_endian_bytes, reason = "API")]
