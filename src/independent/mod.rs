@@ -436,7 +436,7 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
     }
     /// Shrinks the capacity of the weave as much as possible.
-    pub fn shrink_to(&mut self) {
+    pub fn shrink_to_fit(&mut self) {
         self.nodes.shrink_to_fit();
         self.roots.shrink_to_fit();
         self.active.shrink_to_fit();
