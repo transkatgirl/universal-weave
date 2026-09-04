@@ -219,7 +219,7 @@ where
 /// - Updating node activation has a worst-case time complexity of O(V + E) rather than [`DependentWeave`]'s O(1), so bulk operations must be done carefully to prevent accidentally quadratic behavior.
 ///
 /// For best performance, it is recommended that you use random node identifiers and the [`Hasher`](core::hash::Hasher) implementation from the [nohash-hasher](https://crates.io/crates/nohash-hasher) crate. If your node identifiers end with random data (such as ULIDs in their raw representation), use the [hash_hasher](https://crates.io/crates/hash_hasher) crate instead.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize))]
 #[cfg_attr(feature = "rkyv", rkyv(bytecheck(verify)))]
@@ -269,6 +269,18 @@ where
 
     /// The metadata associated with the weave.
     pub metadata: M,
+}
+
+impl<K, T, M, S> Default for IndependentWeave<K, T, M, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+    M: Default,
+{
+    fn default() -> Self {
+        Self::new(M::default())
+    }
 }
 
 #[cfg(feature = "serde")]
