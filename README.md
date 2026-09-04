@@ -41,6 +41,7 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 		- CRDT-based collaborative editing (requires loro & rkyv, *experimental*)
 	- DAG-based Weave implementation
 		- Node moving
+	- Support for graphical display of Weave content
 	- Support for Weave wrapper implementations
 		- Built-in action queuing wrapper (can be used to implement undo/redo)
 - Supports `no_std` environments (requires `alloc`)
