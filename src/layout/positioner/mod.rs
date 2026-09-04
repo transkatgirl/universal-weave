@@ -105,13 +105,11 @@ where
         self.height = 0;
 
         self.real_offsets.clear();
-
         self.rank_half_width.clear();
-
         self.x_coordinates.clear();
         self.layer_ends.clear();
-        self.size = Vec2::ZERO;
         self.layer_gap = 0.0;
+        self.size = Vec2::ZERO;
         self.polylines.clear();
         self.polyline_source_x.clear();
         self.polyline_segments.clear();
