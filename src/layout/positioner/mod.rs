@@ -1,4 +1,4 @@
-#![allow(clippy::too_many_lines, clippy::cognitive_complexity, reason = "WIP")]
+#![allow(clippy::too_many_lines, clippy::cognitive_complexity, reason = "TODO")] // TODO: Split large functions
 #![allow(
     clippy::as_conversions,
     clippy::cast_possible_truncation,
@@ -9,8 +9,6 @@
     reason = "Node and edge counts fit in u32"
 )]
 #![allow(clippy::impl_trait_in_params, reason = "Readability")]
-
-// TODO: Split functions into subfunctions, final correctness review
 
 use core::{
     hash::{BuildHasher, Hash},
