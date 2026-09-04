@@ -408,8 +408,7 @@ struct PassScratch<'a, 'g> {
     merged_top_offsets: &'a [u32],
     merged_bottom_flat: &'a [u32],
     merged_bottom_offsets: &'a [u32],
-    medians_down: &'a [Medians],
-    medians_up: &'a [Medians],
+    medians: &'a mut ScratchpadVec<'g, Medians>,
     root: &'a mut ScratchpadVec<'g, u32>,
     align: &'a mut ScratchpadVec<'g, u32>,
     sink: &'a mut ScratchpadVec<'g, u32>,
@@ -832,19 +831,6 @@ where
             }
         }
 
-        let medians_down = build_medians(
-            guard,
-            &structure.up_offsets,
-            &structure.up_flat,
-            &structure.top,
-        );
-        let medians_up = build_medians(
-            guard,
-            &structure.down_offsets,
-            &structure.down_flat,
-            &structure.top,
-        );
-
         let mut left_offsets = guard.vec();
         let mut right_offsets = guard.vec();
         let mut left_runs = guard.vec();
@@ -922,8 +908,7 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            medians_down: &medians_down,
-            medians_up: &medians_up,
+            medians: &mut guard.vec_with_capacity(count),
             root: &mut root,
             align: &mut guard.vec_with_capacity(count),
             sink: &mut guard.vec_with_capacity(count),
@@ -931,28 +916,43 @@ where
             stack: &mut guard.vec(),
         };
 
-        let extents = [
-            Self::coordinate_pass::<true, true, HAS_SEGMENTS>(
-                &mut scratch,
-                spacing,
-                &mut candidates[0],
-            ),
-            Self::coordinate_pass::<true, false, HAS_SEGMENTS>(
-                &mut scratch,
-                spacing,
-                &mut candidates[1],
-            ),
-            Self::coordinate_pass::<false, true, HAS_SEGMENTS>(
-                &mut scratch,
-                spacing,
-                &mut candidates[2],
-            ),
-            Self::coordinate_pass::<false, false, HAS_SEGMENTS>(
-                &mut scratch,
-                spacing,
-                &mut candidates[3],
-            ),
-        ];
+        let mut extents = [(0.0, 0.0); 4];
+
+        fill_medians(
+            scratch.medians,
+            &structure.up_offsets,
+            &structure.up_flat,
+            &structure.top,
+        );
+
+        extents[0] = Self::coordinate_pass::<true, true, HAS_SEGMENTS>(
+            &mut scratch,
+            spacing,
+            &mut candidates[0],
+        );
+        extents[1] = Self::coordinate_pass::<true, false, HAS_SEGMENTS>(
+            &mut scratch,
+            spacing,
+            &mut candidates[1],
+        );
+
+        fill_medians(
+            scratch.medians,
+            &structure.down_offsets,
+            &structure.down_flat,
+            &structure.top,
+        );
+
+        extents[2] = Self::coordinate_pass::<false, true, HAS_SEGMENTS>(
+            &mut scratch,
+            spacing,
+            &mut candidates[2],
+        );
+        extents[3] = Self::coordinate_pass::<false, false, HAS_SEGMENTS>(
+            &mut scratch,
+            spacing,
+            &mut candidates[3],
+        );
 
         let mut best = 0;
 
@@ -1222,8 +1222,7 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            medians_down,
-            medians_up,
+            medians,
             root,
             align,
             sink,
@@ -1236,7 +1235,6 @@ where
         } else {
             (*merged_bottom_flat, *merged_bottom_offsets)
         };
-        let medians = if DOWNWARD { *medians_down } else { *medians_up };
         let edge_marked = if DOWNWARD { *marked_up } else { *marked };
         let (runs_flat, runs_offsets) = if LEFTWARD {
             (*left_runs, *left_offsets)
@@ -1903,14 +1901,13 @@ struct Medians {
     kind: MedianKind,
 }
 
-fn build_medians<'g>(
-    guard: &'g ScratchpadGuard<'_>,
+fn fill_medians(
+    medians: &mut ScratchpadVec<'_, Medians>,
     offsets: &[u32],
     flat: &[u32],
     top: &[u32],
-) -> ScratchpadVec<'g, Medians> {
-    let mut medians = guard.vec_with_capacity(offsets.len().saturating_sub(1));
-
+) {
+    medians.clear();
     medians.extend(
         offsets
             .iter()
@@ -1959,8 +1956,6 @@ fn build_medians<'g>(
                 }
             }),
     );
-
-    medians
 }
 
 fn ends_from_counts(offsets: &mut [u32]) -> usize {
