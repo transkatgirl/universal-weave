@@ -443,10 +443,6 @@ where
         self.bookmarked.shrink_to_fit();
         self.scratchpad = Scratchpad::new();
     }
-    #[allow(
-        clippy::too_many_lines,
-        reason = "Cannot be split into smaller functions"
-    )]
     #[cfg_attr(debug_assertions, contract(
         ensures(ret == self.nodes.contains_key(id)),
         ensures(!ret || value == self.active.contains(id)),
@@ -723,10 +719,6 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
-    #[allow(
-        clippy::too_many_lines,
-        reason = "Cannot be split into smaller functions"
-    )]
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
     pub fn set_active_dependent_semantics(&mut self, id: &K, value: bool) -> bool {

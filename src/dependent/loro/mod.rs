@@ -887,7 +887,6 @@ where
     S: BuildHasher + Default + Clone,
 {
     /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized enough for [`Weave`] operations to function properly.
-    #[allow(clippy::too_many_lines, reason = "Marginally exceeds threshold")]
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 
