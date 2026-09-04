@@ -27,9 +27,7 @@ use serde::{
 use crate::dependent::{DependentNode, DependentWeave as NewDependentWeave, detect_cycles};
 
 #[cfg(feature = "rkyv")]
-use crate::dependent::{
-    ArchivedDependentWeave as NewArchivedDependentWeave, archived_detect_cycles,
-};
+use crate::dependent::archived_detect_cycles;
 
 #[cfg(any(feature = "serde", feature = "rkyv"))]
 use crate::contract::ValidationError;
@@ -225,26 +223,7 @@ where
     }
 }
 
-#[cfg(feature = "rkyv")]
-impl<K, T, M, S> From<ArchivedDependentWeave<K, T, M, S>> for NewArchivedDependentWeave<K, T, M, S>
-where
-    K: Archive + Hash + Copy + Eq + Ord,
-    <K as Archive>::Archived: Hash + Copy + Eq + Ord + 'static,
-    T: Archive,
-    M: Archive,
-    S: BuildHasher + Default + Clone,
-{
-    fn from(value: ArchivedDependentWeave<K, T, M, S>) -> Self {
-        Self {
-            nodes: value.nodes,
-            roots: value.roots,
-            active: value.active,
-            bookmarked: value.bookmarked,
-            scratchpad: value.scratchpad,
-            metadata: value.metadata,
-        }
-    }
-}
+// ArchivedDependentWeave cannot be converted to/from the non-legacy Archived struct due to a limitation of `rkyv`
 
 #[cfg(feature = "rkyv")]
 impl<K, T, M, S> ArchivedDependentWeave<K, T, M, S>
