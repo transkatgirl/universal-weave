@@ -1107,7 +1107,7 @@ where
                     .zip(start..)
                 {
                     let source_x = fourth[source];
-                    let source_border = rank_center + source_size.y * 0.5;
+                    let source_border = (rank_center + source_size.y * 0.5).min(band_end);
 
                     for target in bucket(&structure.down_flat, &structure.down_offsets, source)
                         .iter()
@@ -1126,17 +1126,24 @@ where
                             };
                         let target_position = position_of[real_target];
 
-                        let target_center = if let Some((_, seg_last)) = segment {
-                            let [span_end, target_end] =
-                                adjacent(&self.layer_ends, seg_last as usize);
-                            f32::midpoint(span_end + self.layer_gap, target_end)
-                        } else {
-                            next_center
-                        };
+                        let (target_center, target_band_start) =
+                            if let Some((_, seg_last)) = segment {
+                                let [span_end, target_end] =
+                                    adjacent(&self.layer_ends, seg_last as usize);
+                                let target_band_start = span_end + self.layer_gap;
+
+                                (
+                                    f32::midpoint(target_band_start, target_end),
+                                    target_band_start,
+                                )
+                            } else {
+                                (next_center, next_band_start)
+                            };
 
                         let target_x = fourth[real_target];
-                        let target_border =
-                            target_center - self.sizes[target_position as usize].y * 0.5;
+                        let target_border = (target_center
+                            - self.sizes[target_position as usize].y * 0.5)
+                            .max(target_band_start);
 
                         let (min_x, max_x) = if let Some((seg_x, seg_last)) = segment {
                             self.polyline_segments.push((
@@ -1710,7 +1717,8 @@ where
                         (source_x.min(target_x), source_x.max(target_x))
                     };
 
-                    let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5;
+                    let source_border =
+                        (rank_center + self.sizes[line.0 as usize].y * 0.5).min(source_band_end);
                     let (target_center, target_band_start, span_end) = if let Some((_, seg_last)) =
                         segment_info
                     {
@@ -1725,7 +1733,8 @@ where
                     } else {
                         (next_center, next_band_start, 0.0)
                     };
-                    let target_border = target_center - self.sizes[line.1 as usize].y * 0.5;
+                    let target_border = (target_center - self.sizes[line.1 as usize].y * 0.5)
+                        .max(target_band_start);
 
                     if line_min_x <= max.x
                         && line_max_x >= min.x
