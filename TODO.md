@@ -2,6 +2,7 @@
 
 ## Correctness
 
+- [ ] Improve Layouter handling of floating-point rounding error
 - [ ] Improve test coverage
     - [ ] **DependentWeave unit tests**
     - [ ] **IndependentWeave unit tests**
