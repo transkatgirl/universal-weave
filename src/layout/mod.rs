@@ -23,8 +23,6 @@ use crate::{
     layout::positioner::Layout2D,
 };
 
-// TODO: Add curve fitting convenience functions
-
 mod positioner;
 
 /// Minimum gaps in a [`Weave`] layout.
@@ -261,6 +259,40 @@ where
     ) {
         self.layout.view(min, max, callback);
     }
+}
+
+/// Smooths a polyline produced by this module's [`Layouter`] implementation into a chain of cubic Bézier segments.
+///
+/// This function may produce incorrect results if used to process polylines from other [`Layouter`] implementations.
+#[allow(
+    clippy::float_arithmetic,
+    clippy::arithmetic_side_effects,
+    reason = "Coordinate calculation"
+)]
+#[must_use]
+pub fn smooth(points: ArrayVec<[Vec2; 6]>) -> ArrayVec<[[Vec2; 4]; 5]> {
+    let mut segments = ArrayVec::new();
+
+    for [start, end] in points.array_windows::<2>().copied() {
+        let y_diff = end.y - start.y;
+
+        segments.push(if y_diff == 0.0 {
+            let x_diff = end.x - start.x;
+
+            [
+                start,
+                start + Vec2::new(x_diff * (1.0 / 3.0), 0.0),
+                start + Vec2::new(x_diff * (2.0 / 3.0), 0.0),
+                end,
+            ]
+        } else {
+            let arm = Vec2::new(0.0, y_diff * 0.5);
+
+            [start, start + arm, end - arm, end]
+        });
+    }
+
+    segments
 }
 
 #[must_use]
