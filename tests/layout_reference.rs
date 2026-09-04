@@ -493,8 +493,8 @@ struct WeaveContent {
 impl WeaveContent {
     fn size(&self) -> Vec2 {
         Vec2 {
-            x: (self.content_seed as f32 / u32::MAX as f32) * 16.0,
-            y: (self.length as f32 / u32::MAX as f32) * 16.0,
+            x: (self.length % 64) as f32 * 0.25,
+            y: (self.content_seed % 4) as f32 * 4.0,
         }
     }
 }
