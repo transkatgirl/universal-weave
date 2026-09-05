@@ -565,13 +565,17 @@ where
 {
     /// Removes the specified range from the active path without removing the contents from the underlying Weave.
     ///
+    /// If the range is empty or does not intersect with the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
+    ///
     /// This function may split up to 2 nodes if necessary to apply the operation.
     ///
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics.
     fn split_out(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
-    /// Inserts a new node at the specified index with the specified contents.
+    /// Inserts a new node into the active path at the specified index.
+    ///
+    /// If `at` is beyond the active path's length, the content will be appended to the end of the active path.
     ///
     /// This function may split up to 1 node if necessary to apply the operation.
     ///
