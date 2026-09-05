@@ -571,7 +571,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics, or if `generate_id` returns an identifier already in the Weave.
+    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
     fn split_out(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
     /// Inserts a new node into the active path at the specified index.
     ///
@@ -581,7 +581,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics, or if `generate_id` returns an identifier already in the Weave.
+    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
     fn insert_at(&mut self, at: usize, contents: T, generate_id: impl FnMut() -> K);
 }
 
