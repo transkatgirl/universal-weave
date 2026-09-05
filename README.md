@@ -41,10 +41,12 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 		- CRDT-based collaborative editing (requires loro & rkyv, *experimental*)
 	- DAG-based Weave implementation
 		- Node moving
-	- Support for graphical display of Weave content
+	- Support for arranging Weave contents in coordinate space for graphical rendering
+		- Built-in 2D layout implementation (requires layout feature)
 	- Support for Weave wrapper implementations
 		- Built-in action queuing wrapper (can be used to implement undo/redo)
 - Supports `no_std` environments (requires `alloc`)
 	- Loro must be disabled when building for `no_std`
+	- Built-in 2D layout implementation requires target_pointer_width == 32 || target_pointer_width == 64
 	- Recommended heap size is ~1.6 MB per 1,000 nodes for IndependentWeave + IndependentLayouter
 		- Significant memory efficiency improvements are planned for future releases
