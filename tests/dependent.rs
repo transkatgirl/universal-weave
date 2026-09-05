@@ -137,6 +137,12 @@ struct WeaveContent {
 impl IndependentContents for WeaveContent {}
 
 impl DiscreteContents for WeaveContent {
+    fn len(&self) -> usize {
+        self.length as usize
+    }
+    fn is_empty(&self) -> bool {
+        self.length == 0
+    }
     fn split(self, at: usize) -> DiscreteContentResult<Self> {
         if at == 0 || at as u64 >= self.length as u64 {
             DiscreteContentResult::One(self)

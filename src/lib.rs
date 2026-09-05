@@ -155,6 +155,10 @@ where
 
 /// [`Node`] contents which can be split apart or merged together.
 pub trait DiscreteContents: Sized {
+    /// Returns the length of the item.
+    fn len(&self) -> usize;
+    /// Returns `true` if the item has a length of zero.
+    fn is_empty(&self) -> bool;
     /// Splits the item at specified index.
     ///
     /// If splitting the item fails, the original contents are returned.
@@ -176,6 +180,14 @@ pub enum DiscreteContentResult<T> {
 
 impl DiscreteContents for () {
     #[inline]
+    fn len(&self) -> usize {
+        0
+    }
+    #[inline]
+    fn is_empty(&self) -> bool {
+        true
+    }
+    #[inline]
     fn split(self, _at: usize) -> DiscreteContentResult<Self> {
         DiscreteContentResult::Two((), ())
     }
@@ -185,10 +197,37 @@ impl DiscreteContents for () {
     }
 }
 
+impl DiscreteContents for Vec<u8> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.len()
+    }
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+    #[inline]
+    fn split(mut self, at: usize) -> DiscreteContentResult<Self> {
+        if at == 0 || at > self.len() {
+            DiscreteContentResult::One(self)
+        } else {
+            let right = self.split_off(at);
+            DiscreteContentResult::Two(self, right)
+        }
+    }
+    #[inline]
+    fn merge(mut self, mut value: Self) -> DiscreteContentResult<Self> {
+        self.append(&mut value);
+        DiscreteContentResult::One(self)
+    }
+}
+
 /// [`Node`] contents which do not depend on the contents of other [`Node`] objects in order to be meaningful.
 pub trait IndependentContents {}
 
 impl IndependentContents for () {}
+
+impl IndependentContents for Vec<u8> {}
 
 /// [`Node`] contents which can be meaningfully deduplicated.
 ///
