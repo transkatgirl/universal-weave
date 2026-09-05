@@ -570,7 +570,7 @@ where
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics.
-    fn split_out_range(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
+    fn split_out(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
     /// Inserts a new node at the specified index with the specified contents.
     ///
     /// This function may split up to 1 node if necessary to apply the operation.
@@ -578,7 +578,7 @@ where
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics.
-    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnMut() -> K);
+    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnOnce() -> K);
 }
 
 /// A geometric item within an arrangement of a Weave's content.
