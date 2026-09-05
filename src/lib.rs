@@ -175,9 +175,11 @@ pub enum DiscreteContentResult<T> {
 }
 
 impl DiscreteContents for () {
+    #[inline]
     fn split(self, _at: usize) -> DiscreteContentResult<Self> {
         DiscreteContentResult::Two((), ())
     }
+    #[inline]
     fn merge(self, _value: Self) -> DiscreteContentResult<Self> {
         DiscreteContentResult::One(())
     }
