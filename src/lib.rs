@@ -578,7 +578,7 @@ where
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics.
-    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnOnce() -> K);
+    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnMut() -> K);
 }
 
 /// A geometric item within an arrangement of a Weave's content.
