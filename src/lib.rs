@@ -563,7 +563,7 @@ where
     N: Node<K, T>,
     T: DiscreteContents + IndependentContents,
 {
-    /// Removes the specified range from the active path without removing the contents from the underlying Weave.
+    /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
     /// If the range is empty or does not intersect with the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
@@ -571,7 +571,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics.
+    /// May panic if `T::split()` fails or panics, or if `generate_id` returns an identifier already in the Weave.
     fn split_out(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
     /// Inserts a new node into the active path at the specified index.
     ///
@@ -581,8 +581,8 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics.
-    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnMut() -> K);
+    /// May panic if `T::split()` fails or panics, or if `generate_id` returns an identifier already in the Weave.
+    fn insert_at(&mut self, at: usize, contents: T, generate_id: impl FnMut() -> K);
 }
 
 /// A geometric item within an arrangement of a Weave's content.
