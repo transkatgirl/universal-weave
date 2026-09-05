@@ -4,8 +4,10 @@
 
 - [ ] Improve Layouter handling of floating-point rounding error
 - [ ] Improve test coverage
-    - [ ] **DependentWeave unit tests**
-    - [ ] **IndependentWeave unit tests**
+    - [ ] **Improve differential testing harnesses**
+        - [ ] Add differential testing for 0.5.0 layout behavior
+    - [ ] DependentWeave unit tests
+    - [ ] IndependentWeave unit tests
     - [ ] DeduplicatedWeave unit tests
 - [ ] **Turn function contracts into readable & executable documentation**
 	- [ ] DependentWeave
