@@ -115,6 +115,7 @@ use alloc::vec::Vec;
 use core::{
     cmp::{Ordering, Reverse},
     hash::{BuildHasher, Hash},
+    ops::Range,
 };
 
 use hashbrown::{HashMap, hash_map::Entry};
@@ -526,6 +527,58 @@ where
     ///
     /// May panic if `T::merge` panics.
     fn merge_with_parent(&mut self, id: &K) -> Option<K>;
+}
+
+/*
+
+Split out behavior:
+1. Find first node at beginning of range and at end of range
+2. If both refer to the same node, use Weave::split 0-2 times, followed by Weave::set_active
+3. If both refer to different nodes:
+    3a. Find the shortest path between the two nodes
+    3b. Use Weave::split 0-2 times, followed by Weave::set_active_path
+
+Insert at behavior:
+1. Find first node at index
+2. If index is at beginning of node, use Weave::insert
+3. Otherwise, use Weave::split and then Weave::insert
+
+TODO:
+
+1. Implement PatchablePathWeave on IndependentWeave
+2. Write function contracts for PatchablePathWeave operations & update property test suites
+3. Add wrapper support
+
+*/
+
+/// A [`Weave`] where the contents of the active path can be modified through insertion and removal operations.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state unless otherwise specified by the implementation.
+pub trait PatchablePathWeave<K, N, T>:
+    DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>
+where
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents,
+{
+    /// Removes the specified range from the active path without removing the contents from the underlying Weave.
+    ///
+    /// This function may split up to 2 nodes if necessary to apply the operation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split()` fails or panics.
+    fn split_out_range(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
+    /// Inserts a new node at the specified index with the specified contents.
+    ///
+    /// This function may split up to 1 node if necessary to apply the operation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split()` fails or panics.
+    fn insert_at(&mut self, at: usize, content: T, generate_id: impl FnMut() -> K);
 }
 
 /// A geometric item within an arrangement of a Weave's content.
