@@ -31,8 +31,9 @@ use serde::{
 
 use crate::{
     ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, Weave, ancestor_subgraph, ancestor_subgraph_reaches,
+    IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node,
+    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
+    ancestor_subgraph_reaches,
     contract::valid_topology,
     dependent::{DependentNode, DependentWeave},
     descendant_subgraph, descendant_subgraph_reaches, longest_candidate_path_to_root,
@@ -2036,7 +2037,7 @@ where
     }
 }
 
-impl<K, T, M, S> crate::IndependentWeave<K, IndependentNode<K, T, S>, T>
+impl<K, T, M, S> IndependentWeaveTrait<K, IndependentNode<K, T, S>, T>
     for IndependentWeave<K, T, M, S>
 where
     K: Hash + Copy + Eq + Ord,

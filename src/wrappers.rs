@@ -35,7 +35,7 @@ pub struct LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: Node<K, T> + Clone,
 {
     /// The [`Weave`] being wrapped.
     ///
@@ -50,7 +50,7 @@ impl<W, K, N, T, M> AsRef<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: Node<K, T> + Clone,
 {
     #[inline]
     fn as_ref(&self) -> &W {
@@ -62,7 +62,7 @@ impl<W, K, N, T, M> From<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: Node<K, T> + Clone,
 {
     #[inline]
     fn from(value: W) -> Self {
@@ -77,7 +77,7 @@ impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: Node<K, T> + Clone,
 {
     /// Creates a new [`LoggedWeave`] from a [`Weave`].
     #[inline]
@@ -1854,3 +1854,568 @@ where
         self.weave.merge_with_parent(id)
     }
 }
+
+/// A [`Weave`] wrapper which adds content patch operations to the active path.
+///
+/// # Panics
+///
+/// All panics should be assumed to leave the Weave in a malformed state.
+#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[must_use]
+pub struct PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    /// The [`Weave`] being wrapped.
+    pub weave: W,
+
+    scratchpad: Vec<K>,
+
+    _phantom_n: PhantomData<N>,
+    _phantom_t: PhantomData<T>,
+}
+
+impl<W, K, N, T> AsRef<W> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn as_ref(&self) -> &W {
+        &self.weave
+    }
+}
+
+impl<W, K, N, T> From<W> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn from(value: W) -> Self {
+        Self {
+            weave: value,
+            scratchpad: Vec::new(),
+            _phantom_n: PhantomData,
+            _phantom_t: PhantomData,
+        }
+    }
+}
+
+impl<W, K, N, T> PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    /// Creates a [`PatchablePathWeave`] from a [`Weave`].
+    #[inline]
+    pub const fn new(weave: W) -> Self {
+        Self {
+            weave,
+            scratchpad: Vec::new(),
+            _phantom_n: PhantomData,
+            _phantom_t: PhantomData,
+        }
+    }
+    /// Converts a [`PatchablePathWeave`] into it's inner [`Weave`].
+    #[inline]
+    pub fn into_inner(self) -> W {
+        self.weave
+    }
+    /// Returns a reference to the inner [`Weave`].
+    #[inline]
+    pub const fn as_inner(&self) -> &W {
+        &self.weave
+    }
+}
+
+impl<W, K, N, T> Weave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    type Nodes = W::Nodes;
+    type Roots = W::Roots;
+
+    #[inline]
+    fn len(&self) -> usize {
+        self.weave.len()
+    }
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.weave.is_empty()
+    }
+    #[inline]
+    fn nodes(&self) -> &Self::Nodes {
+        self.weave.nodes()
+    }
+    #[inline]
+    fn roots(&self) -> &Self::Roots {
+        self.weave.roots()
+    }
+    #[inline]
+    fn contains(&self, id: &K) -> bool {
+        self.weave.contains(id)
+    }
+    #[inline]
+    fn contains_active(&self, id: &K) -> bool {
+        self.weave.contains_active(id)
+    }
+    #[inline]
+    fn get(&self, id: &K) -> Option<&N> {
+        self.weave.get(id)
+    }
+    #[inline]
+    fn get_parents(&self, id: &K) -> Option<&N::From> {
+        self.weave.get_parents(id)
+    }
+    #[inline]
+    fn get_children(&self, id: &K) -> Option<&N::To> {
+        self.weave.get_children(id)
+    }
+    #[inline]
+    fn get_contents(&self, id: &K) -> Option<&T> {
+        self.weave.get_contents(id)
+    }
+    #[inline]
+    fn get_ordered_identifiers(&mut self, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers(output);
+    }
+    #[inline]
+    fn get_ordered_identifiers_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_ordered_identifiers_from(id, output);
+    }
+    #[inline]
+    fn get_active_path(&mut self, output: &mut Vec<K>) {
+        self.weave.get_active_path(output);
+    }
+    #[inline]
+    fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
+        self.weave.get_path_from(id, output);
+    }
+    #[inline]
+    fn insert(&mut self, node: N) -> bool {
+        self.weave.insert(node)
+    }
+    #[inline]
+    fn set_active(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_active(id, value)
+    }
+    #[inline]
+    fn remove(&mut self, id: &K) -> Option<N> {
+        self.weave.remove(id)
+    }
+    #[inline]
+    fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool {
+        self.weave.remove_tracked(id, on_removal)
+    }
+    #[inline]
+    fn clear(&mut self) {
+        self.weave.clear();
+    }
+}
+
+impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
+        + IndependentWeave<K, N, T>
+        + MetadataWeave<K, N, T, M>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn metadata(&self) -> &M {
+        self.weave.metadata()
+    }
+    #[inline]
+    fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O {
+        self.weave.metadata_mut(callback)
+    }
+}
+
+impl<W, K, N, T> BookmarkableWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
+        + IndependentWeave<K, N, T>
+        + BookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    type Bookmarks = W::Bookmarks;
+
+    #[inline]
+    fn bookmarks(&self) -> &Self::Bookmarks {
+        self.weave.bookmarks()
+    }
+    #[inline]
+    fn contains_bookmark(&self, id: &K) -> bool {
+        self.weave.contains_bookmark(id)
+    }
+    #[inline]
+    fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
+        self.weave.set_bookmarked(id, value)
+    }
+}
+
+impl<W, K, N, T> SortableWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
+        + IndependentWeave<K, N, T>
+        + SortableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
+        self.weave.sort_children_by(id, cmp)
+    }
+    #[inline]
+    fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
+        self.weave.sort_children_by_id(id, cmp)
+    }
+    #[inline]
+    fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
+        self.weave.sort_roots_by(cmp);
+    }
+    #[inline]
+    fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.weave.sort_roots_by_id(cmp);
+    }
+}
+
+impl<W, K, N, T> SortableBookmarkableWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
+        + IndependentWeave<K, N, T>
+        + SortableBookmarkableWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
+        self.weave.sort_bookmarks_by(cmp);
+    }
+    #[inline]
+    fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
+        self.weave.sort_bookmarks_by_id(cmp);
+    }
+}
+
+impl<W, K, N, T> ActiveSingularWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T>
+        + ActivePathWeave<K, N, T>
+        + IndependentWeave<K, N, T>
+        + ActiveSingularWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn active(&self) -> Option<K> {
+        ActiveSingularWeave::active(&self.weave)
+    }
+}
+
+impl<W, K, N, T> ActivePathWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    type Active = W::Active;
+
+    #[inline]
+    fn active(&self) -> &Self::Active {
+        self.weave.active()
+    }
+    #[inline]
+    fn set_active_path(&mut self, active: impl Iterator<Item = K>) {
+        self.weave.set_active_path(active);
+    }
+}
+
+impl<W, K, N, T> IndependentWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
+        self.weave.move_to(id, new_parents)
+    }
+}
+
+impl<W, K, N, T> SemiIndependentWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
+        self.weave.get_contents_mut(id, callback)
+    }
+}
+
+impl<W, K, N, T> DiscreteWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+{
+    #[inline]
+    fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
+        self.weave.split(id, at, new_id)
+    }
+    #[inline]
+    fn merge_with_parent(&mut self, id: &K) -> Option<K> {
+        self.weave.merge_with_parent(id)
+    }
+}
+
+/*impl<W, K, N, T> PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
+    K: Hash + Copy + Eq + Ord,
+    N: Node<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+{
+    /// Removes the specified range from the active path without removing the content from the underlying Weave.
+    ///
+    /// If the range is empty or does not intersect with the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
+    ///
+    /// This function may split up to 2 nodes and may insert up to 1 node if necessary to apply the operation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
+    ///
+    /// May panic if `T::default()` has a length greater than zero.
+    fn split_out(&mut self, range: Range<usize>, mut generate_id: impl FnMut() -> K) {
+        if range.is_empty() {
+            return;
+        }
+
+        self.get_active_path(&mut self.scratchpad);
+        self.scratchpad.reverse();
+
+        if self.scratchpad.is_empty() {
+            return;
+        }
+
+        let mut cursor: usize = 0;
+        let mut start = None;
+        let mut end = None;
+
+        for (index, id) in self.scratchpad.iter().enumerate() {
+            let length = self.weave.get_contents(id).unwrap().len();
+            let next = cursor.strict_add(length);
+
+            if start.is_none() && next >= range.start {
+                start = Some((index, length, cursor));
+            }
+
+            if next > range.end {
+                end = Some((index, cursor));
+                break;
+            }
+
+            cursor = next;
+        }
+
+        let (prefix_len, start_split) = if range.start == 0 {
+            let prefix_len = self
+                .scratchpad
+                .iter()
+                .take_while(|id| self.weave.get_contents(id).unwrap().is_empty())
+                .count();
+
+            (prefix_len, None)
+        } else if let Some((index, length, cursor)) = start {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            let at = range.start - cursor;
+
+            (index.strict_add(1), (at != length).then_some((index, at)))
+        } else {
+            return;
+        };
+
+        let end = if let Some((index, cursor)) = end {
+            if cursor == range.end {
+                Some((self.scratchpad[index], index))
+            } else {
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                let at = range.end - cursor;
+                let id = generate_id();
+
+                assert!(
+                    self.split(&self.scratchpad[index], at, id),
+                    "Splitting node failed"
+                );
+
+                Some((id, index))
+            }
+        } else {
+            None
+        };
+
+        if let Some((index, at)) = start_split {
+            assert!(
+                self.split(&self.scratchpad[index], at, generate_id()),
+                "Splitting node failed"
+            );
+        }
+
+        let (end, rest) = if let Some((end, index)) = end {
+            (Some(end), index.strict_add(1))
+        } else {
+            (None, self.scratchpad.len())
+        };
+
+        let anchor = if let Some(start) = self.scratchpad[..prefix_len].last() {
+            if let Some(end) = end {
+                let parents = self.weave.get_parents(&end).unwrap();
+
+                if !parents.contains(start) {
+                    let mut new_parents =
+                        Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)));
+
+                    assert!(self.move_to(&end, &new_parents), "Moving node failed");
+                }
+            }
+
+            None
+        } else {
+            let contents = T::default();
+
+            assert!(
+                contents.is_empty(),
+                "`T::default()` must have a length of zero"
+            );
+
+            let id = generate_id();
+
+            assert!(
+                self.insert(IndependentNode {
+                    id,
+                    from: IndexSet::default(),
+                    to: IndexSet::from_iter(end),
+                    active: false,
+                    bookmarked: false,
+                    contents,
+                }),
+                "Inserting node failed"
+            );
+
+            Some(id)
+        };
+
+        self.set_active_path(
+            anchor
+                .into_iter()
+                .chain(self.scratchpad[..prefix_len].iter().copied())
+                .chain(end)
+                .chain(self.scratchpad[rest..].iter().copied()),
+        );
+        self.scratchpad.clear();
+    }
+    /// Inserts a new node into the active path at the specified index.
+    ///
+    /// If `at` is beyond the active path's length, the content will be appended to the end of the active path.
+    ///
+    /// This function may split up to 1 node if necessary to apply the operation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
+    fn insert_at(&mut self, at: usize, contents: T, mut generate_id: impl FnMut() -> K) {
+        self.get_active_path(&mut self.scratchpad);
+        self.scratchpad.reverse();
+
+        let mut cursor: usize = 0;
+        let mut target = None;
+
+        for (index, id) in self.scratchpad.iter().enumerate() {
+            let length = self.weave.get_contents(id).unwrap().len();
+            let next = cursor.strict_add(length);
+
+            if next >= at {
+                target = Some((index, length));
+                break;
+            }
+
+            cursor = next;
+        }
+
+        let (index, parent, child) = if at == 0 {
+            (0, None, self.scratchpad.first().copied())
+        } else if let Some((index, length)) = target {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            let split_at = at - cursor;
+            let parent = self.scratchpad[index];
+            let next = index.strict_add(1);
+
+            if split_at == length {
+                (next, Some(parent), self.scratchpad.get(next).copied())
+            } else {
+                let right = generate_id();
+
+                assert!(
+                    self.split(&parent, split_at, right),
+                    "Splitting node failed"
+                );
+                self.scratchpad.insert(next, right);
+
+                (next, Some(parent), Some(right))
+            }
+        } else {
+            (self.scratchpad.len(), self.scratchpad.last().copied(), None)
+        };
+
+        let id = generate_id();
+
+        assert!(
+            self.insert(IndependentNode {
+                id,
+                from: IndexSet::from_iter(parent),
+                to: IndexSet::from_iter(child),
+                active: false,
+                bookmarked: false,
+                contents,
+            }),
+            "Inserting node failed"
+        );
+
+        self.scratchpad.insert(index, id);
+        self.set_active_path(self.scratchpad.drain(..));
+    }
+}
+*/
