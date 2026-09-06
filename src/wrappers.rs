@@ -1872,6 +1872,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     /// The [`Weave`] being wrapped.
     pub weave: W,
@@ -1888,6 +1891,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn as_ref(&self) -> &W {
@@ -1901,6 +1907,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn from(value: W) -> Self {
@@ -1919,6 +1928,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     /// Creates a [`PatchablePathWeave`] from a [`Weave`].
     #[inline]
@@ -1948,6 +1960,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     type Nodes = W::Nodes;
     type Roots = W::Roots;
@@ -2039,6 +2054,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn metadata(&self) -> &M {
@@ -2059,6 +2077,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     type Bookmarks = W::Bookmarks;
 
@@ -2085,6 +2106,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
@@ -2113,6 +2137,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
@@ -2133,6 +2160,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn active(&self) -> Option<K> {
@@ -2146,6 +2176,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     type Active = W::Active;
 
@@ -2165,6 +2198,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
@@ -2178,6 +2214,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
@@ -2191,6 +2230,9 @@ where
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     #[inline]
     fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
@@ -2202,13 +2244,15 @@ where
     }
 }
 
-/*impl<W, K, N, T> PatchablePathWeave<W, K, N, T>
+impl<W, K, N, T> PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
 {
     /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
@@ -2221,12 +2265,15 @@ where
     /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
     ///
     /// May panic if `T::default()` has a length greater than zero.
-    fn split_out(&mut self, range: Range<usize>, mut generate_id: impl FnMut() -> K) {
+    pub fn split_out<F>(&mut self, range: Range<usize>, mut generate_id: F)
+    where
+        F: FnMut() -> K,
+    {
         if range.is_empty() {
             return;
         }
 
-        self.get_active_path(&mut self.scratchpad);
+        self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
         if self.scratchpad.is_empty() {
@@ -2279,7 +2326,7 @@ where
                 let id = generate_id();
 
                 assert!(
-                    self.split(&self.scratchpad[index], at, id),
+                    self.weave.split(&self.scratchpad[index], at, id),
                     "Splitting node failed"
                 );
 
@@ -2291,7 +2338,7 @@ where
 
         if let Some((index, at)) = start_split {
             assert!(
-                self.split(&self.scratchpad[index], at, generate_id()),
+                self.weave.split(&self.scratchpad[index], at, generate_id()),
                 "Splitting node failed"
             );
         }
@@ -2306,12 +2353,16 @@ where
             if let Some(end) = end {
                 let parents = self.weave.get_parents(&end).unwrap();
 
-                if !parents.contains(start) {
-                    let mut new_parents =
-                        Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)));
+                //if !parents.contains(start) { // TODO
 
-                    assert!(self.move_to(&end, &new_parents), "Moving node failed");
-                }
+                assert!(
+                    self.weave.move_to(
+                        &end,
+                        &Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)))
+                    ),
+                    "Moving node failed"
+                );
+                //}
             }
 
             None
@@ -2326,21 +2377,20 @@ where
             let id = generate_id();
 
             assert!(
-                self.insert(IndependentNode {
+                self.weave.insert(N::new(
                     id,
-                    from: IndexSet::default(),
-                    to: IndexSet::from_iter(end),
-                    active: false,
-                    bookmarked: false,
-                    contents,
-                }),
+                    N::From::from_iter(iter::empty()),
+                    N::To::from_iter(end),
+                    false,
+                    contents
+                )),
                 "Inserting node failed"
             );
 
             Some(id)
         };
 
-        self.set_active_path(
+        self.weave.set_active_path(
             anchor
                 .into_iter()
                 .chain(self.scratchpad[..prefix_len].iter().copied())
@@ -2358,8 +2408,11 @@ where
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
-    fn insert_at(&mut self, at: usize, contents: T, mut generate_id: impl FnMut() -> K) {
-        self.get_active_path(&mut self.scratchpad);
+    pub fn insert_at<F>(&mut self, at: usize, contents: T, mut generate_id: F)
+    where
+        F: FnMut() -> K,
+    {
+        self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
         let mut cursor: usize = 0;
@@ -2391,7 +2444,7 @@ where
                 let right = generate_id();
 
                 assert!(
-                    self.split(&parent, split_at, right),
+                    self.weave.split(&parent, split_at, right),
                     "Splitting node failed"
                 );
                 self.scratchpad.insert(next, right);
@@ -2405,19 +2458,17 @@ where
         let id = generate_id();
 
         assert!(
-            self.insert(IndependentNode {
+            self.weave.insert(N::new(
                 id,
-                from: IndexSet::from_iter(parent),
-                to: IndexSet::from_iter(child),
-                active: false,
-                bookmarked: false,
-                contents,
-            }),
+                N::From::from_iter(parent),
+                N::To::from_iter(child),
+                false,
+                contents
+            )),
             "Inserting node failed"
         );
 
         self.scratchpad.insert(index, id);
-        self.set_active_path(self.scratchpad.drain(..));
+        self.weave.set_active_path(self.scratchpad.drain(..));
     }
 }
-*/

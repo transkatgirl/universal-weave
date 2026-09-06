@@ -159,6 +159,7 @@ where
     K: Hash + Copy + Eq + Ord,
 {
     /// Creates a new node.
+    #[must_use]
     fn new(id: K, from: Self::From, to: Self::To, is_active: bool, contents: T) -> Self;
 }
 
