@@ -567,7 +567,7 @@ where
     ///
     /// If the range is empty or does not intersect with the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// This function may split up to 2 nodes if necessary to apply the operation.
+    /// This function may split up to 2 nodes and may insert up to 1 node if necessary to apply the operation.
     ///
     /// # Panics
     ///
