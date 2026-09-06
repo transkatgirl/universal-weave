@@ -175,6 +175,7 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn new(id: K, from: Self::From, to: Self::To, is_active: bool, contents: T) -> Self {
         Self {
             id,
