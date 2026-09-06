@@ -79,13 +79,26 @@ where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
-    /// Creates a [`LoggedWeave`] with at least the specified capacity from a [`Weave`].
+    /// Creates a new [`LoggedWeave`] from a [`Weave`].
+    #[inline]
+    pub const fn new(weave: W) -> Self {
+        Self {
+            actions: VecDeque::new(),
+            weave,
+        }
+    }
+    /// Creates a new [`LoggedWeave`] with at least the specified capacity from a [`Weave`].
     #[inline]
     pub fn with_capacity(weave: W, capacity: usize) -> Self {
         Self {
             actions: VecDeque::with_capacity(capacity),
             weave,
         }
+    }
+    /// Creates a new [`LoggedWeave`] from a [`Weave`].
+    #[inline]
+    pub const fn from_weave(weave: W) -> Self {
+        Self::new(weave)
     }
     /// Converts a [`LoggedWeave`] into it's inner [`Weave`].
     #[inline]
@@ -108,6 +121,7 @@ where
         self.actions.clear();
     }
     /// Returns a [`WeaveActionCount`] calculated from the inner list of actions performed on the [`Weave`].
+    #[inline]
     pub fn count_actions(&self) -> WeaveActionCount {
         let mut count = WeaveActionCount::new();
 
@@ -236,7 +250,8 @@ where
             _phantom_t: PhantomData,
         }
     }
-    /// Creates a [`CountedWeave`] from a [`Weave`].
+    /// Creates a new [`CountedWeave`] from a [`Weave`].
+    #[inline]
     pub fn from_weave(weave: W) -> Self {
         Self::new(weave, WeaveActionCount::new())
     }
