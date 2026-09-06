@@ -561,7 +561,7 @@ pub trait PatchablePathWeave<K, N, T>:
 where
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
-    T: DiscreteContents + IndependentContents,
+    T: DiscreteContents + IndependentContents + Default,
 {
     /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
@@ -572,6 +572,8 @@ where
     /// # Panics
     ///
     /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
+    ///
+    /// May panic if `T::default()` has a length greater than zero.
     fn split_out(&mut self, range: Range<usize>, generate_id: impl FnMut() -> K);
     /// Inserts a new node into the active path at the specified index.
     ///
