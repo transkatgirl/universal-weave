@@ -13,9 +13,9 @@ use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state
 use scratchpads::Scratchpad;
 use tinyvec::ArrayVec;
 use universal_weave::{
-    BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents,
-    Layouter, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave,
-    Weave,
+    BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents, DiscreteWeave,
+    IndependentContents, Layouter, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
+    SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
     independent::IndependentWeave,
     layout::{DependentLayouter, Spacing, TopologicalLayouter},
@@ -464,7 +464,7 @@ fn compare_layouter_views<W, K, N, T>(
 ) where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + Debug,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     let lock = scratchpad.guard();
 

@@ -34,9 +34,9 @@ use serde::{
 };
 
 use crate::{
-    ActiveSingularWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, Weave,
+    ActiveSingularWeave, BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, IndependentContents, MetadataWeave, Node, SemiIndependentWeave,
+    SortableBookmarkableWeave, SortableWeave, Weave,
 };
 
 #[cfg(debug_assertions)]
@@ -159,6 +159,23 @@ where
     #[inline]
     fn contents(&self) -> &T {
         &self.contents
+    }
+}
+
+impl<K, T, S> BuildableNode<K, T> for DependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
+{
+    fn new(id: K, from: Self::From, to: Self::To, is_active: bool, contents: T) -> Self {
+        Self {
+            id,
+            from,
+            to,
+            active: is_active,
+            bookmarked: false,
+            contents,
+        }
     }
 }
 

@@ -18,9 +18,10 @@ use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state
 use scratchpads::Scratchpad;
 use tinyvec::ArrayVec;
 use universal_weave::{
-    ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, IndependentWeave as IndependentWeaveTrait, LayoutItem, Layouter,
-    MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
+    ActivePathWeave, BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, IndependentContents, IndependentWeave as IndependentWeaveTrait, LayoutItem,
+    Layouter, MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave,
+    Weave,
     dependent::DependentWeave,
     independent::{IndependentNode, IndependentWeave},
     layout::{Spacing, TopologicalLayouter},
@@ -128,7 +129,7 @@ impl<W, K, N, T> Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for ReferenceLa
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
     fn layout(&mut self, weave: &mut W, mut sizes: impl FnMut(&K) -> Vec2) {
@@ -880,7 +881,7 @@ fn compare_layouter_views<W, K, N, T>(
 ) where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + Debug,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     let lock = scratchpad.guard();
 

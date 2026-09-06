@@ -30,9 +30,9 @@ use serde::{
 };
 
 use crate::{
-    ActivePathWeave, BookmarkableWeave, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave, Node,
-    SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
+    ActivePathWeave, BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents,
+    DiscreteWeave, IndependentContents, IndependentWeave as IndependentWeaveTrait, MetadataWeave,
+    Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave, ancestor_subgraph,
     ancestor_subgraph_reaches,
     contract::valid_topology,
     dependent::{DependentNode, DependentWeave},
@@ -166,6 +166,24 @@ where
     #[inline]
     fn contents(&self) -> &T {
         &self.contents
+    }
+}
+
+impl<K, T, S> BuildableNode<K, T> for IndependentNode<K, T, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    fn new(id: K, from: Self::From, to: Self::To, is_active: bool, contents: T) -> Self {
+        Self {
+            id,
+            from,
+            to,
+            active: is_active,
+            bookmarked: false,
+            contents,
+        }
     }
 }
 

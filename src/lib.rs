@@ -153,6 +153,15 @@ where
     fn contents(&self) -> &T;
 }
 
+/// A [`Node`] which can be created.
+pub trait BuildableNode<K, T>: Node<K, T>
+where
+    K: Hash + Copy + Eq + Ord,
+{
+    /// Creates a new node.
+    fn new(id: K, from: Self::From, to: Self::To, is_active: bool, contents: T) -> Self;
+}
+
 /// [`Node`] contents which can be split apart or merged together.
 pub trait DiscreteContents: Sized {
     /// Returns the length of the item.
@@ -251,7 +260,7 @@ pub trait DeduplicatableContents {
 pub trait Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Mapping between identifiers and nodes.
     type Nodes;
@@ -340,7 +349,7 @@ where
 pub trait MetadataWeave<K, N, T, M>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Returns a reference to the Weave's associated metadata.
     #[must_use]
@@ -357,7 +366,7 @@ where
 pub trait BookmarkableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Identifiers of bookmarked nodes.
     type Bookmarks;
@@ -380,7 +389,7 @@ where
 pub trait SortableWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Sorts the child nodes of a parent node with the specified identifier using the comparison function `cmp`.
     ///
@@ -417,7 +426,7 @@ pub trait SortableBookmarkableWeave<K, N, T>:
     BookmarkableWeave<K, N, T> + SortableWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Sorts bookmarked nodes using the comparison function `cmp`.
     ///
@@ -437,7 +446,7 @@ where
 pub trait ActiveSingularWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Returns the active node's identifier, if any.
     #[must_use]
@@ -448,7 +457,7 @@ where
 pub trait ActivePathWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Identifiers of active nodes.
     type Active;
@@ -466,7 +475,7 @@ where
 pub trait IndependentWeave<K, N, T>: Weave<K, N, T> + SemiIndependentWeave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: IndependentContents,
 {
     /// Moves a node with the specified identifier to a new set of parent nodes, returning `true` if the move was successful.
@@ -483,7 +492,7 @@ where
 pub trait SemiIndependentWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: IndependentContents,
 {
     /// Mutable access to the contents of a node with the specified identifier.
@@ -505,7 +514,7 @@ where
 pub trait DiscreteWeave<K, N, T>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents,
 {
     /// Splits a node with the specified identifier at the given index, creating a new child node with the identifier `new_id`.
@@ -560,7 +569,7 @@ pub trait Layouter<W, K, N, T, V, P>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Arranges a [`Weave`]'s content for graphical rendering using a closure which maps [`Node`]s to their dimensions.
     ///

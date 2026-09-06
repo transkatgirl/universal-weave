@@ -6,7 +6,9 @@ use alloc::{collections::VecDeque, vec::Vec};
 use core::{
     cmp::Ordering,
     hash::{BuildHasher, Hash},
+    iter,
     marker::PhantomData,
+    ops::Range,
 };
 
 use hashbrown::{HashMap, HashSet};
@@ -18,7 +20,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 
 use crate::{
-    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, DeduplicatableContents,
+    ActivePathWeave, ActiveSingularWeave, BookmarkableWeave, BuildableNode, DeduplicatableContents,
     DiscreteContentResult, DiscreteContents, DiscreteWeave, IndependentContents, IndependentWeave,
     MetadataWeave, Node, SemiIndependentWeave, SortableBookmarkableWeave, SortableWeave, Weave,
     dependent, independent,
@@ -35,7 +37,7 @@ pub struct LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     /// The [`Weave`] being wrapped.
     ///
@@ -50,7 +52,7 @@ impl<W, K, N, T, M> AsRef<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     #[inline]
     fn as_ref(&self) -> &W {
@@ -62,7 +64,7 @@ impl<W, K, N, T, M> From<W> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     #[inline]
     fn from(value: W) -> Self {
@@ -77,7 +79,7 @@ impl<W, K, N, T, M> LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     /// Creates a new [`LoggedWeave`] from a [`Weave`].
     #[inline]
@@ -188,7 +190,7 @@ pub struct CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// The [`Weave`] being wrapped.
     ///
@@ -207,7 +209,7 @@ impl<W, K, N, T> AsRef<W> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn as_ref(&self) -> &W {
@@ -219,7 +221,7 @@ impl<W, K, N, T> From<W> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn from(value: W) -> Self {
@@ -237,7 +239,7 @@ impl<W, K, N, T> CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     /// Creates a [`CountedWeave`] from a [`Weave`] and [`WeaveActionCount`] pair.
     #[inline]
@@ -461,7 +463,7 @@ where
         + SemiIndependentWeave<K, N, T>
         + DiscreteWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: IndependentContents + DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
@@ -710,7 +712,7 @@ impl<W, K, N, T, M> Weave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     type Nodes = W::Nodes;
     type Roots = W::Roots;
@@ -814,7 +816,7 @@ impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for LoggedWeave<W, K, N, T, M>
 where
     W: MetadataWeave<K, N, T, M>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     M: Clone,
 {
     #[inline]
@@ -837,7 +839,7 @@ impl<W, K, N, T, M> BookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: BookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     type Bookmarks = W::Bookmarks;
 
@@ -864,7 +866,7 @@ impl<W, K, N, T, M> SortableWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SortableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
 {
@@ -922,7 +924,7 @@ impl<W, K, N, T, M> SortableBookmarkableWeave<K, N, T> for LoggedWeave<W, K, N, 
 where
     W: SortableBookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a W::Bookmarks: IntoIterator<Item = &'a K>,
@@ -945,7 +947,7 @@ impl<W, K, N, T, M> ActiveSingularWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActiveSingularWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     #[inline]
     fn active(&self) -> Option<K> {
@@ -957,7 +959,7 @@ impl<W, K, N, T, M> ActivePathWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: ActivePathWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
 {
     type Active = W::Active;
 
@@ -977,7 +979,7 @@ impl<W, K, N, T, M> IndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     T: IndependentContents + Clone,
 {
     fn move_to(&mut self, id: &K, new_parents: &[K]) -> bool {
@@ -997,7 +999,7 @@ impl<W, K, N, T, M> SemiIndependentWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: SemiIndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     T: IndependentContents + Clone,
 {
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O> {
@@ -1016,7 +1018,7 @@ impl<W, K, N, T, M> DiscreteWeave<K, N, T> for LoggedWeave<W, K, N, T, M>
 where
     W: DiscreteWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T> + Clone,
+    N: BuildableNode<K, T> + Clone,
     T: DiscreteContents,
 {
     fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
@@ -1046,7 +1048,7 @@ impl<W, K, N, T> Weave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     type Nodes = W::Nodes;
     type Roots = W::Roots;
@@ -1154,7 +1156,7 @@ impl<W, K, N, T, M> MetadataWeave<K, N, T, M> for CountedWeave<W, K, N, T>
 where
     W: MetadataWeave<K, N, T, M>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn metadata(&self) -> &M {
@@ -1174,7 +1176,7 @@ impl<W, K, N, T> BookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: BookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     type Bookmarks = W::Bookmarks;
 
@@ -1201,7 +1203,7 @@ impl<W, K, N, T> SortableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SortableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool {
@@ -1237,7 +1239,7 @@ impl<W, K, N, T> SortableBookmarkableWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SortableBookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering) {
@@ -1255,7 +1257,7 @@ impl<W, K, N, T> ActiveSingularWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: ActiveSingularWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     #[inline]
     fn active(&self) -> Option<K> {
@@ -1267,7 +1269,7 @@ impl<W, K, N, T> ActivePathWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: ActivePathWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
 {
     type Active = W::Active;
 
@@ -1286,7 +1288,7 @@ impl<W, K, N, T> IndependentWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: IndependentContents,
 {
     #[inline]
@@ -1304,7 +1306,7 @@ impl<W, K, N, T> SemiIndependentWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: SemiIndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: IndependentContents,
 {
     #[inline]
@@ -1319,7 +1321,7 @@ impl<W, K, N, T> DiscreteWeave<K, N, T> for CountedWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents,
 {
     #[inline]
@@ -1357,7 +1359,7 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1378,7 +1380,7 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1417,7 +1419,7 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1464,7 +1466,7 @@ where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1593,7 +1595,7 @@ where
     W: MetadataWeave<K, N, T, M>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1614,7 +1616,7 @@ where
     W: BookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1641,7 +1643,7 @@ where
     W: SortableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1670,7 +1672,7 @@ where
     W: SortableBookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1691,7 +1693,7 @@ where
     W: ActiveSingularWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1708,7 +1710,7 @@ where
     W: ActivePathWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1731,7 +1733,7 @@ where
     W: IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DeduplicatableContents + Clone,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1762,7 +1764,7 @@ where
     W: SemiIndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: IndependentContents + DeduplicatableContents + Clone,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
@@ -1805,7 +1807,7 @@ where
     W: DiscreteWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DiscreteContents + DeduplicatableContents + Clone,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
     for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K, IntoIter: ExactSizeIterator>,
@@ -1868,7 +1870,7 @@ pub struct PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     /// The [`Weave`] being wrapped.
@@ -1884,7 +1886,7 @@ impl<W, K, N, T> AsRef<W> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -1897,7 +1899,7 @@ impl<W, K, N, T> From<W> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -1915,7 +1917,7 @@ impl<W, K, N, T> PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     /// Creates a [`PatchablePathWeave`] from a [`Weave`].
@@ -1944,7 +1946,7 @@ impl<W, K, N, T> Weave<K, N, T> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     type Nodes = W::Nodes;
@@ -2035,7 +2037,7 @@ where
         + IndependentWeave<K, N, T>
         + MetadataWeave<K, N, T, M>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2055,7 +2057,7 @@ where
         + IndependentWeave<K, N, T>
         + BookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     type Bookmarks = W::Bookmarks;
@@ -2081,7 +2083,7 @@ where
         + IndependentWeave<K, N, T>
         + SortableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2109,7 +2111,7 @@ where
         + IndependentWeave<K, N, T>
         + SortableBookmarkableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2129,7 +2131,7 @@ where
         + IndependentWeave<K, N, T>
         + ActiveSingularWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2142,7 +2144,7 @@ impl<W, K, N, T> ActivePathWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     type Active = W::Active;
@@ -2161,7 +2163,7 @@ impl<W, K, N, T> IndependentWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2174,7 +2176,7 @@ impl<W, K, N, T> SemiIndependentWeave<K, N, T> for PatchablePathWeave<W, K, N, T
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2187,7 +2189,7 @@ impl<W, K, N, T> DiscreteWeave<K, N, T> for PatchablePathWeave<W, K, N, T>
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
 {
     #[inline]
@@ -2204,7 +2206,7 @@ where
 where
     W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {

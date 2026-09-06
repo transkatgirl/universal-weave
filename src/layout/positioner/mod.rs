@@ -23,7 +23,7 @@ use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadVec};
 use tinyvec::ArrayVec;
 
 use crate::{
-    IndependentContents, LayoutItem, Node, Weave,
+    BuildableNode, IndependentContents, LayoutItem, Weave,
     dependent::DependentWeave,
     independent::IndependentWeave,
     layout::{Spacing, positioner::slotset::SlotSet, validate_output_float, validate_vec2},
@@ -312,7 +312,7 @@ where
     ) where
         W: Weave<K, N, T>,
         K: Hash + Copy + Eq + Ord + 'static,
-        N: Node<K, T>,
+        N: BuildableNode<K, T>,
         S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
         for<'a> &'a N::From: IntoIterator<Item = &'a K>,

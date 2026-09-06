@@ -17,7 +17,7 @@ use scratchpads::Scratchpad;
 use tinyvec::ArrayVec;
 
 use crate::{
-    IndependentContents, LayoutItem, Layouter, Node, Weave,
+    BuildableNode, IndependentContents, LayoutItem, Layouter, Weave,
     dependent::{DependentNode, DependentWeave},
     independent::{IndependentNode, IndependentWeave},
     layout::positioner::Layout2D,
@@ -227,7 +227,7 @@ impl<W, K, N, T, S> Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for Topologi
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + 'static,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone + 'static,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
