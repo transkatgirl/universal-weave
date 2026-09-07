@@ -45,6 +45,10 @@
 
 ## Features
 
+- [ ] Add FFI for other languages
+    - [ ] C
+    - [ ] JS (WASM)
+    - [ ] Python
 - [ ] Loom UI building blocks using [egui](https://crates.io/crates/egui) (as separate library)
 - [ ] For node.from / node.to / weave.bookmarked, replace IndexMap with an IndexMap/micromap hybrid which switches between the two based on item count
     - Saves 22-40 bytes/element of memory for small collections
