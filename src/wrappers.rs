@@ -2407,7 +2407,7 @@ where
                     let at = range.start - cursor;
 
                     if at != length {
-                        start_split = Some((index, at));
+                        start_split = Some((id, at));
                     }
                 }
 
@@ -2426,32 +2426,30 @@ where
             (prefix_len, start_split, end)
         };
 
-        let end = end.map(|(index, cursor, left)| {
+        let (end, suffix_index) = if let Some((index, cursor, left)) = end {
+            let next = index.strict_add(1);
+
             if cursor == range.end {
-                (left, index)
+                (Some(left), next)
             } else {
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 let at = range.end - cursor;
-                let id = generate_id();
+                let right = generate_id();
 
-                assert!(self.weave.split(&left, at, id), "Splitting node failed");
+                assert!(self.weave.split(&left, at, right), "Splitting node failed");
 
-                (id, index)
+                (Some(right), next)
             }
-        });
-
-        if let Some((index, at)) = start_split {
-            assert!(
-                self.weave.split(&self.scratchpad[index], at, generate_id()),
-                "Splitting node failed"
-            );
-        }
-
-        let (end, rest) = if let Some((end, index)) = end {
-            (Some(end), index.strict_add(1))
         } else {
             (None, self.scratchpad.len())
         };
+
+        if let Some((left, at)) = start_split {
+            assert!(
+                self.weave.split(left, at, generate_id()),
+                "Splitting node failed"
+            );
+        }
 
         let anchor = if let Some(start) = self.scratchpad[..prefix_len].last() {
             if let Some(end) = end {
@@ -2499,7 +2497,7 @@ where
                     .into_iter()
                     .chain(self.scratchpad[..prefix_len].iter().copied())
                     .chain(end)
-                    .chain(self.scratchpad[rest..].iter().copied()),
+                    .chain(self.scratchpad[suffix_index..].iter().copied()),
             );
         }
     }
