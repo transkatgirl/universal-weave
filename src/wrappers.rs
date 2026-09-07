@@ -2476,13 +2476,15 @@ where
             Some(id)
         };
 
-        self.weave.set_active_path(
-            anchor
-                .into_iter()
-                .chain(self.scratchpad[..prefix_len].iter().copied())
-                .chain(end)
-                .chain(self.scratchpad[rest..].iter().copied()),
-        );
+        if end.is_some() || prefix_len != self.scratchpad.len() {
+            self.weave.set_active_path(
+                anchor
+                    .into_iter()
+                    .chain(self.scratchpad[..prefix_len].iter().copied())
+                    .chain(end)
+                    .chain(self.scratchpad[rest..].iter().copied()),
+            );
+        }
     }
     /// Splits the active path at the specified index without deactivating the right side of the split.
     ///
@@ -2560,21 +2562,6 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        let mut cursor: usize = 0;
-        let mut target = None;
-
-        for (index, id) in self.scratchpad.iter().enumerate() {
-            let length = self.weave.get_contents(id).unwrap().len();
-            let next = cursor.strict_add(length);
-
-            if next >= at {
-                target = Some((index, length));
-                break;
-            }
-
-            cursor = next;
-        }
-
         let (index, parent, child) = if at == 0 {
             let prefix_len = self
                 .scratchpad
@@ -2587,43 +2574,63 @@ where
                 self.scratchpad[..prefix_len].last().copied(),
                 self.scratchpad.get(prefix_len).copied(),
             )
-        } else if let Some((index, length)) = target {
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-            let split_at = at - cursor;
-            let parent = self.scratchpad[index];
-            let next = index.strict_add(1);
-
-            if split_at == length {
-                (next, Some(parent), self.scratchpad.get(next).copied())
-            } else {
-                let right = generate_id();
-
-                assert!(
-                    self.weave.split(&parent, split_at, right),
-                    "Splitting node failed"
-                );
-                self.scratchpad.insert(next, right);
-
-                (next, Some(parent), Some(right))
-            }
         } else {
-            (self.scratchpad.len(), self.scratchpad.last().copied(), None)
+            let mut cursor: usize = 0;
+            let mut target = None;
+
+            for (index, id) in self.scratchpad.iter().enumerate() {
+                let length = self.weave.get_contents(id).unwrap().len();
+                let next = cursor.strict_add(length);
+
+                if next >= at {
+                    target = Some((index, length));
+                    break;
+                }
+
+                cursor = next;
+            }
+
+            if let Some((index, length)) = target {
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                let split_at = at - cursor;
+                let parent = self.scratchpad[index];
+                let next = index.strict_add(1);
+
+                if split_at == length {
+                    (next, Some(parent), self.scratchpad.get(next).copied())
+                } else {
+                    let right = generate_id();
+
+                    assert!(
+                        self.weave.split(&parent, split_at, right),
+                        "Splitting node failed"
+                    );
+                    self.scratchpad.insert(next, right);
+
+                    (next, Some(parent), Some(right))
+                }
+            } else {
+                (self.scratchpad.len(), self.scratchpad.last().copied(), None)
+            }
         };
 
         let id = generate_id();
+        let fast_path = parent.is_none() || child.is_none();
 
         assert!(
             self.weave.insert(N::new(
                 id,
                 N::From::from_iter(parent),
                 N::To::from_iter(child),
-                false,
+                fast_path,
                 contents
             )),
             "Inserting node failed"
         );
 
-        self.scratchpad.insert(index, id);
-        self.weave.set_active_path(self.scratchpad.drain(..));
+        if !fast_path {
+            self.scratchpad.insert(index, id);
+            self.weave.set_active_path(self.scratchpad.drain(..));
+        }
     }
 }
