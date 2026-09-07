@@ -2363,7 +2363,7 @@ where
             return;
         }
 
-        #[allow(clippy::branches_sharing_code, reason = "Style")]
+        #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
         let (prefix_len, start_split, end) = if range.start == 0 {
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
@@ -2378,7 +2378,7 @@ where
                 }
 
                 if cursor == range.end || next > range.end {
-                    end = Some((index, cursor));
+                    end = Some((index, cursor, *id));
                     break;
                 }
 
@@ -2412,7 +2412,7 @@ where
                 }
 
                 if cursor == range.end || next > range.end {
-                    end = Some((index, cursor));
+                    end = Some((index, cursor, *id));
                     break;
                 }
 
@@ -2426,24 +2426,19 @@ where
             (prefix_len, start_split, end)
         };
 
-        let end = if let Some((index, cursor)) = end {
+        let end = end.map(|(index, cursor, left)| {
             if cursor == range.end {
-                Some((self.scratchpad[index], index))
+                (left, index)
             } else {
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 let at = range.end - cursor;
                 let id = generate_id();
 
-                assert!(
-                    self.weave.split(&self.scratchpad[index], at, id),
-                    "Splitting node failed"
-                );
+                assert!(self.weave.split(&left, at, id), "Splitting node failed");
 
-                Some((id, index))
+                (id, index)
             }
-        } else {
-            None
-        };
+        });
 
         if let Some((index, at)) = start_split {
             assert!(
