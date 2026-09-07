@@ -2377,7 +2377,7 @@ where
                     prefix_len = index;
                 }
 
-                if next > range.end || cursor == range.end {
+                if cursor == range.end || next > range.end {
                     end = Some((index, cursor));
                     break;
                 }
@@ -2385,7 +2385,7 @@ where
                 cursor = next;
             }
 
-            if end.is_none() && range.start >= cursor {
+            if end.is_none() && cursor == 0 {
                 return;
             }
 
@@ -2403,7 +2403,7 @@ where
                     start = Some((index, length, cursor));
                 }
 
-                if next > range.end || cursor == range.end {
+                if cursor == range.end || next > range.end {
                     end = Some((index, cursor));
                     break;
                 }
