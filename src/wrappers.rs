@@ -2353,16 +2353,15 @@ where
             if let Some(end) = end {
                 let parents = self.weave.get_parents(&end).unwrap();
 
-                //if !parents.contains(start) { // TODO
-
-                assert!(
-                    self.weave.move_to(
-                        &end,
-                        &Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)))
-                    ),
-                    "Moving node failed"
-                );
-                //}
+                if parents.into_iter().all(|id| id != start) {
+                    assert!(
+                        self.weave.move_to(
+                            &end,
+                            &Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)))
+                        ),
+                        "Moving node failed"
+                    );
+                }
             }
 
             None
