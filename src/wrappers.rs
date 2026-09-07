@@ -1352,7 +1352,7 @@ where
 /// # Limitations
 ///
 /// It is possible for [`Weave::insert()`], [`Weave::remove()`], and [`Weave::remove_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone)]
 #[must_use]
 pub struct DeduplicatedWeave<W, K, N, T, S>
 where
@@ -1373,6 +1373,37 @@ where
     scratchpad: HashSet<K, S>,
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<W, K, N, T, S> PartialEq for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T> + PartialEq,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: BuildableNode<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.weave == other.weave
+    }
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<W, K, N, T, S> Eq for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T> + Eq,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: BuildableNode<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
 }
 
 impl<W, K, N, T, S> DeduplicatedWeave<W, K, N, T, S>
@@ -1864,9 +1895,7 @@ where
 /// May panic if the underlying [`Weave`] refuses a structurally valid operation.
 ///
 /// All panics should be assumed to leave the Weave in a malformed state.
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
-#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+#[derive(Default, Debug, Clone)]
 #[must_use]
 pub struct PatchablePathWeave<W, K, N, T>
 where
@@ -1885,6 +1914,35 @@ where
 
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<W, K, N, T> PartialEq for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T> + PartialEq,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.weave == other.weave
+    }
+}
+
+#[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
+impl<W, K, N, T> Eq for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T> + Eq,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
+{
 }
 
 impl<W, K, N, T> AsRef<W> for PatchablePathWeave<W, K, N, T>
