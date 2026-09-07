@@ -2363,45 +2363,68 @@ where
             return;
         }
 
-        let mut cursor: usize = 0;
-        let mut start = None;
-        let mut end = None;
+        #[allow(clippy::branches_sharing_code, reason = "Style")]
+        let (prefix_len, start_split, end) = if range.start == 0 {
+            let mut cursor: usize = 0;
+            let mut prefix_len = 0;
+            let mut end = None;
 
-        for (index, id) in self.scratchpad.iter().enumerate() {
-            let length = self.weave.get_contents(id).unwrap().len();
-            let next = cursor.strict_add(length);
+            for (index, id) in self.scratchpad.iter().enumerate() {
+                let length = self.weave.get_contents(id).unwrap().len();
+                let next = cursor.strict_add(length);
 
-            if start.is_none() && next >= range.start {
-                start = Some((index, length, cursor));
+                if cursor == 0 {
+                    prefix_len = index;
+                }
+
+                if next > range.end || cursor == range.end {
+                    end = Some((index, cursor));
+                    break;
+                }
+
+                cursor = next;
             }
 
-            if next > range.end || cursor == range.end {
-                end = Some((index, cursor));
-                break;
+            if end.is_none() && range.start >= cursor {
+                return;
             }
 
-            cursor = next;
-        }
-
-        if end.is_none() && range.start >= cursor {
-            return;
-        }
-
-        let (prefix_len, start_split) = if range.start == 0 {
-            let prefix_len = self
-                .scratchpad
-                .iter()
-                .take_while(|id| self.weave.get_contents(id).unwrap().is_empty())
-                .count();
-
-            (prefix_len, None)
+            (prefix_len, None, end)
         } else {
+            let mut cursor: usize = 0;
+            let mut start = None;
+            let mut end = None;
+
+            for (index, id) in self.scratchpad.iter().enumerate() {
+                let length = self.weave.get_contents(id).unwrap().len();
+                let next = cursor.strict_add(length);
+
+                if start.is_none() && next >= range.start {
+                    start = Some((index, length, cursor));
+                }
+
+                if next > range.end || cursor == range.end {
+                    end = Some((index, cursor));
+                    break;
+                }
+
+                cursor = next;
+            }
+
+            if end.is_none() && range.start >= cursor {
+                return;
+            }
+
             let (index, length, cursor) = start.unwrap();
 
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             let at = range.start - cursor;
 
-            (index.strict_add(1), (at != length).then_some((index, at)))
+            (
+                index.strict_add(1),
+                (at != length).then_some((index, at)),
+                end,
+            )
         };
 
         let end = if let Some((index, cursor)) = end {
