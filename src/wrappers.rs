@@ -2606,17 +2606,16 @@ where
                 let next = cursor.strict_add(length);
 
                 if next >= at {
-                    target = Some((index, length));
+                    target = Some((index, length, *id));
                     break;
                 }
 
                 cursor = next;
             }
 
-            if let Some((index, length)) = target {
+            if let Some((index, length, parent)) = target {
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 let split_at = at - cursor;
-                let parent = self.scratchpad[index];
                 let next = index.strict_add(1);
 
                 if split_at == length {
