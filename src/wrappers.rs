@@ -2415,6 +2415,7 @@ where
             return true;
         }
 
+        self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
