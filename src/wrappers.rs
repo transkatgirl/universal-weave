@@ -1861,6 +1861,8 @@ where
 ///
 /// # Panics
 ///
+/// May panic if the underlying [`Weave`] refuses a structurally valid operation.
+///
 /// All panics should be assumed to leave the Weave in a malformed state.
 #[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
