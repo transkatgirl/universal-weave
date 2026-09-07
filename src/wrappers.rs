@@ -2385,22 +2385,30 @@ where
                 cursor = next;
             }
 
-            if end.is_none() && cursor == 0 {
+            if cursor == 0 && end.is_none() {
                 return;
             }
 
             (prefix_len, None, end)
         } else {
             let mut cursor: usize = 0;
-            let mut start = None;
+            let mut prefix_len = 0;
+            let mut start_split = None;
             let mut end = None;
 
             for (index, id) in self.scratchpad.iter().enumerate() {
                 let length = self.weave.get_contents(id).unwrap().len();
                 let next = cursor.strict_add(length);
 
-                if start.is_none() && next >= range.start {
-                    start = Some((index, length, cursor));
+                if prefix_len == 0 && next >= range.start {
+                    prefix_len = index.strict_add(1);
+
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                    let at = range.start - cursor;
+
+                    if at != length {
+                        start_split = Some((index, at));
+                    }
                 }
 
                 if cursor == range.end || next > range.end {
@@ -2415,16 +2423,7 @@ where
                 return;
             }
 
-            let (index, length, cursor) = start.unwrap();
-
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-            let at = range.start - cursor;
-
-            (
-                index.strict_add(1),
-                (at != length).then_some((index, at)),
-                end,
-            )
+            (prefix_len, start_split, end)
         };
 
         let end = if let Some((index, cursor)) = end {
