@@ -2301,7 +2301,7 @@ where
             cursor = next;
         }
 
-        if end.is_none() && range.start > cursor {
+        if end.is_none() && range.start >= cursor {
             return;
         }
 
@@ -2313,13 +2313,13 @@ where
                 .count();
 
             (prefix_len, None)
-        } else if let Some((index, length, cursor)) = start {
+        } else {
+            let (index, length, cursor) = start.unwrap();
+
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             let at = range.start - cursor;
 
             (index.strict_add(1), (at != length).then_some((index, at)))
-        } else {
-            return;
         };
 
         let end = if let Some((index, cursor)) = end {
