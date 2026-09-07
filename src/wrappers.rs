@@ -2293,7 +2293,7 @@ where
                 start = Some((index, length, cursor));
             }
 
-            if next > range.end {
+            if next > range.end || cursor == range.end {
                 end = Some((index, cursor));
                 break;
             }
@@ -2301,7 +2301,7 @@ where
             cursor = next;
         }
 
-        if end.is_none() && range.start >= cursor {
+        if end.is_none() && range.start > cursor {
             return;
         }
 
