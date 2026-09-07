@@ -2273,6 +2273,7 @@ where
             return;
         }
 
+        self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
@@ -2396,7 +2397,66 @@ where
                 .chain(end)
                 .chain(self.scratchpad[rest..].iter().copied()),
         );
-        self.scratchpad.clear();
+    }
+    /// Splits the active path at the specified index without deactivating the path's tail.
+    ///
+    /// If `at` is zero or beyond the active path's length, this function does nothing.
+    ///
+    /// Returns `false` if splitting the path failed.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `T::split()` panics.
+    pub fn split_at<F>(&mut self, at: usize, mut generate_id: F) -> bool
+    where
+        F: FnMut() -> K,
+    {
+        if at == 0 {
+            return true;
+        }
+
+        self.weave.get_active_path(&mut self.scratchpad);
+        self.scratchpad.reverse();
+
+        let mut cursor: usize = 0;
+        let mut target = None;
+
+        for (index, id) in self.scratchpad.iter().enumerate() {
+            let length = self.weave.get_contents(id).unwrap().len();
+            let next = cursor.strict_add(length);
+
+            if next >= at {
+                target = Some((index, length));
+                break;
+            }
+
+            cursor = next;
+        }
+
+        if let Some((index, length)) = target {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            let split_at = at - cursor;
+            let parent = self.scratchpad[index];
+
+            if split_at == length {
+                true
+            } else {
+                let new_id = generate_id();
+
+                if self.weave.split(&parent, split_at, new_id) {
+                    assert!(
+                        self.weave.set_active(&new_id, true),
+                        "Setting node active status failed"
+                    );
+
+                    true
+                } else {
+                    false
+                }
+            }
+        } else {
+            true
+        }
     }
     /// Inserts a new node into the active path at the specified index.
     ///
@@ -2411,6 +2471,7 @@ where
     where
         F: FnMut() -> K,
     {
+        self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
