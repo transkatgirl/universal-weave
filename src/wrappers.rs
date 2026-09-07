@@ -2503,27 +2503,25 @@ where
 
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
-        self.scratchpad.reverse();
 
         let mut cursor: usize = 0;
         let mut target = None;
 
-        for (index, id) in self.scratchpad.iter().enumerate() {
-            let length = self.weave.get_contents(id).unwrap().len();
+        for id in self.scratchpad.drain(..).rev() {
+            let length = self.weave.get_contents(&id).unwrap().len();
             let next = cursor.strict_add(length);
 
             if next >= at {
-                target = Some((index, length));
+                target = Some((id, length));
                 break;
             }
 
             cursor = next;
         }
 
-        if let Some((index, length)) = target {
+        if let Some((parent, length)) = target {
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             let split_at = at - cursor;
-            let parent = self.scratchpad[index];
 
             if split_at == length {
                 true
