@@ -2301,6 +2301,10 @@ where
             cursor = next;
         }
 
+        if end.is_none() && range.start >= cursor {
+            return;
+        }
+
         let (prefix_len, start_split) = if range.start == 0 {
             let prefix_len = self
                 .scratchpad
@@ -2402,11 +2406,11 @@ where
     ///
     /// If `at` is zero or beyond the active path's length, this function does nothing.
     ///
-    /// Returns `false` if splitting the path failed.
+    /// Returns `false` if splitting the path failed or if `generate_id` returns an identifier already in the Weave.
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` panics.
+    /// May panic if `T::split()` or `generate_id` panics.
     pub fn split_at<F>(&mut self, at: usize, mut generate_id: F) -> bool
     where
         F: FnMut() -> K,
