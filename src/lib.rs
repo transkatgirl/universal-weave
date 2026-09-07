@@ -218,7 +218,7 @@ impl DiscreteContents for Vec<u8> {
     }
     #[inline]
     fn split(mut self, at: usize) -> DiscreteContentResult<Self> {
-        if at == 0 || at > self.len() {
+        if at == 0 || at >= self.len() {
             DiscreteContentResult::One(self)
         } else {
             let right = self.split_off(at);
