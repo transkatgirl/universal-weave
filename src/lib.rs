@@ -3,9 +3,13 @@
 //! This library aims to make building Loom implementations easier by providing the following primitives:
 //! - [`DependentWeave`](dependent::DependentWeave) - A tree-based [`Weave`] where each [`Node`] depends on the contents of the previous Node.
 //!     - [`DependentLoroWeave`](dependent::loro::DependentLoroWeave) - A [`DependentWeave`](dependent::DependentWeave) wrapper which adds collaborative editing using the [`loro`] CRDT library (requires `rkyv` and `loro` features to be enabled).
+//!     - [`DependentLayouter`](layout::DependentLayouter) - A 2D [`Layouter`] which takes a [`DependentWeave`](dependent::DependentWeave) as input.
 //! - [`IndependentWeave`](independent::IndependentWeave) - A DAG-based [`Weave`] where each [`Node`] does *not* depend on the contents of the previous Node.
+//!     - [`IndependentLayouter`](layout::IndependentLayouter) - A 2D [`Layouter`] which takes an [`IndependentWeave`](independent::IndependentWeave) as input.
 //!
 //! Operations on the built-in [`Weave`] implementations always preserve node ordering through the use of [`IndexSet`](indexmap::IndexSet), and (non-tail) insertion and removal operations on ordered sets can have a worst-case time complexity of O(n).
+//!
+//! The [`wrappers`] module contains a few wrapper types which can be used to add additional functionality to an underlying [`Weave`].
 //!
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 
