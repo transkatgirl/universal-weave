@@ -68,10 +68,7 @@ where
 {
     #[inline]
     fn from(value: W) -> Self {
-        Self {
-            weave: value,
-            actions: VecDeque::new(),
-        }
+        Self::new(value)
     }
 }
 
@@ -225,13 +222,7 @@ where
 {
     #[inline]
     fn from(value: W) -> Self {
-        Self {
-            weave: value,
-            count: WeaveActionCount::default(),
-            _phantom_k: PhantomData,
-            _phantom_n: PhantomData,
-            _phantom_t: PhantomData,
-        }
+        Self::new(value, WeaveActionCount::new())
     }
 }
 
@@ -1387,6 +1378,7 @@ where
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.weave == other.weave
     }
@@ -1404,6 +1396,40 @@ where
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
+}
+
+impl<W, K, N, T, S> AsRef<W> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T> + Eq,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: BuildableNode<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn as_ref(&self) -> &W {
+        &self.weave
+    }
+}
+
+impl<W, K, N, T, S> From<W> for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T> + Eq,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: BuildableNode<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn from(value: W) -> Self {
+        Self::new(value)
+    }
 }
 
 impl<W, K, N, T, S> DeduplicatedWeave<W, K, N, T, S>
@@ -1927,6 +1953,7 @@ where
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
+    #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.weave == other.weave
     }
@@ -1973,12 +2000,7 @@ where
 {
     #[inline]
     fn from(value: W) -> Self {
-        Self {
-            weave: value,
-            scratchpad: Vec::new(),
-            _phantom_n: PhantomData,
-            _phantom_t: PhantomData,
-        }
+        Self::new(value)
     }
 }
 
