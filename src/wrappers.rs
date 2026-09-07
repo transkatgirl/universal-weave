@@ -2496,7 +2496,17 @@ where
         }
 
         let (index, parent, child) = if at == 0 {
-            (0, None, self.scratchpad.first().copied())
+            let prefix_len = self
+                .scratchpad
+                .iter()
+                .take_while(|id| self.weave.get_contents(id).unwrap().is_empty())
+                .count();
+
+            (
+                prefix_len,
+                self.scratchpad[..prefix_len].last().copied(),
+                self.scratchpad.get(prefix_len).copied(),
+            )
         } else if let Some((index, length)) = target {
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             let split_at = at - cursor;
