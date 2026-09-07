@@ -2398,7 +2398,7 @@ where
                 .chain(self.scratchpad[rest..].iter().copied()),
         );
     }
-    /// Splits the active path at the specified index without deactivating the path's tail.
+    /// Splits the active path at the specified index without deactivating the right side of the split.
     ///
     /// If `at` is zero or beyond the active path's length, this function does nothing.
     ///
