@@ -2364,7 +2364,7 @@ where
         }
 
         #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
-        let (prefix_len, start_split, end) = if range.start == 0 {
+        let (prefix, start_split, end) = if range.start == 0 {
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
             let mut end = None;
@@ -2390,7 +2390,7 @@ where
                 return;
             }
 
-            (prefix_len, None, end)
+            (&self.scratchpad[..prefix_len], None, end)
         } else {
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
@@ -2425,7 +2425,7 @@ where
                 return;
             }
 
-            (prefix_len, start_split, end)
+            (&self.scratchpad[..prefix_len], start_split, end)
         };
 
         let (end, suffix_index) = if let Some((index, at, left)) = end {
@@ -2451,22 +2451,37 @@ where
             );
         }
 
-        let anchor = if let Some(start) = self.scratchpad[..prefix_len].last() {
+        if let Some(prefix_tail) = prefix.last() {
             if let Some(end) = end {
                 let parents = self.weave.get_parents(&end).unwrap();
 
-                if parents.into_iter().all(|id| id != start) {
+                if parents.into_iter().all(|id| id != prefix_tail) {
                     assert!(
                         self.weave.move_to(
                             &end,
-                            &Vec::from_iter(parents.into_iter().copied().chain(iter::once(*start)))
+                            &Vec::from_iter(
+                                parents.into_iter().copied().chain(iter::once(*prefix_tail))
+                            )
                         ),
                         "Moving node failed"
                     );
                 }
-            }
 
-            None
+                self.weave.set_active_path(
+                    prefix
+                        .iter()
+                        .copied()
+                        .chain(iter::once(end))
+                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                );
+            } else if prefix.len() != self.scratchpad.len() {
+                self.weave.set_active_path(
+                    prefix
+                        .iter()
+                        .copied()
+                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                );
+            }
         } else {
             let id = generate_id();
             let contents = T::default();
@@ -2481,23 +2496,19 @@ where
                     id,
                     N::From::from_iter(iter::empty()),
                     N::To::from_iter(end),
-                    false,
+                    end.is_none(),
                     contents
                 )),
                 "Inserting node failed"
             );
 
-            Some(id)
-        };
-
-        if end.is_some() || prefix_len != self.scratchpad.len() {
-            self.weave.set_active_path(
-                anchor
-                    .into_iter()
-                    .chain(self.scratchpad[..prefix_len].iter().copied())
-                    .chain(end)
-                    .chain(self.scratchpad[suffix_index..].iter().copied()),
-            );
+            if let Some(end) = end {
+                self.weave.set_active_path(
+                    iter::once(id)
+                        .chain(iter::once(end))
+                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                );
+            }
         }
     }
     /// Splits the active path at the specified index without deactivating the right side of the split.
