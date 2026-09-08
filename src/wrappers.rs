@@ -2645,7 +2645,7 @@ where
     }
     /// Inserts a new node into the active path at the specified index.
     ///
-    /// If `at` is beyond the active path's length, the content will be appended to the end of the active path.
+    /// If the index extends past the end of the active path, it is clamped to the active path's length.
     ///
     /// This function may split up to 1 node and may insert up to 1 additional node if necessary to apply the operation.
     ///
