@@ -2587,7 +2587,7 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        let (index, parent, child) = if at == 0 {
+        let (index, parent, child, split_right) = if at == 0 {
             let prefix_len = self
                 .scratchpad
                 .iter()
@@ -2598,6 +2598,7 @@ where
                 prefix_len,
                 self.scratchpad[..prefix_len].last().copied(),
                 self.scratchpad.get(prefix_len).copied(),
+                false,
             )
         } else {
             let mut cursor: usize = 0;
@@ -2621,7 +2622,12 @@ where
                 let next = index.strict_add(1);
 
                 if split_at == length {
-                    (next, Some(parent), self.scratchpad.get(next).copied())
+                    (
+                        next,
+                        Some(parent),
+                        self.scratchpad.get(next).copied(),
+                        false,
+                    )
                 } else {
                     let right = generate_id();
 
@@ -2629,12 +2635,16 @@ where
                         self.weave.split(&parent, split_at, right),
                         "Splitting node failed"
                     );
-                    self.scratchpad.insert(next, right);
 
-                    (next, Some(parent), Some(right))
+                    (next, Some(parent), Some(right), true)
                 }
             } else {
-                (self.scratchpad.len(), self.scratchpad.last().copied(), None)
+                (
+                    self.scratchpad.len(),
+                    self.scratchpad.last().copied(),
+                    None,
+                    false,
+                )
             }
         };
 
@@ -2653,8 +2663,14 @@ where
         );
 
         if !fast_path {
-            self.scratchpad.insert(index, id);
-            self.weave.set_active_path(self.scratchpad.drain(..));
+            self.weave.set_active_path(
+                self.scratchpad[..index]
+                    .iter()
+                    .copied()
+                    .chain(iter::once(id))
+                    .chain(split_right.then(|| child.unwrap()))
+                    .chain(self.scratchpad[index..].iter().copied()),
+            );
         }
     }
 }
