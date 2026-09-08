@@ -29,7 +29,7 @@ use crate::{
 /// A [`Weave`] wrapper which logs actions successfully performed on the inner [`Weave`] in the order that they are performed.
 ///
 /// See [`WeaveAction`] for the complete list of loggable actions.
-#[derive(Default, Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
@@ -46,6 +46,18 @@ where
 
     /// The list of actions that were performed on the attached [`Weave`] in the order they were performed.
     pub actions: VecDeque<WeaveAction<K, N, T, M>>,
+}
+
+impl<W, K, N, T, M> Default for LoggedWeave<W, K, N, T, M>
+where
+    W: Weave<K, N, T> + Default,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T> + Clone,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(W::default())
+    }
 }
 
 impl<W, K, N, T, M> AsRef<W> for LoggedWeave<W, K, N, T, M>
@@ -179,7 +191,7 @@ where
 /// A [`Weave`] wrapper which logs the number of actions successfully performed on the inner [`Weave`].
 ///
 /// See [`WeaveActionCount`] for the complete list of loggable actions.
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
 #[must_use]
@@ -200,6 +212,18 @@ where
     _phantom_k: PhantomData<K>,
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
+}
+
+impl<W, K, N, T> Default for CountedWeave<W, K, N, T>
+where
+    W: Weave<K, N, T> + Default,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T>,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::from_weave(W::default())
+    }
 }
 
 impl<W, K, N, T> AsRef<W> for CountedWeave<W, K, N, T>
@@ -1343,7 +1367,7 @@ where
 /// # Limitations
 ///
 /// It is possible for [`Weave::insert()`], [`Weave::remove()`], and [`Weave::remove_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct DeduplicatedWeave<W, K, N, T, S>
 where
@@ -1364,6 +1388,23 @@ where
     scratchpad: HashSet<K, S>,
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
+}
+
+impl<W, K, N, T, S> Default for DeduplicatedWeave<W, K, N, T, S>
+where
+    W: Weave<K, N, T> + Default,
+    K: Hash + Copy + Eq + Ord,
+    T: DeduplicatableContents,
+    N: BuildableNode<K, T>,
+    S: BuildHasher + Default + Clone,
+    for<'a> &'a W::Roots: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(W::default())
+    }
 }
 
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
@@ -1921,7 +1962,7 @@ where
 /// May panic if the underlying [`Weave`] refuses a structurally valid operation.
 ///
 /// All panics should be assumed to leave the Weave in a malformed state.
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct PatchablePathWeave<W, K, N, T>
 where
@@ -1940,6 +1981,22 @@ where
 
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
+}
+
+impl<W, K, N, T> Default for PatchablePathWeave<W, K, N, T>
+where
+    W: DiscreteWeave<K, N, T> + ActivePathWeave<K, N, T> + IndependentWeave<K, N, T> + Default,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T>,
+    T: DiscreteContents + IndependentContents + Default,
+    for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    N::From: FromIterator<K>,
+    N::To: FromIterator<K>,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(W::default())
+    }
 }
 
 #[allow(clippy::missing_trait_methods, reason = "Conflicting lint")]
