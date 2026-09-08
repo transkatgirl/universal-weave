@@ -2338,7 +2338,7 @@ where
 {
     /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
-    /// If the range is empty or does not intersect with the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
+    /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
     /// This function may split up to 2 nodes and may insert up to 1 node if necessary to apply the operation.
     ///
@@ -2421,7 +2421,10 @@ where
                 cursor = next;
             }
 
-            if end.is_none() && range.start >= cursor {
+            if end.is_none()
+                && (range.start > cursor
+                    || (range.start == cursor && prefix_len == self.scratchpad.len()))
+            {
                 return;
             }
 
