@@ -252,6 +252,12 @@ pub trait DeduplicatableContents {
     fn is_duplicate_of(&self, other: &Self) -> bool;
 }
 
+impl DeduplicatableContents for Vec<u8> {
+    fn is_duplicate_of(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
 /// A document linking together multiple [`Node`] objects without cyclical links.
 ///
 /// # Deserialization
