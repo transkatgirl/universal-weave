@@ -2587,7 +2587,7 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        let (index, parent, child, split_right) = if at == 0 {
+        let (index, parent, child, split) = if at == 0 {
             let prefix_len = self
                 .scratchpad
                 .iter()
@@ -2649,26 +2649,25 @@ where
         };
 
         let id = generate_id();
-        let fast_path = parent.is_none() || child.is_none();
 
         assert!(
             self.weave.insert(N::new(
                 id,
                 N::From::from_iter(parent),
                 N::To::from_iter(child),
-                fast_path,
+                !split,
                 contents
             )),
             "Inserting node failed"
         );
 
-        if !fast_path {
+        if split {
             self.weave.set_active_path(
                 self.scratchpad[..index]
                     .iter()
                     .copied()
                     .chain(iter::once(id))
-                    .chain(split_right.then(|| child.unwrap()))
+                    .chain(iter::once(child.unwrap()))
                     .chain(self.scratchpad[index..].iter().copied()),
             );
         }
