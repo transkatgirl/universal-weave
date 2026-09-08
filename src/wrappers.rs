@@ -1957,7 +1957,7 @@ where
 
 /// A [`Weave`] wrapper which adds content patch operations to the active path.
 ///
-/// Unless documented otherwise, the wrapper's exact index behavior for zero-width nodes is an implementation detail which may be changed in the future. However, zero-width node behavior is consistent between functions.
+/// Unless documented otherwise, the wrapper's exact indexing behavior for zero-width nodes is an implementation detail which may be changed in the future. However, indexing behavior is consistent between functions.
 ///
 /// # Requirements
 ///
