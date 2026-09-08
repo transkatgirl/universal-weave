@@ -2377,8 +2377,9 @@ where
                     prefix_len = index;
                 }
 
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 if cursor == range.end || next > range.end {
-                    end = Some((index, cursor, *id));
+                    end = Some((index, range.end - cursor, *id));
                     break;
                 }
 
@@ -2411,8 +2412,9 @@ where
                     }
                 }
 
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 if cursor == range.end || next > range.end {
-                    end = Some((index, cursor, *id));
+                    end = Some((index, range.end - cursor, *id));
                     break;
                 }
 
@@ -2426,14 +2428,12 @@ where
             (prefix_len, start_split, end)
         };
 
-        let (end, suffix_index) = if let Some((index, cursor, left)) = end {
+        let (end, suffix_index) = if let Some((index, at, left)) = end {
             let next = index.strict_add(1);
 
-            if cursor == range.end {
+            if at == 0 {
                 (Some(left), next)
             } else {
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                let at = range.end - cursor;
                 let right = generate_id();
 
                 assert!(self.weave.split(&left, at, right), "Splitting node failed");
@@ -2468,14 +2468,13 @@ where
 
             None
         } else {
+            let id = generate_id();
             let contents = T::default();
 
             assert!(
                 contents.is_empty(),
                 "`T::default()` must have a length of zero"
             );
-
-            let id = generate_id();
 
             assert!(
                 self.weave.insert(N::new(
