@@ -1441,7 +1441,7 @@ where
 
 impl<W, K, N, T, S> AsRef<W> for DeduplicatedWeave<W, K, N, T, S>
 where
-    W: Weave<K, N, T> + Eq,
+    W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
     N: BuildableNode<K, T>,
@@ -1458,7 +1458,7 @@ where
 
 impl<W, K, N, T, S> From<W> for DeduplicatedWeave<W, K, N, T, S>
 where
-    W: Weave<K, N, T> + Eq,
+    W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     T: DeduplicatableContents,
     N: BuildableNode<K, T>,
