@@ -253,6 +253,7 @@ pub trait DeduplicatableContents {
 }
 
 impl DeduplicatableContents for Vec<u8> {
+    #[inline]
     fn is_duplicate_of(&self, other: &Self) -> bool {
         self == other
     }
