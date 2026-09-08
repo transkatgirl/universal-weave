@@ -1957,11 +1957,20 @@ where
 
 /// A [`Weave`] wrapper which adds content patch operations to the active path.
 ///
+/// # Requirements
+///
+/// The underlying [`Weave`] must meet all of the following requirements for patch operations to function properly:
+///
+/// 1. [`IndependentWeave`](crate::independent::IndependentWeave)-like activation semantics.
+/// 2. [`Weave::insert`], [`DiscreteWeave::split`], and [`IndependentWeave::move_to`] must never refuse a structurally valid operation.
+/// 3. `T::split()` must always split at the exact specified index and should never refuse a structurally valid operation.
+/// 4. `T::default()` must have a length of zero.
+///
 /// # Panics
 ///
-/// May panic if the underlying [`Weave`] refuses a structurally valid operation.
+/// May panic if the underlying [`Weave`] violates any of the specified [requirements](#requirements).
 ///
-/// All panics should be assumed to leave the Weave in a malformed state.
+/// All panics should be assumed to leave the underlying Weave in a malformed state.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct PatchablePathWeave<W, K, N, T>
@@ -2397,13 +2406,13 @@ where
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// This function may split up to 2 nodes and may insert up to 1 node if necessary to apply the operation.
+    /// This function may split up to 2 nodes, may move up to 1 node, and may insert up to 1 node if necessary to apply the operation.
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
+    /// May panic if the underlying [`Weave`] violates any of [`PatchablePathWeave`]'s [requirements](#requirements).
     ///
-    /// May panic if `T::default()` has a length greater than zero.
+    /// May panic if `generate_id` panics or returns an identifier already in the Weave.
     pub fn split_out<F>(&mut self, range: Range<usize>, mut generate_id: F)
     where
         F: FnMut() -> K,
@@ -2642,7 +2651,9 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if `T::split()` fails or panics, or if `generate_id` panics or returns an identifier already in the Weave.
+    /// May panic if the underlying [`Weave`] violates any of [`PatchablePathWeave`]'s [requirements](#requirements).
+    ///
+    /// May panic if `generate_id` panics or returns an identifier already in the Weave.
     pub fn insert_at<F>(&mut self, at: usize, contents: T, mut generate_id: F)
     where
         F: FnMut() -> K,
