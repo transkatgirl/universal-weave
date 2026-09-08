@@ -2410,7 +2410,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if the underlying [`Weave`] violates any of [`PatchablePathWeave`]'s [requirements](#requirements).
+    /// May panic if the underlying [`Weave`] violates any of the wrapper's [requirements](#requirements).
     ///
     /// May panic if `generate_id` panics or returns an identifier already in the Weave.
     pub fn split_out<F>(&mut self, range: Range<usize>, mut generate_id: F)
@@ -2651,7 +2651,7 @@ where
     ///
     /// # Panics
     ///
-    /// May panic if the underlying [`Weave`] violates any of [`PatchablePathWeave`]'s [requirements](#requirements).
+    /// May panic if the underlying [`Weave`] violates any of the wrapper's [requirements](#requirements).
     ///
     /// May panic if `generate_id` panics or returns an identifier already in the Weave.
     pub fn insert_at<F>(&mut self, at: usize, contents: T, mut generate_id: F)
