@@ -2629,7 +2629,7 @@ where
                     "Inserting node failed"
                 );
 
-                (1, Some(id), Some(root), Action::InsertAnchor)
+                (0, Some(id), Some(root), Action::InsertAnchor)
             } else {
                 (
                     prefix_len,
@@ -2703,9 +2703,8 @@ where
             Action::InsertAnchor => {
                 self.weave.set_active_path(
                     iter::once(parent.unwrap())
-                        .chain(self.scratchpad[..index].iter().copied())
                         .chain(iter::once(id))
-                        .chain(self.scratchpad[index..].iter().copied()),
+                        .chain(self.scratchpad.iter().copied()),
                 );
             }
             Action::SplitNode => {
