@@ -2364,7 +2364,7 @@ where
         }
 
         #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
-        let (prefix, start_split, end) = if range.start == 0 {
+        let (prefix_len, start_split, end) = if range.start == 0 {
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
             let mut end = None;
@@ -2390,7 +2390,7 @@ where
                 return;
             }
 
-            (&self.scratchpad[..prefix_len], None, end)
+            (prefix_len, None, end)
         } else {
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
@@ -2425,7 +2425,7 @@ where
                 return;
             }
 
-            (&self.scratchpad[..prefix_len], start_split, end)
+            (prefix_len, start_split, end)
         };
 
         let (end, suffix_index) = if let Some((index, at, left)) = end {
@@ -2451,32 +2451,34 @@ where
             );
         }
 
-        if let Some(prefix_tail) = prefix.last() {
+        if let Some(prefix_tail) = self.scratchpad[..prefix_len].last().copied() {
             if let Some(end) = end {
                 let parents = self.weave.get_parents(&end).unwrap();
 
-                if parents.into_iter().all(|id| id != prefix_tail) {
+                if parents.into_iter().all(|id| id != &prefix_tail) {
+                    let start = self.scratchpad.len();
+
+                    self.scratchpad
+                        .extend(parents.into_iter().copied().chain(iter::once(prefix_tail)));
+
                     assert!(
-                        self.weave.move_to(
-                            &end,
-                            &Vec::from_iter(
-                                parents.into_iter().copied().chain(iter::once(*prefix_tail))
-                            )
-                        ),
+                        self.weave.move_to(&end, &self.scratchpad[start..]),
                         "Moving node failed"
                     );
+
+                    self.scratchpad.truncate(start);
                 }
 
                 self.weave.set_active_path(
-                    prefix
+                    self.scratchpad[..prefix_len]
                         .iter()
                         .copied()
                         .chain(iter::once(end))
                         .chain(self.scratchpad[suffix_index..].iter().copied()),
                 );
-            } else if prefix.len() != self.scratchpad.len() {
+            } else if prefix_len != self.scratchpad.len() {
                 self.weave.set_active_path(
-                    prefix
+                    self.scratchpad[..prefix_len]
                         .iter()
                         .copied()
                         .chain(self.scratchpad[suffix_index..].iter().copied()),
