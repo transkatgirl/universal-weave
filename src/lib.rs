@@ -175,7 +175,7 @@ pub trait DiscreteContents: Sized {
     fn is_empty(&self) -> bool;
     /// Splits the item at the specified index.
     ///
-    /// If splitting the item at the exact index fails, the original contents are returned.
+    /// If splitting the item fails, the original contents are returned.
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
     ///
