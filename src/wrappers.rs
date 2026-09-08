@@ -1957,6 +1957,8 @@ where
 
 /// A [`Weave`] wrapper which adds content patch operations to the active path.
 ///
+/// Unless documented otherwise, the wrapper's exact index behavior for zero-width nodes is an implementation detail which may be changed in the future. However, zero-width node behavior is consistent between functions.
+///
 /// # Requirements
 ///
 /// The underlying [`Weave`] must meet all of the following requirements for patch operations to function properly:
@@ -2406,6 +2408,8 @@ where
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
+    /// If the range starts at zero, an empty root node (`T::default()`) may be inserted at the start of the active path.
+    ///
     /// This function may split up to 2 nodes, may move up to 1 node, and may insert up to 1 node if necessary to apply the operation.
     ///
     /// # Panics
@@ -2643,9 +2647,11 @@ where
             true
         }
     }
-    /// Inserts a new node into the active path at the specified index.
+    /// Inserts a new node into the active path at the specified index without removing existing node connections.
     ///
     /// If the index extends past the end of the active path, it is clamped to the active path's length.
+    ///
+    /// If the index is zero, an empty root node (`T::default()`) may be inserted at the start of the active path.
     ///
     /// This function may split up to 1 node and may insert up to 1 additional node if necessary to apply the operation.
     ///
