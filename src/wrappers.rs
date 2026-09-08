@@ -2656,25 +2656,26 @@ where
         };
 
         let id = generate_id();
+        let fast_path = parent.is_none() || child.is_none();
 
         assert!(
             self.weave.insert(N::new(
                 id,
                 N::From::from_iter(parent),
                 N::To::from_iter(child),
-                !split,
+                fast_path,
                 contents
             )),
             "Inserting node failed"
         );
 
-        if split {
+        if !fast_path {
             self.weave.set_active_path(
                 self.scratchpad[..index]
                     .iter()
                     .copied()
                     .chain(iter::once(id))
-                    .chain(iter::once(child.unwrap()))
+                    .chain(split.then(|| child.unwrap()))
                     .chain(self.scratchpad[index..].iter().copied()),
             );
         }
