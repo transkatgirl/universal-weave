@@ -2581,7 +2581,7 @@ where
     ///
     /// If `at` is beyond the active path's length, the content will be appended to the end of the active path.
     ///
-    /// This function may split up to 1 node if necessary to apply the operation.
+    /// This function may split up to 1 node and may insert up to 1 additional node if necessary to apply the operation.
     ///
     /// # Panics
     ///
@@ -2590,23 +2590,54 @@ where
     where
         F: FnMut() -> K,
     {
+        enum Action {
+            InsertAnchor,
+            SplitNode,
+            Boundary,
+        }
+
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        let (index, parent, child, split) = if at == 0 {
+        let (index, parent, child, action) = if at == 0 {
             let prefix_len = self
                 .scratchpad
                 .iter()
                 .take_while(|id| self.weave.get_contents(id).unwrap().is_empty())
                 .count();
 
-            (
-                prefix_len,
-                self.scratchpad[..prefix_len].last().copied(),
-                self.scratchpad.get(prefix_len).copied(),
-                false,
-            )
+            if prefix_len == 0
+                && let Some(root) = self.scratchpad.first().copied()
+            {
+                let id = generate_id();
+                let contents = T::default();
+
+                assert!(
+                    contents.is_empty(),
+                    "`T::default()` must have a length of zero"
+                );
+
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(iter::empty()),
+                        N::To::from_iter(iter::once(root)),
+                        false,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
+                (1, Some(id), Some(root), Action::InsertAnchor)
+            } else {
+                (
+                    prefix_len,
+                    self.scratchpad[..prefix_len].last().copied(),
+                    self.scratchpad.get(prefix_len).copied(),
+                    Action::Boundary,
+                )
+            }
         } else {
             let mut cursor: usize = 0;
             let mut target = None;
@@ -2633,7 +2664,7 @@ where
                         next,
                         Some(parent),
                         self.scratchpad.get(next).copied(),
-                        false,
+                        Action::Boundary,
                     )
                 } else {
                     let right = generate_id();
@@ -2643,41 +2674,51 @@ where
                         "Splitting node failed"
                     );
 
-                    (next, Some(parent), Some(right), true)
+                    (next, Some(parent), Some(right), Action::SplitNode)
                 }
             } else {
                 (
                     self.scratchpad.len(),
                     self.scratchpad.last().copied(),
                     None,
-                    false,
+                    Action::Boundary,
                 )
             }
         };
 
         let id = generate_id();
-        let fast_path = parent.is_none() || child.is_none();
 
         assert!(
             self.weave.insert(N::new(
                 id,
                 N::From::from_iter(parent),
                 N::To::from_iter(child),
-                fast_path,
+                matches!(action, Action::Boundary),
                 contents
             )),
             "Inserting node failed"
         );
 
-        if !fast_path {
-            self.weave.set_active_path(
-                self.scratchpad[..index]
-                    .iter()
-                    .copied()
-                    .chain(iter::once(id))
-                    .chain(split.then(|| child.unwrap()))
-                    .chain(self.scratchpad[index..].iter().copied()),
-            );
+        match action {
+            Action::InsertAnchor => {
+                self.weave.set_active_path(
+                    iter::once(parent.unwrap())
+                        .chain(self.scratchpad[..index].iter().copied())
+                        .chain(iter::once(id))
+                        .chain(self.scratchpad[index..].iter().copied()),
+                );
+            }
+            Action::SplitNode => {
+                self.weave.set_active_path(
+                    self.scratchpad[..index]
+                        .iter()
+                        .copied()
+                        .chain(iter::once(id))
+                        .chain(iter::once(child.unwrap()))
+                        .chain(self.scratchpad[index..].iter().copied()),
+                );
+            }
+            Action::Boundary => {}
         }
     }
 }
