@@ -2451,7 +2451,9 @@ where
             );
         }
 
-        if let Some(prefix_tail) = self.scratchpad[..prefix_len].last().copied() {
+        let prefix = &self.scratchpad[..prefix_len];
+
+        if let Some(prefix_tail) = prefix.last().copied() {
             if let Some(end) = end {
                 let parents = self.weave.get_parents(&end).unwrap();
 
@@ -2478,7 +2480,7 @@ where
                 );
             } else if prefix_len != self.scratchpad.len() {
                 self.weave.set_active_path(
-                    self.scratchpad[..prefix_len]
+                    prefix
                         .iter()
                         .copied()
                         .chain(self.scratchpad[suffix_index..].iter().copied()),
