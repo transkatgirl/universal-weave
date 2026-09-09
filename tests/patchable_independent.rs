@@ -419,7 +419,11 @@ impl StateMachineTest for WeaveWrapper {
                 };
 
                 if range.end >= range.start {
-                    state.active_content.splice(range.clone(), iter::empty());
+                    state.active_content.splice(
+                        range.start.min(state.active_content.len())
+                            ..range.end.min(state.active_content.len()),
+                        iter::empty(),
+                    );
                 }
 
                 state.weave.split_out(range, || {
@@ -445,7 +449,11 @@ impl StateMachineTest for WeaveWrapper {
                     .checked_rem(state.active_content.len() as u32 + 2)
                     .unwrap_or_default()) as usize;
 
-                state.active_content.splice(at..at, content.iter().copied());
+                if at < state.active_content.len() {
+                    state.active_content.splice(at..at, content.iter().copied());
+                } else {
+                    state.active_content.extend(content.iter().copied());
+                }
 
                 state.weave.insert_at(at, content, || {
                     state.counter += 1;
