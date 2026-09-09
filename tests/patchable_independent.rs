@@ -379,7 +379,7 @@ impl StateMachineTest for WeaveWrapper {
                     .extend(state.weave.active_content().flatten().copied());
 
                 let at = (seed
-                    .checked_rem(state.active_content.len() as u32)
+                    .checked_rem(state.active_content.len() as u32 + 2)
                     .unwrap_or_default()) as usize;
 
                 state.weave.split_at(at, || {
@@ -406,10 +406,10 @@ impl StateMachineTest for WeaveWrapper {
                     .extend(state.weave.active_content().flatten().copied());
 
                 let start = (seed_a
-                    .checked_rem(state.active_content.len() as u32)
+                    .checked_rem(state.active_content.len() as u32 + 2)
                     .unwrap_or_default()) as usize;
                 let end = (seed_b
-                    .checked_rem(state.active_content.len() as u32)
+                    .checked_rem(state.active_content.len() as u32 + 2)
                     .unwrap_or_default()) as usize;
 
                 let range = if filter_invalid && start > end {
@@ -442,7 +442,7 @@ impl StateMachineTest for WeaveWrapper {
                     .extend(state.weave.active_content().flatten().copied());
 
                 let at = (seed
-                    .checked_rem(state.active_content.len() as u32)
+                    .checked_rem(state.active_content.len() as u32 + 2)
                     .unwrap_or_default()) as usize;
 
                 state.active_content.splice(at..at, content.iter().copied());
