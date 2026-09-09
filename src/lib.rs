@@ -9,7 +9,7 @@
 //!
 //! Operations on the built-in [`Weave`] implementations always preserve node ordering through the use of [`IndexSet`](indexmap::IndexSet), and (non-tail) insertion and removal operations on ordered sets can have a worst-case time complexity of O(n).
 //!
-//! The [`wrappers`] module contains a few wrapper types which can be used to add additional functionality to an underlying [`Weave`].
+//! The [`wrappers`] module contains a few composable wrapper types (such as [`LoggedWeave`](wrappers::LoggedWeave) and [`PatchablePathWeave`](wrappers::PatchablePathWeave)) which can be used to add additional functionality to an underlying [`Weave`].
 //!
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 
