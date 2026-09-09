@@ -78,6 +78,7 @@ Testing notes:
     - dependent_behavior_unchanged
     - independent_behavior_unchanged
     - independent_extends_dependent
+    - patchable_independent
 
 */
 
