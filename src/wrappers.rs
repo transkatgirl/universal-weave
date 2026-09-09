@@ -2404,6 +2404,20 @@ where
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
+    /// Convenience function which returns an iterator over the content corresponding to the active path.
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Should never panic when underlying Weave is correctly implemented"
+    )]
+    pub fn active_content(&mut self) -> impl Iterator<Item = &T> {
+        self.scratchpad.clear();
+        self.weave.get_active_path(&mut self.scratchpad);
+
+        self.scratchpad
+            .drain(..)
+            .rev()
+            .map(|id| self.weave.get_contents(&id).unwrap())
+    }
     /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
