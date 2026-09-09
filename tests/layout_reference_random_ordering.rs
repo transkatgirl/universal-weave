@@ -27,7 +27,7 @@ use universal_weave::{
     layout::{Spacing, TopologicalLayouter},
 };
 
-const CASES: u32 = 4096;
+const CASES: u32 = 5120;
 const MAX_TRANSITIONS: usize = 512;
 const TOLERANCE: f32 = 1e-4;
 
