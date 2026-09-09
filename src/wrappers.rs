@@ -1982,6 +1982,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2001,6 +2002,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2018,6 +2020,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2035,6 +2038,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2047,6 +2051,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2063,6 +2068,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2079,6 +2085,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2111,6 +2118,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2205,6 +2213,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2228,6 +2237,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2257,6 +2267,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2288,6 +2299,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2311,6 +2323,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2327,6 +2340,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2349,6 +2363,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2365,6 +2380,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2381,6 +2397,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2401,6 +2418,7 @@ where
     N: BuildableNode<K, T>,
     T: DiscreteContents + IndependentContents + Default,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
+    for<'a> &'a N::To: IntoIterator<Item = &'a K>,
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
@@ -2776,19 +2794,19 @@ where
 
         let id = generate_id();
 
-        assert!(
-            self.weave.insert(N::new(
-                id,
-                N::From::from_iter(parent),
-                N::To::from_iter(child),
-                matches!(action, Action::Boundary),
-                contents
-            )),
-            "Inserting node failed"
-        );
-
         match action {
             Action::InsertAnchor => {
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(parent),
+                        N::To::from_iter(child),
+                        false,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
                 self.weave.set_active_path(
                     iter::once(parent.unwrap())
                         .chain(iter::once(id))
@@ -2796,6 +2814,17 @@ where
                 );
             }
             Action::SplitNode => {
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(parent),
+                        N::To::from_iter(child),
+                        false,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
                 self.weave.set_active_path(
                     self.scratchpad[..index]
                         .iter()
@@ -2805,7 +2834,34 @@ where
                         .chain(self.scratchpad[index..].iter().copied()),
                 );
             }
-            Action::Boundary => {}
+            Action::Boundary => {
+                assert!(
+                    self.weave.insert(if let Some(parent) = parent {
+                        N::new(
+                            id,
+                            N::From::from_iter(iter::once(parent)),
+                            N::To::from_iter(
+                                self.weave
+                                    .get_children(&parent)
+                                    .unwrap()
+                                    .into_iter()
+                                    .copied(),
+                            ),
+                            true,
+                            contents,
+                        )
+                    } else {
+                        N::new(
+                            id,
+                            N::From::from_iter(parent),
+                            N::To::from_iter(child),
+                            true,
+                            contents,
+                        )
+                    }),
+                    "Inserting node failed"
+                );
+            }
         }
     }
 }
