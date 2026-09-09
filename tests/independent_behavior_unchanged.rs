@@ -2,14 +2,6 @@ use std::hash::{BuildHasher, Hash, RandomState};
 
 use hashbrown::{HashMap, HashSet};
 use indexmap::IndexSet;
-use old_universal_weave::{
-    ActivePathWeave as _, BookmarkableWeave as _,
-    DiscreteContentResult as OldDiscreteContentResult, DiscreteContents as OldDiscreteContents,
-    DiscreteWeave as _, IndependentContents as OldIndependentContents, IndependentWeave as _,
-    MetadataWeave as _, SemiIndependentWeave as _, SortableBookmarkableWeave as _,
-    SortableWeave as _, Weave as _,
-    independent::{IndependentNode as OldIndependentNode, IndependentWeave as OldIndependentWeave},
-};
 use proptest::{collection::size_range, prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
@@ -18,6 +10,14 @@ use universal_weave::{
     DiscreteWeave as _, IndependentContents, IndependentWeave as _, MetadataWeave as _, Node,
     SemiIndependentWeave as _, SortableBookmarkableWeave as _, SortableWeave as _, Weave as _,
     independent::{IndependentNode, IndependentWeave},
+};
+use universal_weave_structure_reference::{
+    ActivePathWeave as _, BookmarkableWeave as _,
+    DiscreteContentResult as OldDiscreteContentResult, DiscreteContents as OldDiscreteContents,
+    DiscreteWeave as _, IndependentContents as OldIndependentContents, IndependentWeave as _,
+    MetadataWeave as _, SemiIndependentWeave as _, SortableBookmarkableWeave as _,
+    SortableWeave as _, Weave as _,
+    independent::{IndependentNode as OldIndependentNode, IndependentWeave as OldIndependentWeave},
 };
 
 const CASES: u32 = 5120;

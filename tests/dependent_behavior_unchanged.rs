@@ -2,13 +2,6 @@ use std::hash::{BuildHasher, RandomState};
 
 use hashbrown::HashMap;
 use indexmap::IndexSet;
-use old_universal_weave::{
-    ActiveSingularWeave as _, BookmarkableWeave as _,
-    DiscreteContentResult as OldDiscreteContentResult, DiscreteContents as OldDiscreteContents,
-    DiscreteWeave as _, IndependentContents as OldIndependentContents, MetadataWeave as _,
-    SemiIndependentWeave as _, SortableBookmarkableWeave as _, SortableWeave as _, Weave as _,
-    dependent::{DependentNode as OldDependentNode, DependentWeave as OldDependentWeave},
-};
 use proptest::{prelude::*, strategy::Strategy, test_runner::Config};
 use proptest_derive::Arbitrary;
 use proptest_state_machine::{ReferenceStateMachine, StateMachineTest, prop_state_machine};
@@ -17,6 +10,13 @@ use universal_weave::{
     DiscreteWeave as _, IndependentContents, MetadataWeave as _, SemiIndependentWeave as _,
     SortableBookmarkableWeave as _, SortableWeave as _, Weave as _,
     dependent::{DependentNode, DependentWeave},
+};
+use universal_weave_structure_reference::{
+    ActiveSingularWeave as _, BookmarkableWeave as _,
+    DiscreteContentResult as OldDiscreteContentResult, DiscreteContents as OldDiscreteContents,
+    DiscreteWeave as _, IndependentContents as OldIndependentContents, MetadataWeave as _,
+    SemiIndependentWeave as _, SortableBookmarkableWeave as _, SortableWeave as _, Weave as _,
+    dependent::{DependentNode as OldDependentNode, DependentWeave as OldDependentWeave},
 };
 
 const CASES: u32 = 5120;

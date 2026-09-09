@@ -1,6 +1,6 @@
 [package]
 name = "universal-weave"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
 	"transkatgirl",
 ]
@@ -72,11 +72,11 @@ loro-internal = { version = "=1.13.6", optional = true } # Workaround for https:
 
 
 [dev-dependencies]
-proptest               = "1.11.0"
-proptest-state-machine = "0.8.0"
-proptest-derive        = "0.8.0"
-old_universal_weave    = { package = "universal-weave", version = "=0.4.0" }
-rust-sugiyama-fork     = "=0.5.1"
+proptest                            = "1.11.0"
+proptest-state-machine              = "0.8.0"
+proptest-derive                     = "0.8.0"
+universal_weave_structure_reference = { package = "universal-weave", version = "=0.4.0" }
+rust-sugiyama-fork                  = "=0.5.1"
 
 [profile.test.build-override]
 opt-level = 2
@@ -89,6 +89,12 @@ opt-level = 3
 
 [[test]]
 name = "layout_reference"
+required-features = [
+	"layout",
+]
+
+[[test]]
+name = "layout_reference_random_ordering"
 required-features = [
 	"layout",
 ]
