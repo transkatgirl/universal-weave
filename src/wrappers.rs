@@ -2996,12 +2996,11 @@ where
         }
 
         let prefix = &self.scratchpad[..prefix_len];
+        let suffix = &self.scratchpad[suffix_index..];
+
+        let id = generate_id();
 
         if let Some(prefix_tail) = prefix.last().copied() {
-            let suffix = &self.scratchpad[suffix_index..];
-
-            let id = generate_id();
-
             if let Some(end) = end {
                 assert!(
                     self.weave.insert(N::new(
@@ -3015,12 +3014,12 @@ where
                 );
 
                 self.weave.set_active_path(
-                    self.scratchpad[..prefix_len]
+                    prefix
                         .iter()
                         .copied()
                         .chain(iter::once(id))
                         .chain(iter::once(end))
-                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                        .chain(suffix.iter().copied()),
                 );
             } else if let Some(suffix_head) = suffix.first().copied() {
                 assert!(
@@ -3054,8 +3053,6 @@ where
                 );
             }
         } else {
-            let id = generate_id();
-
             assert!(
                 self.weave.insert(N::new(
                     id,
@@ -3071,7 +3068,7 @@ where
                 self.weave.set_active_path(
                     iter::once(id)
                         .chain(iter::once(end))
-                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                        .chain(suffix.iter().copied()),
                 );
             }
         }
