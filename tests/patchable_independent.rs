@@ -165,6 +165,7 @@ enum WeaveTransition {
         seed_a: u32,
         seed_b: u32,
         content: Vec<u8>,
+        prefix_all: bool,
     },
 }
 
@@ -485,6 +486,7 @@ impl StateMachineTest for WeaveWrapper {
                 seed_a,
                 seed_b,
                 content,
+                prefix_all,
             } => {
                 state.active_content.clear();
                 state
@@ -520,7 +522,7 @@ impl StateMachineTest for WeaveWrapper {
                     }
                 }
 
-                state.weave.replace(range, content, || {
+                state.weave.replace(range, content, prefix_all, || {
                     state.counter += 1;
                     state.counter
                 });
