@@ -2862,7 +2862,7 @@ where
             }
         }
     }
-    /// Replaces the specified range of the active path with new content without removing the replaced content from the underlying Weave.
+    /// Replaces the specified range of the active path without removing the old content from the underlying Weave.
     ///
     /// If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
