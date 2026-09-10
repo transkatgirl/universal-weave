@@ -2580,12 +2580,7 @@ where
                         .chain(self.scratchpad[suffix_index..].iter().copied()),
                 );
             } else if prefix_len != self.scratchpad.len() {
-                self.weave.set_active_path(
-                    prefix
-                        .iter()
-                        .copied()
-                        .chain(self.scratchpad[suffix_index..].iter().copied()),
-                );
+                self.weave.set_active_path(prefix.iter().copied());
             }
         } else {
             let id = generate_id();
@@ -3032,37 +3027,59 @@ where
         let suffix = &self.scratchpad[suffix_index..];
 
         let id = generate_id();
+        let to = if prefix_all && let Some(replaced) = replaced {
+            N::To::from_iter(
+                self.weave
+                    .get_children(&replaced)
+                    .unwrap()
+                    .into_iter()
+                    .copied(),
+            )
+        } else {
+            N::To::from_iter(end)
+        };
 
-        assert!(
-            self.weave.insert(N::new(
-                id,
-                N::From::from_iter(prefix.last().copied()),
-                if prefix_all && let Some(replaced) = replaced {
-                    N::To::from_iter(
-                        self.weave
-                            .get_children(&replaced)
-                            .unwrap()
-                            .into_iter()
-                            .copied(),
-                    )
-                } else {
-                    N::To::from_iter(end)
-                },
-                end.is_none(),
-                contents
-            )),
-            "Inserting node failed"
-        );
-
-        if let Some(end) = end {
-            self.weave.set_active_path(
-                prefix
-                    .iter()
-                    .copied()
-                    .chain(iter::once(id))
-                    .chain(iter::once(end))
-                    .chain(suffix.iter().copied()),
+        if let Some(prefix_tail) = prefix.last().copied() {
+            assert!(
+                self.weave.insert(N::new(
+                    id,
+                    N::From::from_iter(iter::once(prefix_tail)),
+                    to,
+                    end.is_none(),
+                    contents
+                )),
+                "Inserting node failed"
             );
+
+            if let Some(end) = end {
+                self.weave.set_active_path(
+                    prefix
+                        .iter()
+                        .copied()
+                        .chain(iter::once(id))
+                        .chain(iter::once(end))
+                        .chain(suffix.iter().copied()),
+                );
+            }
+        } else {
+            assert!(
+                self.weave.insert(N::new(
+                    id,
+                    N::From::from_iter(iter::empty()),
+                    to,
+                    end.is_none(),
+                    contents
+                )),
+                "Inserting node failed"
+            );
+
+            if let Some(end) = end {
+                self.weave.set_active_path(
+                    iter::once(id)
+                        .chain(iter::once(end))
+                        .chain(suffix.iter().copied()),
+                );
+            }
         }
     }
 }
