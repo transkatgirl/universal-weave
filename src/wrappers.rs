@@ -2681,7 +2681,7 @@ where
     }
     /// Inserts a new node into the active path at the specified index without removing existing node connections.
     ///
-    /// The inserted node prefixes all continuations, not just the active continuation. This may result in quadratic connection growth when repeatedly inserting at the same position.
+    /// If `prefix_all` is true, the inserted node prefixes all continuations, not just the active continuation. This may result in quadratic connection growth when repeatedly inserting at the same position.
     ///
     /// If the index extends past the end of the active path, it is clamped to the active path's length.
     ///
@@ -2694,7 +2694,7 @@ where
     /// May panic if the underlying [`Weave`] violates any of the wrapper's [requirements](#requirements).
     ///
     /// May panic if `generate_id` panics or returns an identifier already in the Weave.
-    pub fn insert_at<F>(&mut self, at: usize, contents: T, mut generate_id: F)
+    pub fn insert_at<F>(&mut self, at: usize, contents: T, prefix_all: bool, mut generate_id: F)
     where
         F: FnMut() -> K,
     {
@@ -2841,7 +2841,9 @@ where
                     self.weave.insert(N::new(
                         id,
                         N::From::from_iter(parent),
-                        if let Some(parent) = parent {
+                        if let Some(parent) = parent
+                            && prefix_all
+                        {
                             N::To::from_iter(
                                 self.weave
                                     .get_children(&parent)

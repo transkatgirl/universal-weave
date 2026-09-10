@@ -157,6 +157,7 @@ enum WeaveTransition {
     InsertAt {
         seed: u32,
         content: Vec<u8>,
+        prefix_all: bool,
     },
 }
 
@@ -439,7 +440,11 @@ impl StateMachineTest for WeaveWrapper {
                         .copied())
                 );
             }
-            WeaveTransition::InsertAt { seed, content } => {
+            WeaveTransition::InsertAt {
+                seed,
+                content,
+                prefix_all,
+            } => {
                 state.active_content.clear();
                 state
                     .active_content
@@ -455,7 +460,7 @@ impl StateMachineTest for WeaveWrapper {
                     state.active_content.extend(content.iter().copied());
                 }
 
-                state.weave.insert_at(at, content, || {
+                state.weave.insert_at(at, content, prefix_all, || {
                     state.counter += 1;
                     state.counter
                 });
