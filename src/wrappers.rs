@@ -2681,6 +2681,8 @@ where
     }
     /// Inserts a new node into the active path at the specified index without removing existing node connections.
     ///
+    /// The inserted node prefixes all continuations, not just the active continuation. This may result in quadratic edge growth when repeatedly inserting at the same position.
+    ///
     /// If the index extends past the end of the active path, it is clamped to the active path's length.
     ///
     /// If the index is zero, an empty root node (`T::default()`) may be inserted at the start of the active path.
