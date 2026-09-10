@@ -2836,29 +2836,23 @@ where
             }
             Action::Boundary => {
                 assert!(
-                    self.weave.insert(if let Some(parent) = parent {
-                        N::new(
-                            id,
-                            N::From::from_iter(iter::once(parent)),
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(parent),
+                        if let Some(parent) = parent {
                             N::To::from_iter(
                                 self.weave
                                     .get_children(&parent)
                                     .unwrap()
                                     .into_iter()
                                     .copied(),
-                            ),
-                            true,
-                            contents,
-                        )
-                    } else {
-                        N::new(
-                            id,
-                            N::From::from_iter(parent),
-                            N::To::from_iter(child),
-                            true,
-                            contents,
-                        )
-                    }),
+                            )
+                        } else {
+                            N::To::from_iter(child)
+                        },
+                        true,
+                        contents,
+                    )),
                     "Inserting node failed"
                 );
             }
