@@ -2857,7 +2857,7 @@ where
     ///
     /// If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// This function may split up to 2 nodes if necessary to apply the operation.
+    /// This function may split up to 2 nodes and may insert up to 1 additional node if necessary to apply the operation.
     ///
     /// # Panics
     ///
