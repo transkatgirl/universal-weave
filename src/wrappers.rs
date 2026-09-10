@@ -3022,12 +3022,12 @@ where
                         .chain(iter::once(end))
                         .chain(self.scratchpad[suffix_index..].iter().copied()),
                 );
-            } else {
+            } else if let Some(suffix_head) = suffix.first().copied() {
                 assert!(
                     self.weave.insert(N::new(
                         id,
                         N::From::from_iter(iter::once(prefix_tail)),
-                        N::To::from_iter(suffix.first().copied()),
+                        N::To::from_iter(iter::once(suffix_head)),
                         false,
                         contents
                     )),
@@ -3041,6 +3041,17 @@ where
                         .chain(iter::once(id))
                         .chain(suffix.iter().copied()),
                 );
+            } else {
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(iter::once(prefix_tail)),
+                        N::To::from_iter(iter::empty()),
+                        true,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
             }
         } else {
             let id = generate_id();
@@ -3050,17 +3061,19 @@ where
                     id,
                     N::From::from_iter(iter::empty()),
                     N::To::from_iter(end),
-                    false,
+                    end.is_none(),
                     contents
                 )),
                 "Inserting node failed"
             );
 
-            self.weave.set_active_path(
-                iter::once(id)
-                    .chain(end)
-                    .chain(self.scratchpad[suffix_index..].iter().copied()),
-            );
+            if let Some(end) = end {
+                self.weave.set_active_path(
+                    iter::once(id)
+                        .chain(iter::once(end))
+                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                );
+            }
         }
     }
 }
