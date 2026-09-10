@@ -111,7 +111,7 @@ where
     pub const fn from_weave(weave: W) -> Self {
         Self::new(weave)
     }
-    /// Converts a [`LoggedWeave`] into it's inner [`Weave`].
+    /// Converts a [`LoggedWeave`] into its inner [`Weave`].
     #[inline]
     pub fn into_weave(self) -> W {
         self.weave
@@ -272,7 +272,7 @@ where
     pub fn from_weave(weave: W) -> Self {
         Self::new(weave, WeaveActionCount::new())
     }
-    /// Converts a [`CountedWeave`] into it's inner [`Weave`].
+    /// Converts a [`CountedWeave`] into its inner [`Weave`].
     #[inline]
     pub fn into_weave(self) -> W {
         self.weave
@@ -338,7 +338,7 @@ pub struct WeaveActionCount {
 }
 
 impl WeaveActionCount {
-    /// Creates a new action count initalized to zero.
+    /// Creates a new action count initialized to zero.
     #[inline]
     pub fn new() -> Self {
         Self::default()
@@ -1493,7 +1493,7 @@ where
             _phantom_t: PhantomData,
         }
     }
-    /// Converts a [`DeduplicatedWeave`] into it's inner [`Weave`].
+    /// Converts a [`DeduplicatedWeave`] into its inner [`Weave`].
     #[inline]
     pub fn into_inner(self) -> W {
         self.weave
@@ -2099,7 +2099,7 @@ where
             _phantom_t: PhantomData,
         }
     }
-    /// Converts a [`PatchablePathWeave`] into it's inner [`Weave`].
+    /// Converts a [`PatchablePathWeave`] into its inner [`Weave`].
     #[inline]
     pub fn into_inner(self) -> W {
         self.weave
