@@ -2461,10 +2461,6 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        if self.scratchpad.is_empty() {
-            return;
-        }
-
         #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
         let (prefix_len, start_split, end) = if range.start == 0 {
             let mut cursor: usize = 0;
@@ -2885,21 +2881,6 @@ where
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
-
-        if self.scratchpad.is_empty() {
-            assert!(
-                self.weave.insert(N::new(
-                    generate_id(),
-                    N::From::from_iter(iter::empty()),
-                    N::To::from_iter(iter::empty()),
-                    true,
-                    contents
-                )),
-                "Inserting node failed"
-            );
-
-            return;
-        }
 
         #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
         let (prefix_len, start_split, end) = if range.start == 0 {
