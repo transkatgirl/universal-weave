@@ -159,6 +159,13 @@ enum WeaveTransition {
         content: Vec<u8>,
         prefix_all: bool,
     },
+    #[proptest(weight = 3)]
+    Replace {
+        filter_invalid: bool,
+        seed_a: u32,
+        seed_b: u32,
+        content: Vec<u8>,
+    },
 }
 
 #[allow(clippy::type_complexity)]
@@ -461,6 +468,59 @@ impl StateMachineTest for WeaveWrapper {
                 }
 
                 state.weave.insert_at(at, content, prefix_all, || {
+                    state.counter += 1;
+                    state.counter
+                });
+
+                assert!(
+                    state.active_content.drain(..).eq(state
+                        .weave
+                        .active_content()
+                        .flatten()
+                        .copied())
+                );
+            }
+            WeaveTransition::Replace {
+                filter_invalid,
+                seed_a,
+                seed_b,
+                content,
+            } => {
+                state.active_content.clear();
+                state
+                    .active_content
+                    .extend(state.weave.active_content().flatten().copied());
+
+                let start = (seed_a
+                    .checked_rem(state.active_content.len() as u32 + 2)
+                    .unwrap_or_default()) as usize;
+                let end = (seed_b
+                    .checked_rem(state.active_content.len() as u32 + 2)
+                    .unwrap_or_default()) as usize;
+
+                let range = if filter_invalid && start > end {
+                    end..start
+                } else {
+                    start..end
+                };
+
+                if range.end >= range.start {
+                    state.active_content.splice(
+                        range.start.min(state.active_content.len())
+                            ..range.end.min(state.active_content.len()),
+                        content.iter().copied(),
+                    );
+                } else {
+                    if range.start < state.active_content.len() {
+                        state
+                            .active_content
+                            .splice(range.start..range.start, content.iter().copied());
+                    } else {
+                        state.active_content.extend(content.iter().copied());
+                    }
+                }
+
+                state.weave.replace(range, content, || {
                     state.counter += 1;
                     state.counter
                 });

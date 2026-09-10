@@ -2862,4 +2862,224 @@ where
             }
         }
     }
+    /// Replaces the specified range of the active path with new content without removing the replaced content from the underlying Weave.
+    ///
+    /// If the range extends beyond the active path, its length is clamped to the active path's length.
+    ///
+    /// This function may split up to 2 nodes if necessary to apply the operation.
+    ///
+    /// # Panics
+    ///
+    /// May panic if the underlying [`Weave`] violates any of the wrapper's [requirements](#requirements).
+    ///
+    /// May panic if `generate_id` panics or returns an identifier already in the Weave.
+    pub fn replace<F>(&mut self, range: Range<usize>, contents: T, mut generate_id: F)
+    where
+        F: FnMut() -> K,
+    {
+        if range.is_empty() {
+            self.insert_at(range.start, contents, false, generate_id);
+            return;
+        }
+
+        self.scratchpad.clear();
+        self.weave.get_active_path(&mut self.scratchpad);
+        self.scratchpad.reverse();
+
+        if self.scratchpad.is_empty() {
+            assert!(
+                self.weave.insert(N::new(
+                    generate_id(),
+                    N::From::from_iter(iter::empty()),
+                    N::To::from_iter(iter::empty()),
+                    true,
+                    contents
+                )),
+                "Inserting node failed"
+            );
+
+            return;
+        }
+
+        #[allow(clippy::branches_sharing_code, reason = "Variable scoping")]
+        let (prefix_len, start_split, end) = if range.start == 0 {
+            let mut cursor: usize = 0;
+            let mut prefix_len = 0;
+            let mut end = None;
+
+            for (index, id) in self.scratchpad.iter().enumerate() {
+                let length = self.weave.get_contents(id).unwrap().len();
+                let next = cursor.strict_add(length);
+
+                if cursor == 0 {
+                    prefix_len = index;
+                }
+
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                if cursor == range.end || next > range.end {
+                    end = Some((index, range.end - cursor, *id));
+                    break;
+                }
+
+                cursor = next;
+            }
+
+            if cursor == 0 && end.is_none() {
+                assert!(
+                    self.weave.insert(N::new(
+                        generate_id(),
+                        N::From::from_iter(self.scratchpad.last().copied()),
+                        N::To::from_iter(iter::empty()),
+                        true,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
+                return;
+            }
+
+            (prefix_len, None, end)
+        } else {
+            let mut cursor: usize = 0;
+            let mut prefix_len = 0;
+            let mut start_split = None;
+            let mut end = None;
+
+            for (index, id) in self.scratchpad.iter().enumerate() {
+                let length = self.weave.get_contents(id).unwrap().len();
+                let next = cursor.strict_add(length);
+
+                if prefix_len == 0 && next >= range.start {
+                    prefix_len = index.strict_add(1);
+
+                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                    let at = range.start - cursor;
+
+                    if at != length {
+                        start_split = Some((id, at));
+                    }
+                }
+
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+                if cursor == range.end || next > range.end {
+                    end = Some((index, range.end - cursor, *id));
+                    break;
+                }
+
+                cursor = next;
+            }
+
+            if end.is_none()
+                && (range.start > cursor
+                    || (range.start == cursor && prefix_len == self.scratchpad.len()))
+            {
+                assert!(
+                    self.weave.insert(N::new(
+                        generate_id(),
+                        N::From::from_iter(self.scratchpad.last().copied()),
+                        N::To::from_iter(iter::empty()),
+                        true,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
+                return;
+            }
+
+            (prefix_len, start_split, end)
+        };
+
+        let (end, suffix_index) = if let Some((index, at, left)) = end {
+            let next = index.strict_add(1);
+
+            if at == 0 {
+                (Some(left), next)
+            } else {
+                let right = generate_id();
+
+                assert!(self.weave.split(&left, at, right), "Splitting node failed");
+
+                (Some(right), next)
+            }
+        } else {
+            (None, self.scratchpad.len())
+        };
+
+        if let Some((left, at)) = start_split {
+            assert!(
+                self.weave.split(left, at, generate_id()),
+                "Splitting node failed"
+            );
+        }
+
+        let prefix = &self.scratchpad[..prefix_len];
+
+        if let Some(prefix_tail) = prefix.last().copied() {
+            let suffix = &self.scratchpad[suffix_index..];
+
+            let id = generate_id();
+
+            if let Some(end) = end {
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(iter::once(prefix_tail)),
+                        N::To::from_iter(iter::once(end)),
+                        false,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
+                self.weave.set_active_path(
+                    self.scratchpad[..prefix_len]
+                        .iter()
+                        .copied()
+                        .chain(iter::once(id))
+                        .chain(iter::once(end))
+                        .chain(self.scratchpad[suffix_index..].iter().copied()),
+                );
+            } else {
+                assert!(
+                    self.weave.insert(N::new(
+                        id,
+                        N::From::from_iter(iter::once(prefix_tail)),
+                        N::To::from_iter(suffix.first().copied()),
+                        false,
+                        contents
+                    )),
+                    "Inserting node failed"
+                );
+
+                self.weave.set_active_path(
+                    prefix
+                        .iter()
+                        .copied()
+                        .chain(iter::once(id))
+                        .chain(suffix.iter().copied()),
+                );
+            }
+        } else {
+            let id = generate_id();
+
+            assert!(
+                self.weave.insert(N::new(
+                    id,
+                    N::From::from_iter(iter::empty()),
+                    N::To::from_iter(end),
+                    false,
+                    contents
+                )),
+                "Inserting node failed"
+            );
+
+            self.weave.set_active_path(
+                iter::once(id)
+                    .chain(end)
+                    .chain(self.scratchpad[suffix_index..].iter().copied()),
+            );
+        }
+    }
 }
