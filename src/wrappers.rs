@@ -2882,24 +2882,19 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         self.scratchpad.reverse();
 
-        let insert_node = |weave: &mut W,
-                           id: K,
-                           parent: Option<K>,
-                           child: Option<K>,
-                           active: bool,
-                           contents: T| {
+        let mut insert_tail_node = |weave: &mut W, parent: Option<K>, contents: T| {
             assert!(
                 weave.insert(N::new(
-                    id,
+                    generate_id(),
                     N::From::from_iter(parent),
                     if let Some(parent) = parent
                         && prefix_all
                     {
                         N::To::from_iter(weave.get_children(&parent).unwrap().into_iter().copied())
                     } else {
-                        N::To::from_iter(child)
+                        N::To::from_iter(iter::empty())
                     },
-                    active,
+                    true,
                     contents
                 )),
                 "Inserting node failed"
@@ -2930,14 +2925,7 @@ where
             }
 
             if cursor == 0 && end.is_none() {
-                insert_node(
-                    &mut self.weave,
-                    generate_id(),
-                    self.scratchpad.last().copied(),
-                    None,
-                    true,
-                    contents,
-                );
+                insert_tail_node(&mut self.weave, self.scratchpad.last().copied(), contents);
 
                 return;
             }
@@ -2977,14 +2965,7 @@ where
                 && (range.start > cursor
                     || (range.start == cursor && prefix_len == self.scratchpad.len()))
             {
-                insert_node(
-                    &mut self.weave,
-                    generate_id(),
-                    self.scratchpad.last().copied(),
-                    None,
-                    true,
-                    contents,
-                );
+                insert_tail_node(&mut self.weave, self.scratchpad.last().copied(), contents);
 
                 return;
             }
