@@ -58,7 +58,7 @@ use crate::contract::ValidationError;
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
-/// A [`Node`] in a [`IndependentWeave`] document.
+/// A [`Node`] in an [`IndependentWeave`] document.
 #[must_use]
 pub struct IndependentNode<K, T, S>
 where

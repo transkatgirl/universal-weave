@@ -12,11 +12,11 @@ However, as the feature set grows, they become incredibly difficult to get right
 
 You *really* shouldn't reinvent the wheel if you don't have to.
 
-This library is the culmination of everything I've learned over the past 1 1/2 years of attempting to build a worthy successor to [the original Loom](https://github.com/socketteer/loom). It's highly flexible, empowering users to more easily build branching interfaces for literally anything.
+This library is the culmination of everything I've learned over the past year and a half of attempting to build a worthy successor to [the original Loom](https://github.com/socketteer/loom). It's highly flexible, empowering users to more easily build branching interfaces for literally anything.
 
 Please [consider donating](https://github.com/sponsors/transkatgirl) if you consider this crate useful.
 
-(These primitives are designed specifically for user-facing applications. Crates like [ego-tree](https://crates.io/crates/ego-tree), [petgraph](https://crates.io/crates/petgraph), [daggy](https://crates.io/crates/daggy), etc, are better suited for general-purpose or extreme use cases.)
+(These primitives are designed specifically for user-facing applications. Crates like [ego-tree](https://crates.io/crates/ego-tree), [petgraph](https://crates.io/crates/petgraph), [daggy](https://crates.io/crates/daggy), etc., are better suited for general-purpose or extreme use cases.)
 
 ## Features
 

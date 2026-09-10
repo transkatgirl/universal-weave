@@ -1,6 +1,6 @@
 //! [`Weave`] rendering helpers.
 //!
-//! This library provides 3 different 2D [`Layouter`] implementations with identical behavior:
+//! This module provides three different 2D [`Layouter`] implementations with identical behavior:
 //! - [`DependentLayouter`] - Takes a [`DependentWeave`] as an input.
 //! - [`IndependentLayouter`] - Takes an [`IndependentWeave`] as an input.
 //! - [`TopologicalLayouter`] - Takes any [`Weave`] as an input.
@@ -27,7 +27,7 @@ mod positioner;
 
 /// Minimum gaps in a [`Weave`] layout.
 ///
-/// All values must be finite normal numbers >= 0.
+/// All values must be positive normal numbers or positive zero.
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[must_use]
 pub struct Spacing {
@@ -53,7 +53,7 @@ impl Default for Spacing {
 }
 
 impl Spacing {
-    /// Validates that all spacing values are finite normal numbers >= 0.
+    /// Validates that all spacing values are positive normal numbers or positive zero.
     #[must_use]
     pub const fn validate(&self) -> bool {
         validate_float(self.node)
@@ -261,7 +261,7 @@ where
     }
 }
 
-/// Smooths a polyline produced by this module's [`Layouter`] implementation into a chain of cubic Bézier segments.
+/// Smooths a polyline produced by this module's [`Layouter`] implementations into a chain of cubic Bézier segments.
 ///
 /// This function may produce incorrect results if used to process polylines from other [`Layouter`] implementations.
 #[allow(

@@ -9,7 +9,7 @@
 //!
 //! Operations on the built-in [`Weave`] implementations always preserve node ordering through the use of [`IndexSet`](indexmap::IndexSet), and (non-tail) insertion and removal operations on ordered sets can have a worst-case time complexity of O(n).
 //!
-//! The [`wrappers`] module contains a few composable wrapper types (such as [`LoggedWeave`](wrappers::LoggedWeave) and [`PatchablePathWeave`](wrappers::PatchablePathWeave)) which can be used to add additional functionality to an underlying [`Weave`].
+//! The [`wrappers`] module contains a few composable wrapper types (such as [`LoggedWeave`](wrappers::LoggedWeave) and [`PatchablePathWeave`](wrappers::PatchablePathWeave)) which can be used to add functionality to an underlying [`Weave`].
 //!
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 
@@ -181,7 +181,7 @@ pub trait DiscreteContents: Sized {
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
     ///
-    /// If merging the two items fails, the original contents are returned in the order they were specified in.
+    /// If merging the two items fails, the original contents are returned in the order they were specified.
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 

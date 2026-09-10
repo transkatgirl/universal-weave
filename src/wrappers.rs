@@ -1,4 +1,4 @@
-//! Wrappers which add additional functionality to [`Weave`] implementations.
+//! Wrappers which add functionality to [`Weave`] implementations.
 
 #![allow(missing_docs, reason = "False positives")]
 
@@ -1366,7 +1366,7 @@ where
 ///
 /// # Limitations
 ///
-/// It is possible for [`Weave::insert()`], [`Weave::remove()`], and [`Weave::remove_tracked()`] to create duplicate siblings under circumstances specified in the function's documentation.
+/// It is possible for [`Weave::insert()`], [`Weave::remove()`], and [`Weave::remove_tracked()`] to create duplicate siblings under circumstances specified in each function's documentation.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct DeduplicatedWeave<W, K, N, T, S>

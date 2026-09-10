@@ -41,7 +41,7 @@ use crate::{DiscreteWeave, Node};
 ///
 /// # Conflict resolution
 ///
-/// Conflicting [`SemiIndependentWeave::get_contents_mut`] updates and [`MetadataWeave::metadata_mut`] updates are currently handled via a Last Write Wins strategy. Additional conflict resolution strategies may be made available in the future.
+/// Conflicting [`SemiIndependentWeave::get_contents_mut`] updates and [`MetadataWeave::metadata_mut`] updates are currently handled via a last-write-wins strategy. Additional conflict resolution strategies may be made available in the future.
 ///
 /// # Synchronization
 ///
@@ -376,7 +376,7 @@ where
     pub fn into_doc(self) -> LoroDoc {
         self.doc
     }
-    /// Update the weave's state by modifying the inner [`LoroDoc`].
+    /// Updates the weave's state by modifying the inner [`LoroDoc`].
     ///
     /// Attempting to modify the inner [`LoroDoc`] outside of this function using shallow cloning (such as [`LoroDoc::clone()`]) *will* lead to unexpected behavior, such as panics and/or data loss. However, since this function is fairly slow, it is highly recommended that you batch changes to the [`LoroDoc`] whenever possible.
     ///
@@ -886,7 +886,7 @@ where
         + Deserialize<M, Strategy<Pool, rancor::Error>>,
     S: BuildHasher + Default + Clone,
 {
-    /// Validates that the state of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized enough for [`Weave`] operations to function properly.
+    /// Validates that the states of the inner [`LoroDoc`] and [`DependentWeave`] are synchronized enough for [`Weave`] operations to function properly.
     pub fn validate(&self) -> bool {
         let mut buffer = AlignedVec::with_capacity(self.buffer.capacity());
 

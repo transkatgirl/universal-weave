@@ -48,7 +48,7 @@ contracts = "0.6.10"
 scratchpads = "0.1.0"
 hashbrown = { version = "0.17.1", features = [
 	"allocator-api2",
-	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: Function contracts (only enabled in debug mode) and Archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
+	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: function contracts (only enabled in debug mode) and archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
 	"default-hasher",
 	"inline-more",
 ], default-features = false }
@@ -68,7 +68,7 @@ serde = { version = "1.0.229", features = [
 	"derive",
 ], default-features = false, optional = true }
 loro = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046
-loro-internal = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046; No loro-internal functions are called directly
+loro-internal = { version = "=1.13.6", optional = true } # Workaround for https://github.com/loro-dev/loro/issues/1046; no loro-internal functions are called directly
 
 
 [dev-dependencies]
