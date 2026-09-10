@@ -2685,7 +2685,7 @@ where
     ///
     /// If the index extends past the end of the active path, it is clamped to the active path's length.
     ///
-    /// If the index is zero, an empty root node (`T::default()`) may be inserted at the start of the active path.
+    /// If the index is zero, an empty root node (`T::default()`) may be inserted at the start of the active path. In this case, `prefix_all` has no effect.
     ///
     /// This function may split up to 1 node and may insert up to 1 additional node if necessary to apply the operation.
     ///
