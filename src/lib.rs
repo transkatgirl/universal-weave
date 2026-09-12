@@ -729,7 +729,7 @@ where
     ///
     /// Panics if the [`ImmutableWeave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
     ///
-    /// May panic if `map` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
+    /// May panic if `sizes` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
     fn layout(&mut self, weave: &W, sizes: impl FnMut(&K) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
     fn size(&self) -> V;
