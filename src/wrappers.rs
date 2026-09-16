@@ -452,10 +452,10 @@ impl WeaveActionCount {
 }
 
 /// A [`Weave`] which can have [`WeaveAction`]s applied to it.
-pub trait ActionableWeave<K, N, T, M, S>
+pub trait ActionableWeave<K, N, T, M, S>: Weave<K, N, T>
 where
     K: Hash + Copy + Eq + Ord,
-    N: Node<K, T>,
+    N: BuildableNode<K, T>,
     S: BuildHasher + Default + Clone,
 {
     /// Applies a [`WeaveAction`] to a [`Weave`].
@@ -720,6 +720,21 @@ where
                 "Failed to apply Weave action"
             ),
         }
+    }
+}
+
+impl<W, K, N, T, M, S> ActionableWeave<K, N, T, M, S> for LoggedWeave<W, K, N, T, M>
+where
+    W: ActionableWeave<K, N, T, M, S>,
+    K: Hash + Copy + Eq + Ord,
+    N: BuildableNode<K, T> + Clone,
+    T: IndependentContents + DiscreteContents + Clone,
+    M: Clone,
+    S: BuildHasher + Default + Clone,
+{
+    fn apply(&mut self, action: WeaveAction<K, N, T, M>) {
+        self.weave.apply(action.clone());
+        self.actions.push_back(action);
     }
 }
 
