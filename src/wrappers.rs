@@ -98,7 +98,7 @@ where
             weave,
         }
     }
-    /// Creates a new [`LoggedWeave`] with at least the specified capacity from a [`Weave`].
+    /// Creates a new [`LoggedWeave`] with at least the specified action capacity from a [`Weave`].
     #[inline]
     pub fn with_capacity(weave: W, capacity: usize) -> Self {
         Self {
