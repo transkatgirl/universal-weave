@@ -2867,7 +2867,7 @@ where
     ///
     /// If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// If the range is empty, this function behaves identically to [`Self::insert_at()`].
+    /// If `range` is empty, this function behaves identically to [`Self::insert_at()`].
     ///
     /// This function may split up to 2 nodes and may insert up to 1 additional node if necessary to apply the operation.
     ///
