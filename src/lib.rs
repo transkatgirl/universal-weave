@@ -516,7 +516,6 @@ where
     /// # Panics
     ///
     /// May panic if `callback` panics.
-    #[must_use]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O>;
 }
 

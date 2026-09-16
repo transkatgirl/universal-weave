@@ -2440,7 +2440,7 @@ where
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// If the range starts at zero, an empty root node (`T::default()`) may be inserted at the start of the active path.
+    /// If the range covers the entire active path, every node is deactivated. Otherwise, if the range starts at zero, an empty root node (`T::default()`) will be inserted at the start of the active path if one does not already exist.
     ///
     /// This function may split up to 2 nodes, may move up to 1 node, and may insert up to 1 node if necessary to apply the operation.
     ///
@@ -2449,6 +2449,7 @@ where
     /// May panic if the underlying [`Weave`] violates any of the wrapper's [requirements](#requirements).
     ///
     /// May panic if `generate_id` panics or returns an identifier already in the Weave.
+    #[allow(clippy::cognitive_complexity, reason = "Barely over threshold")]
     pub fn split_out<F>(&mut self, range: Range<usize>, mut generate_id: F)
     where
         F: FnMut() -> K,
@@ -2466,6 +2467,7 @@ where
             let mut cursor: usize = 0;
             let mut prefix_len = 0;
             let mut end = None;
+            let mut remaining = false;
 
             for (index, id) in self.scratchpad.iter().enumerate() {
                 let length = self.weave.get_contents(id).unwrap().len();
@@ -2476,15 +2478,23 @@ where
                 }
 
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                if cursor == range.end || next > range.end {
+                if end.is_none() && (cursor == range.end || next > range.end) {
                     end = Some((index, range.end - cursor, *id));
+                }
+
+                if next > range.end {
+                    remaining = true;
                     break;
                 }
 
                 cursor = next;
             }
 
-            if cursor == 0 && end.is_none() {
+            if !remaining {
+                if cursor != 0 {
+                    self.weave.set_active_path(iter::empty());
+                }
+
                 return;
             }
 
@@ -2676,7 +2686,7 @@ where
     ///
     /// If the index extends past the end of the active path, it is clamped to the active path's length.
     ///
-    /// If the index is zero, an empty root node (`T::default()`) may be inserted at the start of the active path. In this case, `prefix_all` has no effect.
+    /// If the index is zero and the active path is non-empty, an empty root node (`T::default()`) will be inserted at the start of the active path if one does not already exist. When this new root node is inserted, `prefix_all` has no effect.
     ///
     /// This function may split up to 1 node and may insert up to 1 additional node if necessary to apply the operation.
     ///
@@ -2856,6 +2866,8 @@ where
     /// If `prefix_all` is true, the inserted content prefixes all continuations of the last replaced node, not just the active continuation. This may result in quadratic connection growth when repeatedly replacing the same range.
     ///
     /// If the range extends beyond the active path, its length is clamped to the active path's length.
+    ///
+    /// If the range is empty, this function behaves identically to [`Self::insert_at()`].
     ///
     /// This function may split up to 2 nodes and may insert up to 1 additional node if necessary to apply the operation.
     ///
