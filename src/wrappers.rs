@@ -728,7 +728,7 @@ where
     W: ActionableWeave<K, N, T, M, S>,
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T> + Clone,
-    T: IndependentContents + DiscreteContents + Clone,
+    T: Clone,
     M: Clone,
     S: BuildHasher + Default + Clone,
 {
