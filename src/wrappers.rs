@@ -2455,7 +2455,7 @@ where
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
     ///
-    /// If the range covers the entire active path, every node is deactivated. Otherwise, if the range starts at zero, an empty root node (`T::default()`) will be inserted at the start of the active path if one does not already exist.
+    /// If the range covers the entire active path, all contents are deactivated. Otherwise, if the range starts at zero, an empty root node (`T::default()`) will be inserted at the start of the active path if one does not already exist.
     ///
     /// This function may split up to 2 nodes, may move up to 1 node, and may insert up to 1 node if necessary to apply the operation.
     ///
