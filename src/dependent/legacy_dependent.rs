@@ -40,6 +40,7 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
         Self {
             nodes: value.nodes,
@@ -57,6 +58,7 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn from(value: NewDependentWeave<K, T, M, S>) -> Self {
         Self {
             nodes: value.nodes,
