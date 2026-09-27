@@ -523,6 +523,14 @@ impl StateMachineTest for WeaveWrapper {
                 .get_ordered_identifiers_from(&target, &mut state.ordered_node_identifiers_from);
             state.weave.get_active_path(&mut state.active_path);
             state.weave.get_path_from(&target, &mut state.path_from);
+            if let Some(head) = state.active_path.first() {
+                state.weave.get_path_from(head, &mut state.path_from);
+                assert_eq!(state.active_path, state.path_from);
+            }
+            if let Some(item) = state.active_path.get(1) {
+                state.weave.get_path_from(item, &mut state.path_from);
+                assert_eq!(state.active_path[1..], state.path_from);
+            }
         }
         state
     }
