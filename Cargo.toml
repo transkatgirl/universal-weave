@@ -1,6 +1,6 @@
 [package]
 name = "universal-weave"
-version = "0.9.0"
+version = "0.9.1"
 authors = [
 	"transkatgirl",
 ]
@@ -53,10 +53,10 @@ hashbrown = { version = "0.17.1", features = [
 	"inline-more",
 ], default-features = false }
 indexmap = { version = "2.14.2", default-features = false }
-glam = { version = "0.33.7", features = [
+glam = { version = "0.33.11", features = [
 	"libm",
 ], default-features = false, optional = true }
-tinyvec = { version = "1.13.2", optional = true }
+tinyvec = { version = "1.13.3", optional = true }
 rkyv = { version = "0.8.18", features = [
 	"alloc",
 	"bytecheck",
