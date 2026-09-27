@@ -2451,6 +2451,12 @@ where
         self.weave.get_active_path(&mut self.scratchpad);
         &mut self.scratchpad
     }
+    /// Convenience function which returns the output of [`Weave::get_path_from`].
+    pub fn path_vec(&mut self, id: &K) -> &mut Vec<K> {
+        self.scratchpad.clear();
+        self.weave.get_path_from(id, &mut self.scratchpad);
+        &mut self.scratchpad
+    }
     /// Convenience function which returns an iterator over the content corresponding to the active path.
     #[allow(
         clippy::missing_panics_doc,
@@ -2459,6 +2465,20 @@ where
     pub fn active_content(&mut self) -> impl Iterator<Item = &T> {
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
+
+        self.scratchpad
+            .drain(..)
+            .rev()
+            .map(|id| self.weave.get_contents(&id).unwrap())
+    }
+    /// Convenience function which returns an iterator over the content corresponding to `id`'s path.
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Should never panic when underlying Weave is correctly implemented"
+    )]
+    pub fn path_content(&mut self, id: &K) -> impl Iterator<Item = &T> {
+        self.scratchpad.clear();
+        self.weave.get_path_from(id, &mut self.scratchpad);
 
         self.scratchpad
             .drain(..)
