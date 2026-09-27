@@ -2437,6 +2437,12 @@ where
     N::From: FromIterator<K>,
     N::To: FromIterator<K>,
 {
+    /// Convenience function which returns the output of [`Weave::get_active_path`].
+    pub fn active_path_vec(&mut self) -> &mut Vec<K> {
+        self.scratchpad.clear();
+        self.weave.get_active_path(&mut self.scratchpad);
+        &mut self.scratchpad
+    }
     /// Convenience function which returns an iterator over the content corresponding to the active path.
     #[allow(
         clippy::missing_panics_doc,
