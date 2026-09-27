@@ -2438,6 +2438,7 @@ where
     N::To: FromIterator<K>,
 {
     /// Convenience function which provides an empty `&mut Vec<K>` for path operations.
+    #[inline]
     pub fn inner_scratchpad_mut<F, O>(&mut self, callback: F) -> O
     where
         F: FnOnce(&mut W, &mut Vec<K>) -> O,
@@ -2446,12 +2447,14 @@ where
         callback(&mut self.weave, &mut self.scratchpad)
     }
     /// Convenience function which returns the output of [`Weave::get_active_path`].
+    #[inline]
     pub fn active_path_vec(&mut self) -> &mut Vec<K> {
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
         &mut self.scratchpad
     }
     /// Convenience function which returns the output of [`Weave::get_path_from`].
+    #[inline]
     pub fn path_vec(&mut self, id: &K) -> &mut Vec<K> {
         self.scratchpad.clear();
         self.weave.get_path_from(id, &mut self.scratchpad);
