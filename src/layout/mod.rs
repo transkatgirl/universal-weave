@@ -54,6 +54,7 @@ impl Default for Spacing {
 impl Spacing {
     /// Validates that all spacing values are positive normal numbers or positive zero.
     #[must_use]
+    #[inline]
     pub const fn validate(&self) -> bool {
         validate_float(self.node)
             && validate_float(self.layer)

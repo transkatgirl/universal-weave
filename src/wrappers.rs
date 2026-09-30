@@ -350,6 +350,7 @@ impl WeaveActionCount {
     }
     /// Returns the sum of all action counts.
     #[must_use]
+    #[inline]
     pub const fn total_count(&self) -> usize {
         self.insert
             .saturating_add(self.set_active)
