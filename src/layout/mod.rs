@@ -67,7 +67,7 @@ impl Spacing {
 /// A 2D [`Layouter`] which takes a [`DependentWeave`] as input.
 ///
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct DependentLayouter<K, S>
 where
@@ -78,6 +78,17 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K, S>,
+}
+
+impl<K, S> Default for DependentLayouter<K, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(Spacing::default())
+    }
 }
 
 impl<K, S> DependentLayouter<K, S>
@@ -127,7 +138,7 @@ where
 /// A 2D [`Layouter`] which takes an [`IndependentWeave`] as input.
 ///
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
-#[derive(Default, Debug, Clone)]
+#[derive(Debug, Clone)]
 #[must_use]
 pub struct IndependentLayouter<K, S>
 where
@@ -139,6 +150,17 @@ where
 
     layout: Layout2D<K, S>,
     topological: Vec<K>,
+}
+
+impl<K, S> Default for IndependentLayouter<K, S>
+where
+    K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
+{
+    #[inline]
+    fn default() -> Self {
+        Self::new(Spacing::default())
+    }
 }
 
 impl<K, S> IndependentLayouter<K, S>
