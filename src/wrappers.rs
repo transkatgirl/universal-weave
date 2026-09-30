@@ -1501,6 +1501,7 @@ where
     for<'a> &'a N::To: IntoIterator<Item = &'a K>,
 {
     /// Creates a [`DeduplicatedWeave`] from a [`Weave`].
+    #[inline]
     pub fn new(weave: W) -> Self {
         Self {
             scratchpad: HashSet::default(),

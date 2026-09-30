@@ -298,6 +298,7 @@ where
     S: BuildHasher + Default + Clone,
     M: Default,
 {
+    #[inline]
     fn default() -> Self {
         Self::new(M::default())
     }
@@ -416,6 +417,7 @@ where
         ensures(ret.nodes.is_empty()),
         ensures(ret.validate())
     ))]
+    #[inline]
     pub fn new(metadata: M) -> Self {
         Self {
             nodes: HashMap::with_hasher(S::default()),
@@ -433,6 +435,7 @@ where
         ensures(ret.nodes.is_empty()),
         ensures(ret.validate())
     ))]
+    #[inline]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         let nodes = HashMap::with_capacity_and_hasher(capacity, S::default());
         let capacity = nodes.capacity();
@@ -458,6 +461,7 @@ where
             .min(self.bookmarked.capacity())
     }
     /// Reserves capacity for at least `additional` more nodes.
+    #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.nodes.reserve(additional);
         self.roots
@@ -468,6 +472,7 @@ where
             .reserve(self.nodes.capacity().saturating_sub(self.bookmarked.len()));
     }
     /// Shrinks the capacity of the weave as much as possible.
+    #[inline]
     pub fn shrink_to_fit(&mut self) {
         self.nodes.shrink_to_fit();
         self.roots.shrink_to_fit();

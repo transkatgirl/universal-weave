@@ -41,6 +41,7 @@ pub struct Spacing {
 }
 
 impl Default for Spacing {
+    #[inline]
     fn default() -> Self {
         Self {
             node: 16.0,
@@ -217,6 +218,7 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     fn default() -> Self {
         Self::new(Spacing::default())
     }
