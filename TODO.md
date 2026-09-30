@@ -2,18 +2,14 @@
 
 ## Correctness
 
-- [ ] Improve Layouter handling of floating-point rounding error
+- [ ] **Improve Layouter handling of floating-point rounding error**
+- [ ] **Turn function contracts into readable, executable documentation**
+	- [ ] DependentWeave
+	- [ ] IndependentWeave
 - [ ] Improve test coverage
     - [ ] DependentWeave unit tests
     - [ ] IndependentWeave unit tests
     - [ ] DeduplicatedWeave unit tests
-- [ ] **Turn function contracts into readable & executable documentation**
-	- [ ] DependentWeave
-	- [ ] IndependentWeave
-- [ ] Improve documentation
-    - [ ] Trait documentation improvements
-    - [ ] DependentWeave-specific documentation
-    - [ ] IndependentWeave-specific documentation
 - [ ] Setup fuzzing w/ `cargo-fuzz`
 	- [ ] DependentWeave (test validation of random weave + random weave action on success)
     - [ ] IndependentWeave (test validation of random weave + random weave action on success)
@@ -22,6 +18,12 @@
 
 ### API & Documentation Correctness
 
+- [ ] **Improve overall crate documentation** (aim to have similar doc quality to other Rust libraries)
+    - [ ] Trait documentation improvements
+    - [ ] DependentWeave-specific documentation
+    - [ ] IndependentWeave-specific documentation
+    - [ ] Layouter-specific documentation
+    - [ ] Wrapper-specific documentation
 - [ ] Ensure crate is compliant with https://rust-lang.github.io/api-guidelines/checklist.html
     - [ ] Naming
     - [ ] Interoperability
