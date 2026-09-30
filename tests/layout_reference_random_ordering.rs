@@ -426,6 +426,13 @@ where
     fn size(&self) -> Vec2 {
         self.size
     }
+    fn center(&self, id: &K) -> Option<Vec2> {
+        self.nodes.iter().find_map(
+            |(node, center, _)| {
+                if node == id { Some(*center) } else { None }
+            },
+        )
+    }
     fn view(
         &mut self,
         min: Vec2,
@@ -962,6 +969,13 @@ impl StateMachineTest for WeaveWrapper {
             Vec2::splat(1.0e30),
         );
 
+        compare_layouter_center::<
+            IndependentWeave<u32, WeaveContent, u32, RandomState>,
+            u32,
+            IndependentNode<u32, WeaveContent, RandomState>,
+            WeaveContent,
+        >(&mut state.layouter, &mut state.reference_layouter, &target);
+
         let subview_min = Vec2 {
             x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
                 * 2.0
@@ -1001,6 +1015,37 @@ impl StateMachineTest for WeaveWrapper {
         _state: &Self::SystemUnderTest,
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
+    }
+}
+
+fn compare_layouter_center<W, K, N, T>(
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    id: &K,
+) where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord + Debug,
+    N: BuildableNode<K, T>,
+{
+    let mut center: Option<Vec2> = None;
+
+    left.view(Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+        if let LayoutItem::Node {
+            id: node_id,
+            center: node_center,
+            ..
+        } = item
+            && id == &node_id
+        {
+            center = Some(node_center);
+        }
+    });
+
+    assert_eq!(left.center(id), center);
+    if let Some(center) = center {
+        assert!((center - right.center(id).unwrap()).abs().max_element() <= TOLERANCE);
+    } else {
+        assert!(right.center(id).is_none());
     }
 }
 

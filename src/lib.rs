@@ -593,7 +593,11 @@ where
     /// May panic if `sizes` panics or if the underlying [`Weave`] is improperly implemented.
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
+    #[must_use]
     fn size(&self) -> V;
+    /// Returns the center position of the node corresponding to the specified identifier.
+    #[must_use]
+    fn center(&self, id: &K) -> Option<V>;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
     fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
@@ -731,7 +735,11 @@ where
     /// May panic if `sizes` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
     fn layout(&mut self, weave: &W, sizes: impl FnMut(&K) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
+    #[must_use]
     fn size(&self) -> V;
+    /// Returns the center position of the node corresponding to the specified identifier.
+    #[must_use]
+    fn center(&self, id: &K) -> Option<V>;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
     fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }

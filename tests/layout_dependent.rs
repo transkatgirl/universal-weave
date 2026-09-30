@@ -14,8 +14,8 @@ use scratchpads::Scratchpad;
 use tinyvec::ArrayVec;
 use universal_weave::{
     BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents, DiscreteWeave,
-    IndependentContents, Layouter, MetadataWeave, SemiIndependentWeave, SortableBookmarkableWeave,
-    SortableWeave, Weave,
+    IndependentContents, LayoutItem, Layouter, MetadataWeave, SemiIndependentWeave,
+    SortableBookmarkableWeave, SortableWeave, Weave,
     dependent::{DependentNode, DependentWeave},
     independent::IndependentWeave,
     layout::{DependentLayouter, Spacing, TopologicalLayouter},
@@ -144,7 +144,7 @@ enum WeaveTransition {
 struct WeaveWrapper {
     weave: DependentWeave<u32, WeaveContent, u32, RandomState>,
     sizes: HashMap<u32, Vec2>,
-    layouter: DependentLayouter<u32>,
+    layouter: DependentLayouter<u32, RandomState>,
     reference_layouter: TopologicalLayouter<u32, RandomState>,
     counter: u32,
     scratchpad: Scratchpad,
@@ -413,6 +413,13 @@ impl StateMachineTest for WeaveWrapper {
             Vec2::splat(1.0e30),
         );
 
+        compare_layouter_center::<
+            DependentWeave<u32, WeaveContent, u32, RandomState>,
+            u32,
+            DependentNode<u32, WeaveContent, RandomState>,
+            WeaveContent,
+        >(&mut state.layouter, &mut state.reference_layouter, &target);
+
         let subview_min = Vec2 {
             x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
                 * 2.0
@@ -453,6 +460,33 @@ impl StateMachineTest for WeaveWrapper {
         _ref_state: &<Self::Reference as ReferenceStateMachine>::State,
     ) {
     }
+}
+
+fn compare_layouter_center<W, K, N, T>(
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    id: &K,
+) where
+    W: Weave<K, N, T>,
+    K: Hash + Copy + Eq + Ord + Debug,
+    N: BuildableNode<K, T>,
+{
+    let mut center: Option<Vec2> = None;
+
+    left.view(Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+        if let LayoutItem::Node {
+            id: node_id,
+            center: node_center,
+            ..
+        } = item
+            && id == &node_id
+        {
+            center = Some(node_center);
+        }
+    });
+
+    assert_eq!(left.center(id), center);
+    assert_eq!(right.center(id), center);
 }
 
 fn compare_layouter_views<W, K, N, T>(

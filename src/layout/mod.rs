@@ -7,7 +7,6 @@
 
 use core::{
     hash::{BuildHasher, Hash},
-    marker::PhantomData,
     num::FpCategory,
 };
 
@@ -68,19 +67,21 @@ impl Spacing {
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
 #[derive(Default, Debug, Clone)]
 #[must_use]
-pub struct DependentLayouter<K>
+pub struct DependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K>,
+    layout: Layout2D<K, S>,
 }
 
-impl<K> DependentLayouter<K>
+impl<K, S> DependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     /// Creates a new [`DependentLayouter`] with the specified spacing.
     pub fn new(spacing: Spacing) -> Self {
@@ -93,7 +94,7 @@ where
 
 impl<K, T, M, S>
     Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2, ArrayVec<[Vec2; 6]>>
-    for DependentLayouter<K>
+    for DependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     S: BuildHasher + Default + Clone + 'static,
@@ -103,6 +104,9 @@ where
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
+    }
+    fn center(&self, id: &K) -> Option<Vec2> {
+        self.layout.center(id)
     }
     fn view(
         &mut self,
@@ -119,20 +123,22 @@ where
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
 #[derive(Default, Debug, Clone)]
 #[must_use]
-pub struct IndependentLayouter<K>
+pub struct IndependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K>,
+    layout: Layout2D<K, S>,
     topological: Vec<K>,
 }
 
-impl<K> IndependentLayouter<K>
+impl<K, S> IndependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     /// Creates a new [`IndependentLayouter`] with the specified spacing.
     pub fn new(spacing: Spacing) -> Self {
@@ -152,7 +158,7 @@ impl<K, T, M, S>
         T,
         Vec2,
         ArrayVec<[Vec2; 6]>,
-    > for IndependentLayouter<K>
+    > for IndependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     T: IndependentContents,
@@ -166,6 +172,9 @@ where
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
+    }
+    fn center(&self, id: &K) -> Option<Vec2> {
+        self.layout.center(id)
     }
     fn view(
         &mut self,
@@ -190,10 +199,9 @@ where
     /// The [`Spacing`] used to arrange contents.
     pub spacing: Spacing,
 
-    layout: Layout2D<K>,
+    layout: Layout2D<K, S>,
     topological: Vec<K>,
     scratchpad: Scratchpad,
-    _hasher: PhantomData<S>,
 }
 
 impl<K, S> Default for TopologicalLayouter<K, S>
@@ -218,7 +226,6 @@ where
             layout: Layout2D::default(),
             topological: Vec::new(),
             scratchpad: Scratchpad::new(),
-            _hasher: PhantomData,
         }
     }
 }
@@ -240,7 +247,7 @@ where
             "Malformed topological order"
         );
 
-        self.layout.layout_topological::<W, N, T, S, _>(
+        self.layout.layout_topological::<W, N, T, _>(
             weave,
             sizes,
             &self.spacing,
@@ -250,6 +257,9 @@ where
     }
     fn size(&self) -> Vec2 {
         self.layout.size()
+    }
+    fn center(&self, id: &K) -> Option<Vec2> {
+        self.layout.center(id)
     }
     fn view(
         &mut self,

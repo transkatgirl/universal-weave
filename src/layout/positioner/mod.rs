@@ -19,6 +19,7 @@ use core::{
 
 use alloc::vec::Vec;
 use glam::Vec2;
+use hashbrown::HashMap;
 use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadVec};
 use tinyvec::ArrayVec;
 
@@ -38,9 +39,10 @@ const VIEW_BLOCK: usize = 1 << VIEW_BLOCK_SHIFT;
 
 #[derive(Debug, Clone)]
 #[must_use]
-pub struct Layout2D<K>
+pub struct Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     keys: Vec<K>,
     sizes: Vec<Vec2>,
@@ -61,11 +63,13 @@ where
     polyline_reach: Vec<(f32, f32)>,
     polyline_block_bounds: Vec<(Vec2, Vec2)>,
     reach_prefix: Vec<f32>,
+    positions: HashMap<K, u32, S>,
 }
 
-impl<K> Default for Layout2D<K>
+impl<K, S> Default for Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     fn default() -> Self {
         Self {
@@ -87,13 +91,15 @@ where
             polyline_reach: Vec::new(),
             polyline_block_bounds: Vec::new(),
             reach_prefix: Vec::new(),
+            positions: HashMap::with_hasher(S::default()),
         }
     }
 }
 
-impl<K> Layout2D<K>
+impl<K, S> Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     fn clear(&mut self, reserved_nodes: usize) {
         self.keys.clear();
@@ -117,6 +123,8 @@ where
         self.polyline_reach.clear();
         self.polyline_block_bounds.clear();
         self.reach_prefix.clear();
+        self.positions.clear();
+        self.positions.reserve(reserved_nodes);
     }
     fn push_real(
         &mut self,
@@ -183,18 +191,17 @@ where
     }
 }
 
-impl<K> Layout2D<K>
+impl<K, S> Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
-    pub fn layout_dependent<T, M, S>(
+    pub fn layout_dependent<T, M>(
         &mut self,
         weave: &mut DependentWeave<K, T, M, S>,
         mut sizes: impl FnMut(&K) -> Vec2,
         spacing: &Spacing,
-    ) where
-        S: BuildHasher + Default + Clone,
-    {
+    ) {
         assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
         self.clear(weave.nodes.len());
@@ -232,8 +239,9 @@ where
         };
 
         self.assign_dag_coordinates_inner::<false>(&guard, &structure, spacing);
+        self.positions.extend(self.keys.iter().copied().zip(0..));
     }
-    pub fn layout_independent<T, M, S>(
+    pub fn layout_independent<T, M>(
         &mut self,
         weave: &mut IndependentWeave<K, T, M, S>,
         mut sizes: impl FnMut(&K) -> Vec2,
@@ -241,7 +249,6 @@ where
         topological: &mut Vec<K>,
     ) where
         T: IndependentContents,
-        S: BuildHasher + Default + Clone,
     {
         assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
 
@@ -257,12 +264,11 @@ where
             let mut bottom: ScratchpadVec<'_, u32> = guard.vec();
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(edge_total.strict_mul(4));
-            let mut indices = guard.map_with_capacity(weave.nodes.len(), S::default());
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
                 parents.extend(weave.nodes[&id].from.iter().map(|id| {
-                    let index = indices[id];
+                    let index = self.positions[id];
                     (index, top[index as usize] & RANK_MASK)
                 }));
 
@@ -273,7 +279,7 @@ where
                     .map_or_default(|r| r + 1);
 
                 let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
-                indices.insert(id, index);
+                self.positions.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
                     let next_from_rank = from_rank + 1;
@@ -293,7 +299,7 @@ where
 
             debug_assert_eq!(
                 weave.nodes.len(),
-                indices.len(),
+                self.positions.len(),
                 "Malformed topological order"
             );
 
@@ -302,7 +308,7 @@ where
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
     }
-    pub fn layout_topological<W, N, T, S, F>(
+    pub fn layout_topological<W, N, T, F>(
         &mut self,
         weave: &W,
         mut sizes: F,
@@ -313,7 +319,6 @@ where
         W: Weave<K, N, T>,
         K: Hash + Copy + Eq + Ord + 'static,
         N: BuildableNode<K, T>,
-        S: BuildHasher + Default + Clone,
         F: FnMut(&K) -> Vec2,
         for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     {
@@ -329,12 +334,11 @@ where
             let mut bottom: ScratchpadVec<'_, u32> = guard.vec();
             let mut edges: ScratchpadVec<'_, u32> =
                 guard.vec_with_capacity(weave.len().strict_mul(4));
-            let mut indices = guard.map_with_capacity(weave.len(), S::default());
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
                 parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|id| {
-                    let index = indices[id];
+                    let index = self.positions[id];
                     (index, top[index as usize] & RANK_MASK)
                 }));
 
@@ -345,7 +349,7 @@ where
                     .map_or_default(|r| r + 1);
 
                 let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
-                indices.insert(id, index);
+                self.positions.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
                     let next_from_rank = from_rank + 1;
@@ -363,7 +367,11 @@ where
 
             assert!(top.len() < u32::MAX as usize, "Too many vertices");
 
-            assert_eq!(weave.len(), indices.len(), "Malformed topological order");
+            assert_eq!(
+                weave.len(),
+                self.positions.len(),
+                "Malformed topological order"
+            );
 
             self.prepare_structure(&guard, top, bottom, edges)
         };
@@ -412,9 +420,10 @@ struct PassScratch<'a, 'g> {
     stack: &'a mut ScratchpadVec<'g, (u32, u32, u32)>,
 }
 
-impl<K> Layout2D<K>
+impl<K, S> Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     fn prepare_structure<'g>(
         &mut self,
@@ -1052,16 +1061,20 @@ where
             self.sizes.copy_from_slice(&permuted_sizes);
         }
 
+        root.clear();
+
+        let mut position_of = root;
+        position_of.resize(count, 0);
+
+        for (position, vertex) in structure.real_flat.iter().copied().enumerate() {
+            position_of[vertex as usize] = position as u32;
+        }
+
+        for index in self.positions.values_mut() {
+            *index = position_of[*index as usize];
+        }
+
         if !structure.down_flat.is_empty() {
-            root.clear();
-
-            let mut position_of = root;
-            position_of.resize(count, 0);
-
-            for (position, vertex) in structure.real_flat.iter().copied().enumerate() {
-                position_of[vertex as usize] = position as u32;
-            }
-
             let segment_count = structure.top.len() - self.keys.len();
             let edge_count = structure.down_flat.len() - segment_count;
 
@@ -1575,13 +1588,29 @@ where
     }
 }
 
-impl<K> Layout2D<K>
+impl<K, S> Layout2D<K, S>
 where
     K: Hash + Copy + Eq + Ord,
+    S: BuildHasher + Default + Clone,
 {
     #[must_use]
     pub const fn size(&self) -> Vec2 {
         self.size
+    }
+    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
+    #[must_use]
+    pub fn center(&self, id: &K) -> Option<Vec2> {
+        let index = self.positions.get(id)?;
+
+        let rank = self.real_offsets[1..].partition_point(|end| end <= index);
+        let band_start = rank
+            .checked_sub(1)
+            .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap);
+
+        Some(Vec2::new(
+            self.x_coordinates[*index as usize],
+            f32::midpoint(band_start, self.layer_ends[rank]),
+        ))
     }
     #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
     pub fn view(
