@@ -1593,6 +1593,7 @@ where
     K: Hash + Copy + Eq + Ord,
     S: BuildHasher + Default + Clone,
 {
+    #[inline]
     #[must_use]
     pub const fn size(&self) -> Vec2 {
         self.size

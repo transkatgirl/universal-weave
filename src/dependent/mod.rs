@@ -951,6 +951,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
+    #[inline]
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.roots.sort_by(cmp);
     }
@@ -996,6 +997,7 @@ where
         ensures(old(self.bookmarked.clone()) == self.bookmarked),
         invariant(self.validate())
     ))]
+    #[inline]
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering) {
         self.bookmarked.sort_by(cmp);
     }

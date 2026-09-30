@@ -99,15 +99,19 @@ where
     K: Hash + Copy + Eq + Ord + 'static,
     S: BuildHasher + Default + Clone + 'static,
 {
+    #[inline]
     fn layout(&mut self, weave: &mut DependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
         self.layout.layout_dependent(weave, sizes, &self.spacing);
     }
+    #[inline]
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
+    #[inline]
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
+    #[inline]
     fn view(
         &mut self,
         min: Vec2,
@@ -170,12 +174,15 @@ where
         self.layout
             .layout_independent(weave, sizes, &self.spacing, &mut self.topological);
     }
+    #[inline]
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
+    #[inline]
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
+    #[inline]
     fn view(
         &mut self,
         min: Vec2,
@@ -255,12 +262,15 @@ where
             &mut self.topological,
         );
     }
+    #[inline]
     fn size(&self) -> Vec2 {
         self.layout.size()
     }
+    #[inline]
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
+    #[inline]
     fn view(
         &mut self,
         min: Vec2,

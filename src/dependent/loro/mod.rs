@@ -406,14 +406,17 @@ where
         }
     }
     /// Returns the inner [`LoroDoc`]'s [`PeerID`].
+    #[inline]
     pub fn peer_id(&self) -> PeerID {
         self.doc.peer_id()
     }
     /// Returns the inner [`LoroDoc`]'s operation log [`VersionVector`].
+    #[inline]
     pub fn oplog_vv(&self) -> VersionVector {
         self.doc.oplog_vv()
     }
     /// Returns the inner [`LoroDoc`]'s operation log [`Frontiers`].
+    #[inline]
     pub fn oplog_frontiers(&self) -> Frontiers {
         self.doc.oplog_frontiers()
     }
@@ -422,6 +425,7 @@ where
     /// # Errors
     ///
     /// Returns `Err` if the inner [`LoroDoc::export()`] fails.
+    #[inline]
     pub fn export(&mut self, mode: ExportMode) -> Result<Vec<u8>, LoroEncodeError> {
         self.doc.export(mode)
     }
