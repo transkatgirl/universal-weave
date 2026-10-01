@@ -244,7 +244,7 @@ where
     N: BuildableNode<K, T>,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
-    fn layout(&mut self, weave: &mut W, mut sizes: impl FnMut(&K) -> Vec2) {
+    fn layout(&mut self, weave: &mut W, mut sizes: impl FnMut(&N) -> Vec2) {
         assert!(self.spacing.validate());
         self.size = Vec2::ZERO;
         self.nodes.clear();
@@ -264,7 +264,8 @@ where
         let mut indices: HashMap<K, usize> = HashMap::with_capacity(order.len());
 
         for id in order {
-            let parents = weave.get_parents(&id).unwrap();
+            let node = weave.get(&id).unwrap();
+            let parents = node.from();
 
             let rank = parents
                 .into_iter()
@@ -272,7 +273,7 @@ where
                 .max()
                 .map_or(0, |r| r + 1);
 
-            let size = sizes(&id);
+            let size = sizes(node);
 
             assert!(
                 matches!(
@@ -926,10 +927,12 @@ impl StateMachineTest for WeaveWrapper {
             priorities: state.priorities,
         };
 
-        state.layouter.layout(&mut wrapped, |id| state.sizes[id]);
+        state
+            .layouter
+            .layout(&mut wrapped, |node| state.sizes[&node.id]);
         state
             .reference_layouter
-            .layout(&mut wrapped, |id| state.sizes[id]);
+            .layout(&mut wrapped, |node| state.sizes[&node.id]);
 
         state.weave = wrapped.weave;
         state.priorities = wrapped.priorities;

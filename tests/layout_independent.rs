@@ -490,10 +490,10 @@ impl StateMachineTest for WeaveWrapper {
 
         state
             .layouter
-            .layout(&mut state.weave, |id| state.sizes[id]);
+            .layout(&mut state.weave, |node| state.sizes[&node.id]);
         state
             .reference_layouter
-            .layout(&mut state.weave, |id| state.sizes[id]);
+            .layout(&mut state.weave, |node| state.sizes[&node.id]);
 
         assert_eq!(
             Layouter::<

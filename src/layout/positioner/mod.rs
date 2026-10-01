@@ -25,8 +25,8 @@ use tinyvec::ArrayVec;
 
 use crate::{
     BuildableNode, IndependentContents, LayoutItem, Weave,
-    dependent::DependentWeave,
-    independent::IndependentWeave,
+    dependent::{DependentNode, DependentWeave},
+    independent::{IndependentNode, IndependentWeave},
     layout::{Spacing, positioner::slotset::SlotSet, validate_output_float, validate_vec2},
 };
 
@@ -199,7 +199,7 @@ where
     pub fn layout_dependent<T, M>(
         &mut self,
         weave: &mut DependentWeave<K, T, M, S>,
-        mut sizes: impl FnMut(&K) -> Vec2,
+        mut sizes: impl FnMut(&DependentNode<K, T, S>) -> Vec2,
         spacing: &Spacing,
     ) {
         assert!(weave.nodes.len() < SEG_BIT as usize, "Too many nodes");
@@ -217,7 +217,8 @@ where
             stack.extend(weave.roots.iter().rev().map(|id| (*id, u32::MAX, 0)));
 
             while let Some((id, parent, rank)) = stack.pop() {
-                let index = self.push_real_unsegmentable(&mut top, id, rank, sizes(&id));
+                let node = &weave.nodes[&id];
+                let index = self.push_real_unsegmentable(&mut top, id, rank, sizes(node));
 
                 if parent != u32::MAX {
                     edges.extend([parent, index]);
@@ -226,8 +227,7 @@ where
                 let next_rank = rank + 1;
 
                 stack.extend(
-                    weave.nodes[&id]
-                        .to
+                    node.to
                         .iter()
                         .copied()
                         .rev()
@@ -244,7 +244,7 @@ where
     pub fn layout_independent<T, M>(
         &mut self,
         weave: &mut IndependentWeave<K, T, M, S>,
-        mut sizes: impl FnMut(&K) -> Vec2,
+        mut sizes: impl FnMut(&IndependentNode<K, T, S>) -> Vec2,
         spacing: &Spacing,
         topological: &mut Vec<K>,
     ) where
@@ -267,7 +267,8 @@ where
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
-                parents.extend(weave.nodes[&id].from.iter().map(|id| {
+                let node = &weave.nodes[&id];
+                parents.extend(node.from.iter().map(|id| {
                     let index = self.positions[id];
                     (index, top[index as usize] & RANK_MASK)
                 }));
@@ -278,7 +279,7 @@ where
                     .max()
                     .map_or_default(|r| r + 1);
 
-                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
+                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(node));
                 self.positions.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {
@@ -319,7 +320,7 @@ where
         W: Weave<K, N, T>,
         K: Hash + Copy + Eq + Ord + 'static,
         N: BuildableNode<K, T>,
-        F: FnMut(&K) -> Vec2,
+        F: FnMut(&N) -> Vec2,
         for<'a> &'a N::From: IntoIterator<Item = &'a K>,
     {
         assert!(weave.len() < SEG_BIT as usize, "Too many nodes");
@@ -337,7 +338,8 @@ where
             let mut parents: ScratchpadVec<'_, (u32, u32)> = guard.vec();
 
             for id in topological.drain(..) {
-                parents.extend(weave.get_parents(&id).unwrap().into_iter().map(|id| {
+                let node = weave.get(&id).unwrap();
+                parents.extend(node.from().into_iter().map(|id| {
                     let index = self.positions[id];
                     (index, top[index as usize] & RANK_MASK)
                 }));
@@ -348,7 +350,7 @@ where
                     .max()
                     .map_or_default(|r| r + 1);
 
-                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(&id));
+                let index = self.push_real(&mut top, &mut bottom, id, rank, sizes(node));
                 self.positions.insert(id, index);
 
                 for (from_index, from_rank) in parents.drain(..) {

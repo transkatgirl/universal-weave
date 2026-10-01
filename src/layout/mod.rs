@@ -113,7 +113,11 @@ where
     S: BuildHasher + Default + Clone + 'static,
 {
     #[inline]
-    fn layout(&mut self, weave: &mut DependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
+    fn layout(
+        &mut self,
+        weave: &mut DependentWeave<K, T, M, S>,
+        sizes: impl FnMut(&DependentNode<K, T, S>) -> Vec2,
+    ) {
         self.layout.layout_dependent(weave, sizes, &self.spacing);
     }
     #[inline]
@@ -192,7 +196,11 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone + 'static,
 {
-    fn layout(&mut self, weave: &mut IndependentWeave<K, T, M, S>, sizes: impl FnMut(&K) -> Vec2) {
+    fn layout(
+        &mut self,
+        weave: &mut IndependentWeave<K, T, M, S>,
+        sizes: impl FnMut(&IndependentNode<K, T, S>) -> Vec2,
+    ) {
         weave.get_ordered_identifiers(&mut self.topological);
 
         self.layout
@@ -270,7 +278,7 @@ where
     S: BuildHasher + Default + Clone + 'static,
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
-    fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> Vec2) {
+    fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&N) -> Vec2) {
         weave.get_ordered_identifiers(&mut self.topological);
 
         assert_eq!(

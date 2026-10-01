@@ -591,7 +591,7 @@ where
     /// Panics if the [`Weave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
     ///
     /// May panic if `sizes` panics or if the underlying [`Weave`] is improperly implemented.
-    fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&K) -> V);
+    fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&N) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
     #[must_use]
     fn size(&self) -> V;
@@ -733,7 +733,7 @@ where
     /// Panics if the [`ImmutableWeave`]'s content could not be arranged due to an unsatisfiable constraint or numerical overflow.
     ///
     /// May panic if `sizes` panics or if the underlying [`ImmutableWeave`] is improperly implemented.
-    fn layout(&mut self, weave: &W, sizes: impl FnMut(&K) -> V);
+    fn layout(&mut self, weave: &W, sizes: impl FnMut(&N) -> V);
     /// Returns the size of the bounding box enclosing the arrangement's content.
     #[must_use]
     fn size(&self) -> V;
