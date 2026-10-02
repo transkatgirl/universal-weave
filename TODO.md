@@ -41,6 +41,8 @@
 
 ### Future plans
 
+- Change DiscreteWeave::split behavior (assign preserved identifier to right side)
+- Change DiscreteWeave::merge_with_parent identifier behavior (inherit child identifier, not parent)
 - Formal verification using [Verus](https://github.com/verus-lang/verus) once it supports enough of the language features
 
 ## Features
