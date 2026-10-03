@@ -130,7 +130,7 @@ where
     }
     #[inline]
     fn view(
-        &mut self,
+        &self,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
@@ -216,7 +216,7 @@ where
     }
     #[inline]
     fn view(
-        &mut self,
+        &self,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
@@ -305,7 +305,7 @@ where
     }
     #[inline]
     fn view(
-        &mut self,
+        &self,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),

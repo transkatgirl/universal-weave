@@ -599,7 +599,7 @@ where
     #[must_use]
     fn center(&self, id: &K) -> Option<V>;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
+    fn view(&self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 /// A read-only [`Weave`].
@@ -741,7 +741,7 @@ where
     #[must_use]
     fn center(&self, id: &K) -> Option<V>;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
+    fn view(&self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

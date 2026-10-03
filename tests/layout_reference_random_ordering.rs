@@ -435,7 +435,7 @@ where
         )
     }
     fn view(
-        &mut self,
+        &self,
         min: Vec2,
         max: Vec2,
         mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
