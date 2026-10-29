@@ -219,7 +219,7 @@ where
             })
             && !detect_cycles(
                 &self.nodes,
-                self.roots.iter().copied(),
+                &self.roots,
                 &mut Vec::with_capacity(self.roots.len()),
             )
     }

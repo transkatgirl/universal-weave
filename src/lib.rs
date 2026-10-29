@@ -14,6 +14,8 @@
 //! Efficient (de)serialization is supported using `rkyv` and `serde`. Basic functionality for versioning serialized data is provided by [`VersionedBytes`](versioning::VersionedBytes) (requires `rkyv` feature to be enabled).
 
 #![no_std]
+#![cfg_attr(creusot, feature(allocator_api, const_destruct))]
+#![cfg_attr(creusot, recursion_limit = "256")]
 #![forbid(non_ascii_idents)]
 #![warn(missing_docs)]
 #![warn(let_underscore)]
@@ -28,6 +30,7 @@
 #![allow(clippy::pattern_type_mismatch, reason = "Conflicting lint")]
 #![allow(clippy::separated_literal_suffix, reason = "Conflicting lint")]
 #![allow(clippy::semicolon_outside_block, reason = "Conflicting lint")]
+#![allow(clippy::pub_with_shorthand, reason = "Conflicting lint")]
 #![allow(
     clippy::field_scoped_visibility_modifiers,
     reason = "Used by IndependentWeave::from()"
@@ -62,6 +65,7 @@
 #![allow(clippy::shadow_unrelated)] // TODO
 #![allow(clippy::shadow_reuse)] // TODO
 #![allow(clippy::shadow_same)] // TODO
+#![allow(clippy::wildcard_imports, reason = "creusot_std::macros")]
 
 /*
 
@@ -82,13 +86,46 @@ Testing notes:
 
 */
 
+#[cfg(all(creusot, any(feature = "rkyv", feature = "serde", feature = "loro")))]
+compile_error!(
+    "Creusot can only verify this crate without the `rkyv`, `serde` and `loro` features: use `cargo creusot -- --no-default-features`"
+);
+
+/// Proof code, such as snapshots of ghost state, which only exists while Creusot is verifying the crate.
+#[cfg(creusot)]
+macro_rules! proof {
+    ($($tokens:tt)*) => {
+        $($tokens)*
+    };
+}
+
+/// Proof code, such as snapshots of ghost state, which only exists while Creusot is verifying the crate.
+#[cfg(not(creusot))]
+macro_rules! proof {
+    ($($tokens:tt)*) => {};
+}
+
 mod contract;
 pub mod dependent;
 pub mod independent;
+#[cfg(creusot)]
+mod verification;
+#[cfg(not(creusot))]
 pub mod wrappers;
+
+/// Wrappers which add functionality to [`Weave`] implementations.
+///
+/// While Creusot is verifying the crate, this only contains [`PatchablePathWeave`](wrappers::PatchablePathWeave), the only verified wrapper.
+#[cfg(creusot)]
+pub mod wrappers {
+    mod patchable;
+
+    pub use patchable::PatchablePathWeave;
+}
 
 #[cfg(all(
     feature = "layout",
+    not(creusot),
     any(target_pointer_width = "32", target_pointer_width = "64")
 ))]
 pub mod layout;
@@ -96,7 +133,6 @@ pub mod layout;
 #[cfg(feature = "rkyv")]
 pub mod versioning;
 
-pub use contracts;
 pub use hashbrown;
 pub use indexmap;
 
@@ -118,16 +154,99 @@ pub use loro;
 extern crate alloc;
 
 use alloc::vec::Vec;
-use core::{
-    cmp::{Ordering, Reverse},
-    hash::{BuildHasher, Hash},
+use core::{cmp::Ordering, hash::Hash};
+
+use creusot_std::macros::*;
+
+#[cfg(creusot)]
+use creusot_std::{
+    invariant::inv,
+    logic::Seq,
+    model::DeepModel,
+    std::{
+        iter::IteratorSpec,
+        ops::{FnMutExt as _, FnOnceExt as _},
+    },
 };
 
-use hashbrown::{HashMap, hash_map::Entry};
+#[cfg(feature = "rkyv")]
+use core::{cmp::Reverse, hash::BuildHasher};
+
+#[cfg(feature = "rkyv")]
+use hashbrown::hash_map::Entry;
+
+#[cfg(feature = "rkyv")]
 use scratchpads::{ScratchpadMap, ScratchpadSet, ScratchpadVec};
 
 #[cfg(feature = "rkyv")]
 use rkyv::collections::swiss_table::{ArchivedHashMap, ArchivedIndexSet};
+
+/// A bound which only applies while verifying this crate with [Creusot](https://github.com/creusot-rs/creusot).
+///
+/// Every type implements it, except while verifying, where it requires the type to have a [`DeepModel`](creusot_std::model::DeepModel).
+#[cfg(not(creusot))]
+pub trait Verifiable {}
+
+#[cfg(not(creusot))]
+impl<T: ?Sized> Verifiable for T {}
+
+/// A bound which only applies while verifying this crate with [Creusot](https://github.com/creusot-rs/creusot).
+///
+/// Every type implements it, except while verifying, where it requires the type to have a [`DeepModel`].
+#[cfg(creusot)]
+pub trait Verifiable: DeepModel {}
+
+#[cfg(creusot)]
+impl<T: DeepModel + ?Sized> Verifiable for T {}
+
+/// An [`Iterator`] bound which only applies while verifying this crate with [Creusot](https://github.com/creusot-rs/creusot).
+///
+/// Every iterator implements it, except while verifying, where it requires the iterator to specify what it produces with an [`IteratorSpec`](creusot_std::std::iter::IteratorSpec).
+#[cfg(not(creusot))]
+pub trait VerifiableIterator: Iterator {}
+
+#[cfg(not(creusot))]
+impl<I: Iterator + ?Sized> VerifiableIterator for I {}
+
+/// An [`Iterator`] bound which only applies while verifying this crate with [Creusot](https://github.com/creusot-rs/creusot).
+///
+/// Every iterator implements it, except while verifying, where it requires the iterator to specify what it produces with an [`IteratorSpec`].
+#[cfg(creusot)]
+pub trait VerifiableIterator: IteratorSpec {}
+
+#[cfg(creusot)]
+impl<I: IteratorSpec + ?Sized> VerifiableIterator for I {}
+
+/// Checks whether two identifiers are equal.
+///
+/// Comparing identifiers with `==` calls their [`Eq`] implementation, which verification can't
+/// prove terminates. This assumes that it does, as the specifications of hash maps and sets
+/// already do, since they call it.
+#[trusted]
+#[check(terminates)]
+#[ensures(result == (a.deep_model() == b.deep_model()))]
+#[inline]
+pub(crate) fn same_id<K>(a: &K, b: &K) -> bool
+where
+    K: Eq + Verifiable,
+{
+    a == b
+}
+
+/// Builds the default hasher.
+///
+/// This calls `S`'s [`Default`] implementation, which verification can't prove terminates. This
+/// assumes that it does, as the specifications of hash maps and sets already assume of `S`'s
+/// [`BuildHasher`](core::hash::BuildHasher) implementation.
+#[trusted]
+#[check(terminates)]
+#[inline]
+pub(crate) fn default_hasher<S>() -> S
+where
+    S: Default,
+{
+    S::default()
+}
 
 /// An item within a [`Weave`] which can be connected to other items.
 #[must_use]
@@ -171,22 +290,63 @@ where
 
 /// [`Node`] contents which can be split apart or merged together.
 pub trait DiscreteContents: Sized {
+    /// The units which make up the item: what [`DiscreteContents::len`] counts, and what
+    /// [`DiscreteContents::split`]'s index counts in.
+    ///
+    /// This only exists while verifying.
+    #[cfg(creusot)]
+    type Unit;
+    /// The units which make up the item, in order.
+    ///
+    /// This only exists while verifying.
+    #[logic]
+    fn units(self) -> Seq<Self::Unit>;
     /// Returns the length of the item.
+    #[ensures(result@ == self.units().len())]
     fn len(&self) -> usize;
     /// Returns `true` if the item has a length of zero.
+    #[ensures(result == (self.units().len() == 0))]
     fn is_empty(&self) -> bool;
+    /// Splitting `self` at `at` can return `outcome`: what [`DiscreteContents::split`] promises,
+    /// which implementations can describe by overriding this. By default, it promises nothing.
+    ///
+    /// This only exists while verifying.
+    #[logic(open)]
+    fn splits(self, _at: usize, _outcome: DiscreteContentResult<Self>) -> bool {
+        true
+    }
+    /// Merging `self` with `value` can return `outcome`: what [`DiscreteContents::merge`]
+    /// promises, which implementations can describe by overriding this. By default, it promises
+    /// nothing.
+    ///
+    /// This only exists while verifying.
+    #[logic(open)]
+    fn merges(self, _value: Self, _outcome: DiscreteContentResult<Self>) -> bool {
+        true
+    }
     /// Splits the item at the specified index.
     ///
     /// If splitting the item fails, the original contents are returned.
+    #[ensures(match result {
+        DiscreteContentResult::One(contents) => contents == self,
+        DiscreteContentResult::Two(_, _) => true,
+    })]
+    #[ensures(self.splits(at, result))]
     fn split(self, at: usize) -> DiscreteContentResult<Self>;
     /// Merges two items together.
     ///
     /// If merging the two items fails, the original contents are returned in the order they were specified.
+    #[ensures(match result {
+        DiscreteContentResult::One(_) => true,
+        DiscreteContentResult::Two(left, right) => left == self && right == value,
+    })]
+    #[ensures(self.merges(value, result))]
     fn merge(self, value: Self) -> DiscreteContentResult<Self>;
 }
 
 /// A type representing the results of an action on a [`DiscreteContents`] item.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(creusot), derive(PartialEq, Eq, PartialOrd, Ord, Hash))]
 #[allow(missing_docs, reason = "Enum items are self-explanatory")]
 #[must_use]
 pub enum DiscreteContentResult<T> {
@@ -195,34 +355,89 @@ pub enum DiscreteContentResult<T> {
 }
 
 impl DiscreteContents for () {
+    #[cfg(creusot)]
+    type Unit = ();
+
+    #[logic(open)]
+    fn units(self) -> Seq<()> {
+        Seq::empty()
+    }
     #[inline]
+    #[ensures(result@ == 0)]
     fn len(&self) -> usize {
         0
     }
     #[inline]
+    #[ensures(result)]
     fn is_empty(&self) -> bool {
         true
     }
+    #[logic(open)]
+    fn splits(self, _at: usize, outcome: DiscreteContentResult<Self>) -> bool {
+        pearlite! { outcome == DiscreteContentResult::Two((), ()) }
+    }
+    #[logic(open)]
+    fn merges(self, _value: Self, outcome: DiscreteContentResult<Self>) -> bool {
+        pearlite! { outcome == DiscreteContentResult::One(()) }
+    }
     #[inline]
+    #[ensures(result == DiscreteContentResult::Two((), ()))]
     fn split(self, _at: usize) -> DiscreteContentResult<Self> {
         DiscreteContentResult::Two((), ())
     }
     #[inline]
+    #[ensures(result == DiscreteContentResult::One(()))]
     fn merge(self, _value: Self) -> DiscreteContentResult<Self> {
         DiscreteContentResult::One(())
     }
 }
 
 impl DiscreteContents for Vec<u8> {
+    #[cfg(creusot)]
+    type Unit = u8;
+
+    #[logic(open)]
+    fn units(self) -> Seq<u8> {
+        pearlite! { self@ }
+    }
     #[inline]
+    #[ensures(result@ == self@.len())]
     fn len(&self) -> usize {
         self.len()
     }
     #[inline]
+    #[ensures(result == (self@.len() == 0))]
     fn is_empty(&self) -> bool {
         self.is_empty()
     }
+    #[logic(open)]
+    fn splits(self, at: usize, outcome: DiscreteContentResult<Self>) -> bool {
+        pearlite! {
+            match outcome {
+                DiscreteContentResult::One(contents) => contents == self
+                    && (at@ == 0 || at@ >= self@.len()),
+                DiscreteContentResult::Two(left, right) => 0 < at@ && at@ < self@.len()
+                    && left@ == self@.subsequence(0, at@)
+                    && right@ == self@.subsequence(at@, self@.len()),
+            }
+        }
+    }
+    #[logic(open)]
+    fn merges(self, value: Self, outcome: DiscreteContentResult<Self>) -> bool {
+        pearlite! {
+            match outcome {
+                DiscreteContentResult::One(contents) => contents@ == self@.concat(value@),
+                DiscreteContentResult::Two(_, _) => false,
+            }
+        }
+    }
     #[inline]
+    #[ensures(match result {
+        DiscreteContentResult::One(contents) => contents == self && (at@ == 0 || at@ >= self@.len()),
+        DiscreteContentResult::Two(left, right) => 0 < at@ && at@ < self@.len()
+            && left@ == self@.subsequence(0, at@)
+            && right@ == self@.subsequence(at@, self@.len()),
+    })]
     fn split(mut self, at: usize) -> DiscreteContentResult<Self> {
         if at == 0 || at >= self.len() {
             DiscreteContentResult::One(self)
@@ -232,7 +447,16 @@ impl DiscreteContents for Vec<u8> {
         }
     }
     #[inline]
+    #[ensures(match result {
+        DiscreteContentResult::One(contents) => contents@ == self@.concat(value@),
+        DiscreteContentResult::Two(_, _) => false,
+    })]
     fn merge(mut self, mut value: Self) -> DiscreteContentResult<Self> {
+        proof_assert! {
+            verification::specs::core_fns::lemma_byte_vec_len(self);
+            verification::specs::core_fns::lemma_byte_vec_len(value);
+            self@.len() + value@.len() <= usize::MAX@
+        };
         self.append(&mut value);
         DiscreteContentResult::One(self)
     }
@@ -348,6 +572,7 @@ where
     /// # Panics
     ///
     /// May panic if `on_removal` panics.
+    #[requires(forall<f> on_removal.hist_inv(f) ==> forall<n: N> inv(n) ==> f.precondition((n,)))]
     fn remove_tracked(&mut self, id: &K, on_removal: impl FnMut(N)) -> bool;
     /// Removes all nodes from the Weave.
     ///
@@ -373,6 +598,7 @@ where
     /// # Panics
     ///
     /// May panic if `callback` panics.
+    #[requires(forall<m: &mut M> inv(m) ==> callback.precondition((m,)))]
     fn metadata_mut<O>(&mut self, callback: impl FnOnce(&mut M) -> O) -> O;
 }
 
@@ -410,24 +636,28 @@ where
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &N, b: &N> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_children_by(&mut self, id: &K, cmp: impl FnMut(&N, &N) -> Ordering) -> bool;
     /// Sorts the identifiers of a parent node's children with the specified identifier using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &K, b: &K> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool;
     /// Sorts root nodes (nodes which do not have any parents) using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &N, b: &N> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_roots_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of root nodes (nodes which do not have any parents) using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &K, b: &K> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_roots_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
@@ -447,12 +677,14 @@ where
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &N, b: &N> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_bookmarks_by(&mut self, cmp: impl FnMut(&N, &N) -> Ordering);
     /// Sorts the identifiers of bookmarked nodes using the comparison function `cmp`.
     ///
     /// # Panics
     ///
     /// May panic if `cmp` does not implement a [total order](https://en.wikipedia.org/wiki/Total_order), or if `cmp` itself panics.
+    #[requires(forall<f> cmp.hist_inv(f) ==> forall<a: &K, b: &K> inv(a) && inv(b) ==> f.precondition((a, b)))]
     fn sort_bookmarks_by_id(&mut self, cmp: impl FnMut(&K, &K) -> Ordering);
 }
 
@@ -482,7 +714,7 @@ where
     /// Replaces the currently active path with the specified set of node IDs.
     ///
     /// If the new active path would result in internal inconsistency, this function will correct the path in an implementation-specific manner.
-    fn set_active_path(&mut self, active: impl Iterator<Item = K>);
+    fn set_active_path(&mut self, active: impl VerifiableIterator<Item = K>);
 }
 
 /// A [`Weave`] where [`Node`] objects do not depend on their parents in order to be meaningful.
@@ -516,6 +748,7 @@ where
     /// # Panics
     ///
     /// May panic if `callback` panics.
+    #[requires(forall<c: &mut T> inv(c) ==> callback.precondition((c,)))]
     fn get_contents_mut<O>(&mut self, id: &K, callback: impl FnOnce(&mut T) -> O) -> Option<O>;
 }
 
@@ -551,7 +784,8 @@ where
 }
 
 /// A geometric item within an arrangement of a Weave's content.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(creusot), derive(PartialEq, Eq, PartialOrd, Ord, Hash))]
 pub enum LayoutItem<K, V, P> {
     /// Computed geometry for a [`Node`].
     Node {
@@ -744,46 +978,11 @@ where
     fn view(&self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(not(creusot), derive(PartialEq, Eq, PartialOrd, Ord, Hash))]
 enum Step<A, B> {
     Enter(A),
     Exit(B),
-}
-
-fn topological_sort<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    roots: impl DoubleEndedIterator<Item = K>,
-    stack: &mut ScratchpadVec<'_, K>,
-    mut identifier_callback: impl FnMut(K),
-    identifier_map: &mut ScratchpadMap<'_, K, usize, S>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    identifier_map.extend(nodes.iter().map(|(&k, n)| (k, n.from().into_iter().len())));
-
-    stack.extend(roots.rev());
-
-    while let Some(id) = stack.pop() {
-        identifier_callback(id);
-
-        for child in nodes[&id].to().into_iter().rev().copied() {
-            let remaining = identifier_map.get_mut(&child).unwrap();
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-            {
-                *remaining -= 1;
-            }
-
-            if *remaining == 0 {
-                stack.push(child);
-            }
-        }
-    }
 }
 
 #[cfg(feature = "rkyv")]
@@ -807,63 +1006,6 @@ fn archived_topological_sort<'a, K, N, T, S>(
 
         for child in archived_set_reverse_order(nodes[&id].to()).copied() {
             let remaining = identifier_map.get_mut(&child).unwrap();
-            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-            {
-                *remaining -= 1;
-            }
-
-            if *remaining == 0 {
-                stack.push(child);
-            }
-        }
-    }
-}
-
-fn topological_sort_subgraph<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    filter: impl Fn(&K) -> bool,
-    subgraph_root: K,
-    stack: &mut ScratchpadVec<'_, K>,
-    mut identifier_callback: impl FnMut(K),
-    identifier_map: &mut ScratchpadMap<'_, K, usize, S>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    /*if filter(id)
-        && !identifier_map.contains_key(id)
-        && nodes[id]
-            .from()
-            .into_iter()
-            .filter(|&parent| filter(parent))
-            .count()
-            == 0
-    {
-        stack.push(*id);
-    }*/
-
-    stack.push(subgraph_root);
-
-    while let Some(id) = stack.pop() {
-        identifier_callback(id);
-
-        for child in nodes[&id].to().into_iter().rev().copied() {
-            if !filter(&child) {
-                continue;
-            }
-
-            let remaining = identifier_map.entry(child).or_insert_with(|| {
-                nodes[&child]
-                    .from()
-                    .into_iter()
-                    .filter(|&parent| filter(parent))
-                    .count()
-            });
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             {
                 *remaining -= 1;
@@ -930,56 +1072,6 @@ fn archived_topological_sort_subgraph<'a, K, N, T, S>(
     }
 }
 
-fn shortest_path_to_ancestor<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: &'a K,
-    target: impl Fn(&'a N) -> bool,
-    scratchpad: &mut ScratchpadVec<'_, K>,
-    scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
-    path: &mut Vec<K>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    scratchpad.push(*id);
-    scratchpad_map.insert(*id, *id);
-
-    let mut head = 0;
-
-    while head < scratchpad.len() {
-        let id = scratchpad[head];
-        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-        {
-            head += 1;
-        }
-
-        let node = &nodes[&id];
-
-        if target(node) {
-            path.push(id);
-            break;
-        }
-
-        for parent in node.from().into_iter().copied() {
-            if let Entry::Vacant(entry) = scratchpad_map.entry(parent) {
-                entry.insert(id);
-                scratchpad.push(parent);
-            }
-        }
-    }
-
-    while let Some(last) = path.last()
-        && last != id
-    {
-        path.push(scratchpad_map[last]);
-    }
-}
-
 #[cfg(feature = "rkyv")]
 fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
@@ -1024,69 +1116,6 @@ fn archived_shortest_path_to_ancestor<'a, K, N, T, S>(
         && last != id
     {
         path.push(scratchpad_map[last]);
-    }
-}
-
-fn longest_candidate_path_to_root<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    topological_order: &[K],
-    is_candidate: impl Fn(&K) -> bool,
-    scratchpad_map: &mut ScratchpadMap<'_, K, (usize, K), S>,
-    mut reversed_path_callback: impl FnMut(K),
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T> + 'a,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    let mut longest_distance = None;
-
-    for id in topological_order {
-        if !is_candidate(id) {
-            continue;
-        }
-
-        let from = nodes[id].from().into_iter();
-
-        let has_parents = from.len() != 0;
-        let best_parent = from
-            .filter_map(|id| scratchpad_map.get(id).map(|v| (v.0, id)))
-            .min_by_key(|&(v, _)| Reverse(v));
-
-        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-        let distance = match best_parent {
-            Some((parent_distance, parent)) => Some((parent_distance + 1, *parent)),
-            None => {
-                if has_parents {
-                    None
-                } else {
-                    Some((0, *id))
-                }
-            }
-        };
-
-        if let Some((distance, parent)) = distance {
-            scratchpad_map.insert(*id, (distance, parent));
-
-            if longest_distance.is_none_or(|(value, _)| distance > value) {
-                longest_distance = Some((distance, *id));
-            }
-        }
-    }
-
-    if let Some(mut id) = longest_distance.map(|(_, id)| id) {
-        loop {
-            reversed_path_callback(id);
-
-            let parent = scratchpad_map[&id].1;
-            if parent == id {
-                break;
-            }
-            id = parent;
-        }
     }
 }
 
@@ -1151,81 +1180,6 @@ fn archived_longest_candidate_path_to_root<'a, K, N, T, S>(
     }
 }
 
-fn ancestor_subgraph<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: K,
-    stack: &mut ScratchpadVec<'_, K>,
-    identifiers: &mut ScratchpadSet<'_, K, S>,
-    mut root_callback: impl FnMut(K),
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T>,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator + ExactSizeIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    if identifiers.insert(id) {
-        stack.push(id);
-    }
-
-    while let Some(id) = stack.pop() {
-        let from = nodes[&id].from().into_iter();
-
-        if from.len() == 0 {
-            root_callback(id);
-        } else {
-            for parent in from.rev().copied() {
-                if identifiers.insert(parent) {
-                    stack.push(parent);
-                }
-            }
-        }
-    }
-}
-
-fn ancestor_subgraph_reaches<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    ids: impl DoubleEndedIterator<Item = K>,
-    target: impl Fn(&K) -> bool,
-    stack: &mut ScratchpadVec<'_, K>,
-    identifiers: &mut ScratchpadSet<'_, K, S>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T>,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    for id in ids.rev() {
-        if identifiers.insert(id) {
-            if target(&id) {
-                return true;
-            }
-
-            stack.push(id);
-        }
-    }
-
-    while let Some(id) = stack.pop() {
-        for parent in nodes[&id].from().into_iter().rev().copied() {
-            if identifiers.insert(parent) {
-                if target(&parent) {
-                    return true;
-                }
-
-                stack.push(parent);
-            }
-        }
-    }
-
-    false
-}
-
 #[cfg(feature = "rkyv")]
 fn archived_ancestor_subgraph<'a, K, N, T, S>(
     nodes: &'a ArchivedHashMap<K, N>,
@@ -1255,74 +1209,6 @@ fn archived_ancestor_subgraph<'a, K, N, T, S>(
             }
         }
     }
-}
-
-fn descendant_subgraph<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    id: K,
-    stack: &mut ScratchpadVec<'_, K>,
-    identifiers: &mut ScratchpadSet<'_, K, S>,
-) where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T>,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    if identifiers.insert(id) {
-        stack.push(id);
-    }
-
-    while let Some(id) = stack.pop() {
-        for child in nodes[&id].to().into_iter().rev().copied() {
-            if identifiers.insert(child) {
-                stack.push(child);
-            }
-        }
-    }
-}
-
-fn descendant_subgraph_reaches<'a, K, N, T, S>(
-    nodes: &'a HashMap<K, N, S>,
-    ids: impl DoubleEndedIterator<Item = K>,
-    target: impl Fn(&K) -> bool,
-    stack: &mut ScratchpadVec<'_, K>,
-    identifiers: &mut ScratchpadSet<'_, K, S>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + 'a,
-    N: Node<K, T>,
-    <N as Node<K, T>>::From: 'a,
-    <N as Node<K, T>>::To: 'a,
-    &'a N::From: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    &'a N::To: IntoIterator<Item = &'a K, IntoIter: DoubleEndedIterator>,
-    S: BuildHasher + Default + Clone,
-{
-    for id in ids.rev() {
-        if identifiers.insert(id) {
-            if target(&id) {
-                return true;
-            }
-
-            stack.push(id);
-        }
-    }
-
-    while let Some(id) = stack.pop() {
-        for child in nodes[&id].to().into_iter().rev().copied() {
-            if identifiers.insert(child) {
-                if target(&child) {
-                    return true;
-                }
-
-                stack.push(child);
-            }
-        }
-    }
-
-    false
 }
 
 #[cfg(feature = "rkyv")]

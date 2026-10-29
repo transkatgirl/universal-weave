@@ -38,13 +38,16 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 	- Stable node ordering
 		- Node sorting
 	- Tree-based Weave implementation
+		- Formally verified using [Creusot](https://github.com/creusot-rs/creusot) (see [VERIFICATION.md](VERIFICATION.md))
 		- CRDT-based collaborative editing (requires loro & rkyv, *experimental*)
 	- DAG-based Weave implementation
+		- Formally verified using [Creusot](https://github.com/creusot-rs/creusot) (see [VERIFICATION.md](VERIFICATION.md))
 		- Node moving
 	- Support for arranging Weave contents in coordinate space for graphical rendering
 		- Built-in 2D layout implementation (requires layout feature)
 	- Support for composable Weave wrappers
 		- Built-in content patching wrapper (can be used to implement text operations on the active node path)
+			- Formally verified over the DAG-based Weave implementation using [Creusot](https://github.com/creusot-rs/creusot) (see [VERIFICATION.md](VERIFICATION.md))
 		- Built-in action queuing wrapper (can be used to implement undo/redo)
 - Supports `no_std` environments (requires `alloc`)
 	- Loro must be disabled when building for `no_std`
