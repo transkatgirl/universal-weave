@@ -45,6 +45,7 @@ use crate::{
     ==> ids((^reversed_path).model()) == chain)]
 #[ensures(forall<q> candidate_root_path(nodes.model(), ids(topological_order@), *candidate, q)
     ==> q.len() <= (^reversed_path).model().len())]
+#[ensures(first_longest(nodes.model(), ids(topological_order@), *candidate, ids((^reversed_path).model())))]
 #[cfg_attr(
     not(creusot),
     allow(unused_variables, reason = "Used by the specification")
@@ -116,6 +117,8 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
     #[invariant(exact_distances(scratchpad_map.model()))]
     #[invariant(longest_recorded(scratchpad_map.model(), longest_distance))]
     #[invariant(distance_bound(nodes.model(), *order, *candidate, scratchpad_map.model(), i@))]
+    #[invariant(first_pointers(nodes.model(), scratchpad_map.model()))]
+    #[invariant(first_longest_recorded(*order, scratchpad_map.model(), longest_distance))]
     #[variant(topological_order@.len() - i@)]
     while i < topological_order.len() {
         let id = &topological_order[i];
@@ -186,6 +189,15 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
                 lemma_distance_record(nodes.model(), *order, *candidate, *old_map, *n, distance, parent);
                 distance_bound(nodes.model(), *order, *candidate, old_map.add(order[*n], (distance, parent)), *n + 1)
             };
+            proof_assert!(first_record_ok(
+                nodes.model(),
+                *order,
+                *candidate,
+                *old_map,
+                *n,
+                distance,
+                parent
+            ));
             scratchpad_map.insert(*id, (distance, parent));
 
             let longer = match longest_distance {
@@ -196,6 +208,15 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
                 longest_distance = Some((distance, *id));
             }
             proof_assert!(longest_distance == longest_after(*old_longest, distance, *id));
+            proof_assert!(first_longest_record_ok(
+                *order,
+                *old_map,
+                *old_longest,
+                *n,
+                *id,
+                distance,
+                parent
+            ));
             proof_assert! {
                 lemma_longest_record(*old_map, *old_longest, *id, distance, parent);
                 longest_recorded(scratchpad_map.model(), longest_distance)
@@ -300,6 +321,20 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
             None => false,
             Some((d, _)) => reversed_path.model().len() + final_map[id.deep_model()].0@ == d@,
         })]
+        #[invariant(match *longest {
+            None => false,
+            Some((d, k)) => (reversed_path.model().len() == 0 ==> id.deep_model() == k.deep_model())
+                && (0 < reversed_path.model().len()
+                    ==> ids(reversed_path.model())[0] == k.deep_model())
+                && forall<i> 0 <= i && i < reversed_path.model().len()
+                    ==> final_map[ids(reversed_path.model())[i]].0@ + i == d@,
+        })]
+        #[invariant(forall<i> 0 <= i && i + 1 < reversed_path.model().len()
+            ==> final_map[ids(reversed_path.model())[i]].1.deep_model()
+                == ids(reversed_path.model())[i + 1])]
+        #[invariant(0 < reversed_path.model().len()
+            ==> final_map[ids(reversed_path.model())[reversed_path.model().len() - 1]].1.deep_model()
+                == id.deep_model())]
         #[variant(final_map[id.deep_model()].0@)]
         loop {
             reversed_path.push(id);
@@ -330,6 +365,31 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
         *final_map,
         *longest,
         reversed_path.model().len()
+    ));
+    proof_assert!(forall<i> 0 <= i && i + 1 < reversed_path.model().len()
+        ==> final_map[ids(reversed_path.model())[i]].1.deep_model()
+            == ids(reversed_path.model())[i + 1]);
+    proof_assert!(match *longest {
+        None => true,
+        Some((d, k)) => 0 < reversed_path.model().len()
+            && ids(reversed_path.model())[0] == k.deep_model()
+            && forall<i> 0 <= i && i < reversed_path.model().len()
+                ==> final_map[ids(reversed_path.model())[i]].0@ + i == d@,
+    });
+    proof_assert!(no_dup(ids(reversed_path.model())));
+    proof_assert!(forall<i> 0 <= i && i < reversed_path.model().len()
+        ==> candidate[ids(reversed_path.model())[i]] && order.contains(ids(reversed_path.model())[i]));
+    proof_assert!(candidate_root_path(nodes.model(), *order, *candidate, ids(reversed_path.model())));
+    proof_assert!(forall<i> 0 <= i && i < reversed_path.model().len()
+        ==> final_map.contains(&ids(reversed_path.model())[i])
+            && final_map[ids(reversed_path.model())[i]].0@ == reversed_path.model().len() - 1 - i);
+    proof_assert!(first_longest_done_ok(
+        nodes.model(),
+        *order,
+        *candidate,
+        *final_map,
+        *longest,
+        ids(reversed_path.model())
     ));
 }
 
@@ -427,6 +487,11 @@ where
         ==> ids((^scratchpad).model()).contains(p))]
 #[ensures(0 < (^path)@.len() ==> forall<q> descending_to(nodes.model(), q, id.deep_model())
     && is_target[nodes.model()[q[0]]] ==> (^path)@.len() <= q.len())]
+// Among the shortest descents from a target to `id`, the path is the first in the order of
+// `precedes`: it is the one whose nodes come first among the parents of the next ones, compared
+// from `id` up.
+#[ensures(0 < (^path)@.len()
+    ==> first_descent(nodes.model(), ids((^path)@), id.deep_model(), *is_target))]
 #[cfg_attr(
     not(creusot),
     allow(unused_variables, reason = "Used by the specification")
@@ -451,6 +516,7 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         let start = snapshot!(id.deep_model());
         let mut level: Snapshot<Mapping<Id<K>, Int>> = snapshot!(|_| 0);
         let mut found = snapshot!(0);
+        let mut tp = snapshot!(Seq::<Id<K>>::empty());
     }
     proof_assert!(scratchpad_map.model().is_empty_logic());
     proof_assert!(forall<k> !scratchpad_map.model().contains(&k));
@@ -460,6 +526,14 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         lemma_no_dup_len(ids(scratchpad.model()), nodes.model());
         scratchpad.model().len() <= nodes.model().len()
     };
+    proof_assert!(ids(scratchpad.model()).ext_eq(Seq::singleton(*start)));
+    proof_assert!(bfs_init_ok(
+        nodes.model(),
+        *start,
+        ids(scratchpad.model()),
+        scratchpad_map.model(),
+        *level
+    ));
 
     let mut head = 0;
 
@@ -479,6 +553,9 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
     #[invariant(scratchpad.model().len() <= nodes.model().len())]
     #[invariant(forall<j> 0 <= j && j < scratchpad.model().len()
         ==> nodes.model().contains(&ids(scratchpad.model())[j]))]
+    #[invariant(bfs_ordered(nodes.model(), ids(scratchpad.model()), scratchpad_map.model(), *level))]
+    #[invariant(bfs_least(nodes.model(), *start, ids(scratchpad.model()), scratchpad_map.model(), *level))]
+    #[invariant(bfs_discovered(*start, ids(scratchpad.model()), scratchpad_map.model(), head@, 0))]
     #[variant(nodes.model().len() - head@)]
     while head < scratchpad.len() {
         let id = scratchpad[head];
@@ -511,9 +588,20 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
                     );
                     level[id.deep_model()] + 1 <= q.len()
                 });
+            proof_assert!(bfs_first_ok(
+                nodes.model(),
+                *start,
+                ids(scratchpad.model()),
+                scratchpad_map.model(),
+                *level,
+                head@ - 1,
+                *is_target
+            ));
             proof! {
                 found = snapshot!(level[id.deep_model()]);
+                tp = snapshot!(tree_path(scratchpad_map.model(), id.deep_model(), level[id.deep_model()]));
             }
+            proof_assert!(first_descent(nodes.model(), *tp, *start, *is_target));
             path.push(id);
             break;
         }
@@ -543,9 +631,20 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         #[invariant(scratchpad.model().len() <= nodes.model().len())]
         #[invariant(forall<j> 0 <= j && j < scratchpad.model().len()
             ==> nodes.model().contains(&ids(scratchpad.model())[j]))]
+        #[invariant(bfs_ordered(nodes.model(), ids(scratchpad.model()), scratchpad_map.model(), *level))]
+        #[invariant(bfs_least(nodes.model(), *start, ids(scratchpad.model()), scratchpad_map.model(), *level))]
+        #[invariant(bfs_discovered(*start, ids(scratchpad.model()), scratchpad_map.model(), head@,
+            old_queue.len()))]
+        #[invariant(bfs_expanding(nodes.model(), ids(scratchpad.model()), scratchpad_map.model(),
+            id.deep_model(), old_queue.len(), i@))]
         #[variant(node.from.model().len() - i@)]
         while i < node.from.len() {
             let parent = node.from[i];
+            proof! {
+                let q_pre = snapshot!(ids(scratchpad.model()));
+                let m_pre = snapshot!(scratchpad_map.model());
+                let l_pre = snapshot!(*level);
+            }
             if let Entry::Vacant(entry) = scratchpad_map.entry(parent) {
                 entry.insert(id);
                 scratchpad.push(parent);
@@ -553,6 +652,29 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
                     level = snapshot!(level.set(parent.deep_model(), level[id.deep_model()] + 1));
                 }
             }
+            proof_assert!(!m_pre.contains(&parent.deep_model()) ==> bfs_push_ordered_ok(
+                nodes.model(),
+                *start,
+                *q_pre,
+                *m_pre,
+                *l_pre,
+                head@,
+                old_queue.len(),
+                i@,
+                parent.deep_model(),
+                id
+            ) && bfs_push_least_ok(
+                nodes.model(),
+                *start,
+                *q_pre,
+                *m_pre,
+                *l_pre,
+                head@,
+                old_queue.len(),
+                i@,
+                parent.deep_model(),
+                id
+            ));
             proof_assert! {
                 lemma_bfs_found_level(
                     *start,
@@ -598,6 +720,8 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         && is_target[nodes.model()[q[0]]] ==> *found + 1 <= q.len())]
     #[invariant(forall<k> scratchpad_map.model().contains(&k) ==> nodes.model().contains(&k))]
     #[invariant(forall<i> 0 <= i && i < path@.len() ==> nodes.model().contains(&ids(path@)[i]))]
+    #[invariant(0 < path@.len() ==> path@.len() <= *found + 1
+        && forall<j> 0 <= j && j < path@.len() ==> ids(path@)[j] == tp[j])]
     #[variant(if path@.len() == 0 {
         0
     } else {
@@ -617,4 +741,5 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         );
         path.push(scratchpad_map[last]);
     }
+    proof_assert!(0 < path@.len() ==> ids(path@).ext_eq(*tp));
 }

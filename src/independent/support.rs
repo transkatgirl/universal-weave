@@ -562,6 +562,46 @@ where
     false
 }
 
+/// `p` is the first of `ids` with the best score in `scores` (most active nodes, then fewest inactive
+/// ones).
+///
+/// This is only open in this module, so that the provers don't unfold it in the methods' proofs:
+/// [`lemma_first_scored`] and [`lemma_first_scored_agree`] give what is needed of it.
+#[cfg(creusot)]
+#[logic(open(self))]
+pub fn first_scored<K: DeepModel>(ids: Seq<Id<K>>, scores: ScoreMap<K>, p: Id<K>) -> bool {
+    pearlite! {
+        scores.contains(&p)
+            && (forall<c> ids.contains(c) ==> score_le(scores[c].0, scores[p].0))
+            && exists<b> 0 <= b && b < ids.len() && ids[b] == p
+                && forall<j> 0 <= j && j < b ==> !score_le(scores[p].0, scores[ids[j]].0)
+    }
+}
+
+/// What [`first_scored`] says.
+#[cfg(creusot)]
+#[logic]
+#[requires(first_scored(ids, scores, p))]
+#[ensures(scores.contains(&p) && ids.contains(p))]
+#[ensures(forall<c> ids.contains(c) ==> score_le(scores[c].0, scores[p].0))]
+#[ensures(exists<b> 0 <= b && b < ids.len() && ids[b] == p
+    && forall<j> 0 <= j && j < b ==> !score_le(scores[p].0, scores[ids[j]].0))]
+pub fn lemma_first_scored<K: DeepModel>(ids: Seq<Id<K>>, scores: ScoreMap<K>, p: Id<K>) {}
+
+/// [`first_scored`] holds in scores which agree on the elements of `ids`.
+#[cfg(creusot)]
+#[logic]
+#[requires(first_scored(ids, scores, p))]
+#[requires(forall<c> ids.contains(c) ==> other.contains(&c) && other[c] == scores[c])]
+#[ensures(first_scored(ids, other, p))]
+pub fn lemma_first_scored_agree<K: DeepModel>(
+    ids: Seq<Id<K>>,
+    scores: ScoreMap<K>,
+    other: ScoreMap<K>,
+    p: Id<K>,
+) {
+}
+
 /// The first of `ids` with the best score (most active nodes, then fewest inactive ones), and its
 /// score.
 #[check(terminates)]
@@ -576,6 +616,11 @@ where
 #[ensures(match result {
     Some((id, score)) => exists<b> 0 <= b && b < ids.model().len() && ids.model()[b] == id.deep_model()
         && forall<j> 0 <= j && j < b ==> !score_le(score, scores.model()[ids.model()[j]].0),
+    None => true,
+})]
+// Both, as a fact which the methods' proofs don't unfold.
+#[ensures(match result {
+    Some((id, _)) => first_scored(ids.model(), scores.model(), id.deep_model()),
     None => true,
 })]
 pub(super) fn best_scored<K, S>(

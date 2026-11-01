@@ -3,7 +3,8 @@
 //! `remove` deletes the node `t`, then every node all of whose parents have been deleted, in the
 //! order of a Kahn-style traversal: `remaining_parents` counts, for each child of a deleted node,
 //! its parents which haven't been deleted yet, and a node is pushed onto the stack when its count
-//! reaches zero. The deleted nodes are listed in `done`, starting with `t`.
+//! reaches zero. The deleted nodes are listed in `done`, starting with `t`. This is Kahn's
+//! algorithm over every node, starting from `t` alone, so `done` is [`removal_sequence`].
 
 use core::hash::{BuildHasher, Hash};
 
@@ -14,8 +15,8 @@ use super::*;
 use crate::{
     IndependentContents,
     verification::{
-        Id, in_order, lemma_in_order_refl, lemma_in_order_removed, lemma_in_order_trans,
-        lemma_no_dup_snoc, lemma_snoc_contains, no_dup, set_bound,
+        Id, in_order, lemma_concat_snoc, lemma_in_order_refl, lemma_in_order_removed,
+        lemma_in_order_trans, lemma_no_dup_snoc, lemma_snoc_contains, no_dup, set_bound,
     },
 };
 
@@ -380,6 +381,288 @@ where
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
 {
+}
+
+/// The order in which removing `t` deletes nodes: Kahn's algorithm over every node, starting from
+/// `t` alone. It deletes a node once all of its parents are deleted, and visits each deleted
+/// node's children from the last to the first.
+#[logic(open)]
+pub fn removal_sequence<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>) -> Seq<Id<K>>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { kahn_run(nodes, admit_all(), nodes.len() + 1, Seq::empty(), Seq::singleton(t)) }
+}
+
+/// Continuing Kahn's algorithm from the deleted nodes `done` and the stack gives
+/// [`removal_sequence`].
+///
+/// This and [`cascade_stack`] are only open in this module, so that the provers don't unfold them
+/// in `remove_tracked`'s proof: the facts below give what it needs.
+#[logic(open(self))]
+pub fn cascade_run<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    t: Id<K>,
+    done: Seq<Id<K>>,
+    stack: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        kahn_run(nodes, admit_all(), nodes.len() + 1 - done.len(), done, stack)
+            == removal_sequence(nodes, t)
+    }
+}
+
+/// The removal's stack while it visits the children `to` of a node deleted after `out`, from the
+/// `i`-th one on: `rest`, then those of `to[i..]` which have become ready, from the last one.
+#[logic(open(self))]
+pub fn cascade_stack<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    i: Int,
+    stack: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        stack == rest.concat(ready(nodes, admit_all(), out, to.subsequence(i, to.len()).reverse()))
+    }
+}
+
+/// [`lemma_removal_sequence_leaf`] as a fact, which applies wherever it is asserted.
+#[logic]
+#[ensures(result == (nodes[t]@.to.len() == 0))]
+#[ensures(result ==> removal_sequence(nodes, t) == Seq::singleton(t))]
+pub fn removal_sequence_leaf_ok<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(nodes[t]@.to.len() == 0 ==> {
+            lemma_removal_sequence_leaf(nodes, t);
+            true
+        });
+        nodes[t]@.to.len() == 0
+    }
+}
+
+/// A node without children is deleted alone.
+#[logic]
+#[requires(nodes[t]@.to.len() == 0)]
+#[ensures(removal_sequence(nodes, t) == Seq::singleton(t))]
+pub fn lemma_removal_sequence_leaf<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let to = nodes[t]@.to;
+        let one = Seq::<Id<K>>::empty().snoc(t);
+        proof_assert!(one.ext_eq(Seq::singleton(t)));
+        proof_assert!(to.reverse().ext_eq(to.subsequence(to.len(), to.len()).reverse()));
+        lemma_ready_ends(nodes, admit_all(), one, to);
+        proof_assert!(ready(nodes, admit_all(), one, to.reverse()) == Seq::empty());
+        proof_assert!(Seq::<Id<K>>::empty().concat(Seq::empty()).ext_eq(Seq::empty()));
+        lemma_kahn_run_step(nodes, admit_all(), nodes.len() + 1, Seq::empty(), Seq::empty(), t);
+        lemma_kahn_run_done(nodes, admit_all(), nodes.len(), one)
+    }
+}
+
+/// Deleting `t` first, Kahn's algorithm continues from those of its children which become ready.
+#[logic]
+#[ensures(result == cascade_stack(nodes, Seq::empty().snoc(t), nodes[t]@.to, Seq::empty(), 0, stack))]
+#[ensures(result ==> cascade_run(nodes, t, Seq::empty().snoc(t), stack))]
+pub fn cascade_run_start_ok<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>, stack: Seq<Id<K>>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let to = nodes[t]@.to;
+        proof_assert!(Seq::<Id<K>>::empty().snoc(t).ext_eq(Seq::singleton(t)));
+        proof_assert!(to.subsequence(0, to.len()).ext_eq(to));
+        lemma_kahn_run_step(nodes, admit_all(), nodes.len() + 1, Seq::empty(), Seq::empty(), t);
+        cascade_stack(nodes, Seq::empty().snoc(t), to, Seq::empty(), 0, stack)
+    }
+}
+
+/// Before any child of a deleted node is visited, the stack is `rest`.
+#[logic]
+#[ensures(rest.concat(ready(nodes, admit_all(), out, to.subsequence(to.len(), to.len()).reverse()))
+    == rest)]
+pub fn lemma_cascade_ready_none<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { lemma_ready_ends(nodes, admit_all(), out, to); rest.concat_empty() }
+}
+
+/// Visiting the child `to[i]` of a deleted node pushes it when none of its parents are left.
+#[logic]
+#[requires(0 <= i && i < to.len())]
+#[requires(left_parents(nodes, out, to[i]) == 0)]
+#[ensures(rest.concat(ready(nodes, admit_all(), out, to.subsequence(i, to.len()).reverse()))
+    == rest.concat(ready(nodes, admit_all(), out, to.subsequence(i + 1, to.len()).reverse())).snoc(to[i]))]
+pub fn lemma_cascade_ready_push<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        lemma_ready_step(nodes, admit_all(), out, to, i + 1);
+        lemma_concat_snoc(
+            rest,
+            ready(nodes, admit_all(), out, to.subsequence(i + 1, to.len()).reverse()),
+            to[i],
+        )
+    }
+}
+
+/// Visiting the child `to[i]` of a deleted node pushes nothing while some of its parents are left.
+#[logic]
+#[requires(0 <= i && i < to.len())]
+#[requires(left_parents(nodes, out, to[i]) != 0)]
+#[ensures(rest.concat(ready(nodes, admit_all(), out, to.subsequence(i, to.len()).reverse()))
+    == rest.concat(ready(nodes, admit_all(), out, to.subsequence(i + 1, to.len()).reverse())))]
+pub fn lemma_cascade_ready_skip<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    lemma_ready_step(nodes, admit_all(), out, to, i + 1)
+}
+
+/// [`lemma_cascade_ready_none`], [`lemma_cascade_ready_push`] and [`lemma_cascade_ready_skip`] as
+/// facts, which apply wherever they are asserted: the stack after visiting the children of a
+/// deleted node from `to[i]` on.
+#[logic]
+#[ensures(result == (0 <= i && i <= to.len()))]
+#[ensures(result && i == to.len() ==> cascade_stack(nodes, out, to, rest, i, rest))]
+#[ensures(result && i < to.len() && left_parents(nodes, out, to[i]) == 0
+    ==> forall<st> cascade_stack(nodes, out, to, rest, i + 1, st)
+        ==> cascade_stack(nodes, out, to, rest, i, st.snoc(to[i])))]
+#[ensures(result && i < to.len() && left_parents(nodes, out, to[i]) != 0
+    ==> forall<st> cascade_stack(nodes, out, to, rest, i + 1, st)
+        ==> cascade_stack(nodes, out, to, rest, i, st))]
+pub fn cascade_ready_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    i: Int,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = 0 <= i && i <= to.len();
+        proof_assert!(pre && i == to.len() ==> {
+            lemma_cascade_ready_none(nodes, out, to, rest);
+            true
+        });
+        proof_assert!(pre && i < to.len() && left_parents(nodes, out, to[i]) == 0 ==> {
+            lemma_cascade_ready_push(nodes, out, to, rest, i);
+            true
+        });
+        proof_assert!(pre && i < to.len() && left_parents(nodes, out, to[i]) != 0 ==> {
+            lemma_cascade_ready_skip(nodes, out, to, rest, i);
+            true
+        });
+        pre
+    }
+}
+
+/// Deleting the node `cur` from the top of the stack after `prev`, and visiting its children,
+/// continues Kahn's algorithm towards [`removal_sequence`].
+#[logic]
+#[ensures(result == (cascade_run(nodes, t, prev, rest.snoc(cur))
+    && cascade_outer(nodes, rank, t, prev.snoc(cur), stack, counts)
+    && cascade_stack(nodes, prev.snoc(cur), nodes[cur]@.to, rest, 0, stack)))]
+#[ensures(result ==> cascade_run(nodes, t, prev.snoc(cur), stack))]
+#[allow(clippy::too_many_arguments, reason = "The removal's state")]
+pub fn cascade_run_pop_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    t: Id<K>,
+    prev: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    cur: Id<K>,
+    stack: Seq<Id<K>>,
+    counts: FMap<Id<K>, usize>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let to = nodes[cur]@.to;
+        let pre = cascade_run(nodes, t, prev, rest.snoc(cur))
+            && cascade_outer(nodes, rank, t, prev.snoc(cur), stack, counts)
+            && cascade_stack(nodes, prev.snoc(cur), to, rest, 0, stack);
+        proof_assert!(pre ==> {
+            proof_assert!(to.subsequence(0, to.len()).ext_eq(to));
+            proof_assert!(forall<i> 0 <= i && i < prev.snoc(cur).len()
+                ==> prev.snoc(cur).contains(prev.snoc(cur)[i]));
+            proof_assert!(no_dup_len_ok(prev.snoc(cur), nodes));
+            proof_assert!(0 < nodes.len() + 1 - prev.len());
+            lemma_kahn_run_step(nodes, admit_all(), nodes.len() + 1 - prev.len(), prev, rest, cur);
+            true
+        } && cascade_run(nodes, t, prev.snoc(cur), stack));
+        pre
+    }
+}
+
+/// Once the stack is empty, the removal has deleted exactly the nodes of [`removal_sequence`], in
+/// order.
+#[logic]
+#[ensures(result == cascade_run(nodes, t, done, Seq::empty()))]
+#[ensures(result ==> done == removal_sequence(nodes, t))]
+pub fn cascade_run_end_ok<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>, done: Seq<Id<K>>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        lemma_kahn_run_done(nodes, admit_all(), nodes.len() + 1 - done.len(), done);
+        cascade_run(nodes, t, done, Seq::empty())
+    }
 }
 
 /// `passed` lists the nodes of `nodes` whose identifiers `done` lists, in the same order, as they

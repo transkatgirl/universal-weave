@@ -16,6 +16,7 @@ use creusot_std::logic::{FSet, Mapping, such_that};
 use super::*;
 use crate::{
     IndependentContents,
+    independent::support::{first_scored, lemma_first_scored, lemma_first_scored_agree},
     verification::{Id, increasing_steps, lemma_increasing, lemma_subset_len, no_dup},
 };
 
@@ -602,8 +603,10 @@ where
                 && s.1@ == scores[c.deep_model()].0.1@ + a,
         })
             && (exists<q> path_down(nodes, k, q) && count_in(set, q) == s.1@ && q.len() == s.0@ + s.1@)
-            && forall<q> path_down(nodes, k, q)
-                ==> count_in(set, q) < s.1@ || (count_in(set, q) == s.1@ && s.0@ + s.1@ <= q.len())
+            && (forall<q> path_down(nodes, k, q)
+                ==> count_in(set, q) < s.1@ || (count_in(set, q) == s.1@ && s.0@ + s.1@ <= q.len()))
+            && (forall<c> nodes[k]@.to.contains(c) ==> scores.contains(&c))
+            && down_first(nodes, scores, k)
     }
 }
 
@@ -629,6 +632,7 @@ where
             Some(c) => nodes[k]@.to.contains(c.deep_model())
                 && (forall<d> nodes[k]@.to.contains(d)
                     ==> score_le(scores[d].0, scores[c.deep_model()].0))
+                && first_scored(nodes[k]@.to, scores, c.deep_model())
                 && entry.0.0@ == scores[c.deep_model()].0.0@ + 1 - a
                 && entry.0.1@ == scores[c.deep_model()].0.1@ + a,
         }
@@ -677,8 +681,25 @@ where
                 None => true,
                 Some(c) => scores.contains(&c.deep_model()) && c.deep_model() != k,
             });
+            proof_assert!(forall<j, c> scores.contains(&j) && nodes[j]@.to.contains(c)
+                ==> scores.contains(&c) && c != k && new[c] == scores[c]);
+            proof_assert!(forall<j> scores.contains(&j) ==> match scores[j].1 {
+                None => true,
+                Some(q) => {
+                    lemma_first_scored_agree(nodes[j]@.to, scores, new, q.deep_model());
+                    true
+                },
+            } && down_first(nodes, new, j));
             proof_assert!(forall<j> scores.contains(&j) ==> down_scored(nodes, set, new, j));
             proof_assert!(new[k] == entry);
+            proof_assert!(forall<c> nodes[k]@.to.contains(c) ==> c != k && new[c] == scores[c]);
+            proof_assert!((match entry.1 {
+                None => true,
+                Some(q) => {
+                    lemma_first_scored_agree(nodes[k]@.to, scores, new, q.deep_model());
+                    true
+                },
+            }) && down_first(nodes, new, k));
             proof_assert!(forall<q> path_down(nodes, k, q) ==> {
                 if q.len() == 1 {
                     lemma_count_single(set, q);
@@ -874,6 +895,7 @@ where
     && set == before.add(id)
     && !before.contains(&id)))]
 #[ensures(result ==> below_found(nodes, before, id, down))]
+#[ensures(result ==> first_best_down(nodes, set, down) ==> first_best_down(nodes, before, down))]
 pub fn down_walk_done_ok<K, T, S>(
     nodes: Nodes<K, T, S>,
     rank: Mapping<Id<K>, Int>,
@@ -929,6 +951,14 @@ where
             lemma_kept_below(nodes, before, id, down);
             true
         } && below_found(nodes, before, id, down));
+        proof_assert!(pre ==> {
+            proof_assert!(0 < down.len() && down[0] == id);
+            proof_assert!(forall<i> 0 <= i && i < down.len() ==> nodes.contains(&down[i]));
+            proof_assert!(forall<i> 0 <= i && i + 1 < down.len() ==> nodes[down[i]]@.to.contains(down[i + 1]));
+            true
+        } && (first_best_down(nodes, set, down)
+            ==> first_down_shift_ok(nodes, rank, before, id, down)
+                && first_best_down(nodes, before, down)));
         pre
     }
 }
@@ -1191,6 +1221,516 @@ where
         proof_assert!(pre ==> forall<q> valid_path(nodes, q)
             && (forall<i> 0 <= i && i < q.len() ==> wider.contains(&q[i]))
             ==> forall<i> 0 <= i && i < q.len() ==> within.contains(&q[i]));
+        pre
+    }
+}
+
+// Which of the best paths activation chooses.
+
+/// The parent recorded for `k` is the first of its parents with the best score.
+#[logic(open)]
+pub fn up_first<K, T, S>(nodes: Nodes<K, T, S>, scores: ScoreMap<K>, k: Id<K>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        match scores[k].1 {
+            None => true,
+            Some(p) => first_scored(nodes[k]@.from, scores, p.deep_model()),
+        }
+    }
+}
+
+/// The child recorded for `k` is the first of its children with the best score.
+#[logic(open)]
+pub fn down_first<K, T, S>(nodes: Nodes<K, T, S>, scores: ScoreMap<K>, k: Id<K>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        match scores[k].1 {
+            None => true,
+            Some(c) => first_scored(nodes[k]@.to, scores, c.deep_model()),
+        }
+    }
+}
+
+/// `parent`, to be recorded for `k`, is the first of its parents with the best recorded score.
+#[logic(open)]
+pub fn parent_first<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    scores: ScoreMap<K>,
+    k: Id<K>,
+    parent: Option<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        match parent {
+            None => true,
+            Some(p) => first_scored(nodes[k]@.from, scores, p.deep_model()),
+        }
+    }
+}
+
+/// `child`, to be recorded for `k`, is the first of its children with the best recorded score.
+#[logic(open)]
+pub fn child_first<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    scores: ScoreMap<K>,
+    k: Id<K>,
+    child: Option<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        match child {
+            None => true,
+            Some(c) => first_scored(nodes[k]@.to, scores, c.deep_model()),
+        }
+    }
+}
+
+/// Recording `entry` for `k`, whose parents are all recorded, keeps each recorded parent the first
+/// best-scored one, as `k` is no recorded node's parent.
+#[logic]
+#[ensures(result == (!scores.contains(&k)
+    && (forall<j> scores.contains(&j) ==> forall<c> nodes[j]@.from.contains(c) ==> scores.contains(&c))
+    && (forall<j> scores.contains(&j) ==> up_first(nodes, scores, j))
+    && (forall<c> nodes[k]@.from.contains(c) ==> scores.contains(&c))
+    && parent_first(nodes, scores, k, entry.1)))]
+#[ensures(result ==> forall<j> scores.add(k, entry).contains(&j)
+    ==> forall<c> nodes[j]@.from.contains(c) ==> scores.add(k, entry).contains(&c))]
+#[ensures(result ==> forall<j> scores.add(k, entry).contains(&j)
+    ==> up_first(nodes, scores.add(k, entry), j))]
+pub fn up_first_insert_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    scores: ScoreMap<K>,
+    k: Id<K>,
+    entry: ((usize, usize), Option<K>),
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let new = scores.add(k, entry);
+        let pre = !scores.contains(&k)
+            && (forall<j> scores.contains(&j) ==> forall<c> nodes[j]@.from.contains(c) ==> scores.contains(&c))
+            && (forall<j> scores.contains(&j) ==> up_first(nodes, scores, j))
+            && (forall<c> nodes[k]@.from.contains(c) ==> scores.contains(&c))
+            && parent_first(nodes, scores, k, entry.1);
+        proof_assert!(pre ==> {
+            proof_assert!(forall<j> scores.contains(&j) ==> new[j] == scores[j]);
+            proof_assert!(forall<j, c> scores.contains(&j) && nodes[j]@.from.contains(c)
+                ==> c != k && new[c] == scores[c]);
+            proof_assert!(forall<j> scores.contains(&j) ==> match scores[j].1 {
+                None => true,
+                Some(q) => {
+                    lemma_first_scored_agree(nodes[j]@.from, scores, new, q.deep_model());
+                    true
+                },
+            } && up_first(nodes, new, j));
+            proof_assert!(forall<c> nodes[k]@.from.contains(c) ==> c != k && new[c] == scores[c]);
+            proof_assert!(match entry.1 {
+                None => true,
+                Some(q) => {
+                    lemma_first_scored_agree(nodes[k]@.from, scores, new, q.deep_model());
+                    true
+                },
+            });
+            proof_assert!(new[k] == entry && up_first(nodes, new, k));
+            true
+        } && (forall<j> new.contains(&j) ==> forall<c> nodes[j]@.from.contains(c) ==> new.contains(&c))
+            && forall<j> new.contains(&j) ==> up_first(nodes, new, j));
+        pre
+    }
+}
+
+/// The nodes of `chain` from the `i`-th one have the score recorded for it, when each node of
+/// `chain` is followed by its recorded parent, and the last has none.
+#[logic]
+#[requires(forall<j> scores.contains(&j) ==> up_scored(nodes, set, scores, j))]
+#[requires(forall<j> 0 <= j && j < chain.len() ==> scores.contains(&chain[j]))]
+#[requires(forall<j> 0 <= j && j + 1 < chain.len()
+    ==> scores[chain[j]].1.deep_model() == Some(chain[j + 1]))]
+#[requires(0 < chain.len() ==> scores[chain[chain.len() - 1]].1.deep_model() == None)]
+#[requires(0 <= i && i < chain.len())]
+#[ensures(count_in(set, chain.subsequence(i, chain.len())) == scores[chain[i]].0.1@)]
+#[ensures(chain.len() - i == scores[chain[i]].0.0@ + scores[chain[i]].0.1@)]
+#[variant(chain.len() - i)]
+pub fn lemma_up_suffix<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    set: FSet<Id<K>>,
+    scores: ScoreMap<K>,
+    chain: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let s = chain.subsequence(i, chain.len());
+        proof_assert!(s.len() == chain.len() - i && s[0] == chain[i]);
+        if i + 1 < chain.len() {
+            lemma_up_suffix(nodes, set, scores, chain, i + 1);
+            proof_assert!(s.tail().ext_eq(chain.subsequence(i + 1, chain.len())));
+            proof_assert!(match scores[chain[i]].1 {
+                None => false,
+                Some(p) => p.deep_model() == chain[i + 1],
+            });
+        } else {
+            proof_assert!(s.tail().len() == 0);
+            proof_assert!(scores[chain[i]].1 == None);
+        }
+    }
+}
+
+/// Following the recorded parents, which are the first best-scored ones, from the first node of
+/// `chain` follows the first parents from which a best path up starts.
+#[logic]
+#[ensures(result == ((forall<j> scores.contains(&j) ==> up_scored(nodes, set, scores, j))
+    && (forall<j> scores.contains(&j) ==> up_first(nodes, scores, j))
+    && (forall<j> scores.contains(&j) ==> forall<c> nodes[j]@.from.contains(c) ==> scores.contains(&c))
+    && 0 < chain.len()
+    && path_up(nodes, chain[0], chain)
+    && (forall<j> 0 <= j && j < chain.len() ==> scores.contains(&chain[j]))
+    && (forall<j> 0 <= j && j + 1 < chain.len()
+        ==> scores[chain[j]].1.deep_model() == Some(chain[j + 1]))
+    && scores[chain[chain.len() - 1]].1.deep_model() == None))]
+#[ensures(result ==> first_best_up(nodes, set, chain))]
+pub fn first_up_walk_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    set: FSet<Id<K>>,
+    scores: ScoreMap<K>,
+    chain: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let n = chain.len();
+        let pre = (forall<j> scores.contains(&j) ==> up_scored(nodes, set, scores, j))
+            && (forall<j> scores.contains(&j) ==> up_first(nodes, scores, j))
+            && (forall<j> scores.contains(&j) ==> forall<c> nodes[j]@.from.contains(c) ==> scores.contains(&c))
+            && 0 < n
+            && path_up(nodes, chain[0], chain)
+            && (forall<j> 0 <= j && j < n ==> scores.contains(&chain[j]))
+            && (forall<j> 0 <= j && j + 1 < n ==> scores[chain[j]].1.deep_model() == Some(chain[j + 1]))
+            && scores[chain[n - 1]].1.deep_model() == None;
+        proof_assert!(pre ==> {
+            proof_assert!(forall<i> 0 <= i && i < n ==> {
+                lemma_up_suffix(nodes, set, scores, chain, i);
+                true
+            } && count_in(set, chain.subsequence(i, n)) == scores[chain[i]].0.1@
+                && n - i == scores[chain[i]].0.0@ + scores[chain[i]].0.1@);
+            proof_assert!(forall<i, j> 0 <= i && i < n && 0 <= j && j < n - i
+                ==> chain.subsequence(i, n)[j] == chain[i + j]);
+            proof_assert!(forall<i> 0 <= i && i < n ==> path_up(nodes, chain[i], chain.subsequence(i, n)));
+            proof_assert!(forall<i> 0 <= i && i < n ==> best_path_up(nodes, set, chain[i], chain.subsequence(i, n)));
+            proof_assert!(forall<i> 0 <= i && i + 1 < n ==> match scores[chain[i]].1 {
+                None => false,
+                Some(p) => p.deep_model() == chain[i + 1] && up_first(nodes, scores, chain[i]) && {
+                    lemma_first_scored(nodes[chain[i]]@.from, scores, chain[i + 1]);
+                    true
+                },
+            });
+            proof_assert!(forall<i> 0 <= i && i + 1 < n
+                ==> first_best_parent(nodes, set, chain[i], chain[i + 1]));
+            true
+        } && first_best_up(nodes, set, chain));
+        pre
+    }
+}
+
+/// Following the recorded children, which are the first best-scored ones, from the first node of
+/// `down` follows the first children from which a best path down starts.
+#[logic]
+#[ensures(result == ((forall<j> scores.contains(&j) ==> down_scored(nodes, set, scores, j))
+    && (forall<j> 0 <= j && j < down.len() ==> scores.contains(&down[j]))
+    && forall<j> 0 <= j && j + 1 < down.len()
+        ==> scores[down[j]].1.deep_model() == Some(down[j + 1])))]
+#[ensures(result ==> first_best_down(nodes, set, down))]
+pub fn first_down_walk_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    set: FSet<Id<K>>,
+    scores: ScoreMap<K>,
+    down: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = (forall<j> scores.contains(&j) ==> down_scored(nodes, set, scores, j))
+            && (forall<j> 0 <= j && j < down.len() ==> scores.contains(&down[j]))
+            && forall<j> 0 <= j && j + 1 < down.len()
+                ==> scores[down[j]].1.deep_model() == Some(down[j + 1]);
+        proof_assert!(pre ==> {
+            proof_assert!(forall<j> scores.contains(&j) ==> exists<q> path_down(nodes, j, q)
+                && count_in(set, q) == scores[j].0.1@ && q.len() == scores[j].0.0@ + scores[j].0.1@);
+            proof_assert!(forall<j, q> scores.contains(&j) && path_down(nodes, j, q)
+                && count_in(set, q) == scores[j].0.1@ && q.len() == scores[j].0.0@ + scores[j].0.1@
+                ==> best_path_down(nodes, set, j, q));
+            proof_assert!(forall<i> 0 <= i && i + 1 < down.len() ==> match scores[down[i]].1 {
+                None => false,
+                Some(c) => c.deep_model() == down[i + 1] && down_first(nodes, scores, down[i]) && {
+                    lemma_first_scored(nodes[down[i]]@.to, scores, down[i + 1]);
+                    true
+                },
+            });
+            proof_assert!(forall<i> 0 <= i && i + 1 < down.len() ==> {
+                let c = down[i + 1];
+                let best = such_that(|q| path_down(nodes, c, q)
+                    && count_in(set, q) == scores[c].0.1@ && q.len() == scores[c].0.0@ + scores[c].0.1@);
+                best_path_down(nodes, set, c, best)
+            });
+            proof_assert!(forall<i> 0 <= i && i + 1 < down.len()
+                ==> first_best_child(nodes, set, down[i], down[i + 1]));
+            true
+        } && first_best_down(nodes, set, down));
+        pre
+    }
+}
+
+/// One step of [`first_up_shift_ok`]: the first best parent of `k`, an ancestor of `id` or `id`
+/// itself, is the same whether `id` is counted or not.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&k)
+    && rank[k] <= rank[id]
+    && first_best_parent(nodes, set.add(id), k, p)))]
+#[ensures(result ==> first_best_parent(nodes, set, k, p))]
+pub fn first_parent_shift_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    set: FSet<Id<K>>,
+    id: Id<K>,
+    k: Id<K>,
+    p: Id<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&k)
+            && rank[k] <= rank[id]
+            && first_best_parent(nodes, set.add(id), k, p);
+        proof_assert!(pre ==> {
+            proof_assert!(forall<x> nodes[k]@.from.contains(x) ==> linked(nodes, k) && rank[x] < rank[id]);
+            proof_assert!(forall<x, r> path_up(nodes, x, r) && rank[x] < rank[id] ==> {
+                crate::independent::verification::edit::lemma_path_ranks_all(nodes, rank, r);
+                proof_assert!(forall<i> 0 <= i && i < r.len() ==> rank[r[i]] <= rank[x]);
+                lemma_count_add_absent(set, r, id);
+                true
+            } && count_in(set.add(id), r) == count_in(set, r));
+            let w = such_that(|w: (Int, Seq<Id<K>>)| 0 <= w.0 && w.0 < nodes[k]@.from.len()
+                && nodes[k]@.from[w.0] == p
+                && best_path_up(nodes, set.add(id), p, w.1)
+                && forall<j, r> 0 <= j && j < nodes[k]@.from.len()
+                    && path_up(nodes, nodes[k]@.from[j], r)
+                    ==> no_better(set.add(id), r, w.1) && (j < w.0 ==> worse(set.add(id), r, w.1)));
+            proof_assert!(rank[p] < rank[id]);
+            proof_assert!(count_in(set.add(id), w.1) == count_in(set, w.1));
+            proof_assert!(best_path_up(nodes, set, p, w.1));
+            proof_assert!(forall<j, r> 0 <= j && j < nodes[k]@.from.len()
+                && path_up(nodes, nodes[k]@.from[j], r)
+                ==> no_better(set, r, w.1) && (j < w.0 ==> worse(set, r, w.1)));
+            true
+        } && first_best_parent(nodes, set, k, p));
+        pre
+    }
+}
+
+/// One step of [`first_down_shift_ok`]: the first best child of `k`, a descendant of `id` or `id`
+/// itself, is the same whether `id` is counted or not.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&k)
+    && rank[id] <= rank[k]
+    && first_best_child(nodes, set.add(id), k, c)))]
+#[ensures(result ==> first_best_child(nodes, set, k, c))]
+pub fn first_child_shift_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    set: FSet<Id<K>>,
+    id: Id<K>,
+    k: Id<K>,
+    c: Id<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&k)
+            && rank[id] <= rank[k]
+            && first_best_child(nodes, set.add(id), k, c);
+        proof_assert!(pre ==> {
+            proof_assert!(forall<x> nodes[k]@.to.contains(x)
+                ==> linked(nodes, k) && nodes[x]@.from.contains(k) && rank[id] < rank[x]);
+            proof_assert!(forall<x, r> path_down(nodes, x, r) && rank[id] < rank[x] ==> {
+                lemma_down_ranks(nodes, rank, r);
+                proof_assert!(forall<i> 0 <= i && i < r.len() ==> rank[x] <= rank[r[i]]);
+                lemma_count_add_absent(set, r, id);
+                true
+            } && count_in(set.add(id), r) == count_in(set, r));
+            let w = such_that(|w: (Int, Seq<Id<K>>)| 0 <= w.0 && w.0 < nodes[k]@.to.len()
+                && nodes[k]@.to[w.0] == c
+                && best_path_down(nodes, set.add(id), c, w.1)
+                && forall<j, r> 0 <= j && j < nodes[k]@.to.len()
+                    && path_down(nodes, nodes[k]@.to[j], r)
+                    ==> no_better(set.add(id), r, w.1) && (j < w.0 ==> worse(set.add(id), r, w.1)));
+            proof_assert!(rank[id] < rank[c]);
+            proof_assert!(count_in(set.add(id), w.1) == count_in(set, w.1));
+            proof_assert!(best_path_down(nodes, set, c, w.1));
+            proof_assert!(forall<j, r> 0 <= j && j < nodes[k]@.to.len()
+                && path_down(nodes, nodes[k]@.to[j], r)
+                ==> no_better(set, r, w.1) && (j < w.0 ==> worse(set, r, w.1)));
+            true
+        } && first_best_child(nodes, set, k, c));
+        pre
+    }
+}
+
+/// The first best parents along a path up from `id`, when `id` is counted in `set`, are those
+/// when it isn't: no path up from the parent of a node of the path contains `id`.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank) && path_up(nodes, id, path)
+    && first_best_up(nodes, set.add(id), path)))]
+#[ensures(result ==> first_best_up(nodes, set, path))]
+pub fn first_up_shift_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    set: FSet<Id<K>>,
+    id: Id<K>,
+    path: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = all_linked(nodes) && ranked(nodes, rank) && path_up(nodes, id, path)
+            && first_best_up(nodes, set.add(id), path);
+        proof_assert!(pre ==> {
+            crate::independent::verification::edit::lemma_path_ranks_all(nodes, rank, path);
+            proof_assert!(forall<i> 0 <= i && i < path.len() ==> rank[path[i]] <= rank[id]);
+            proof_assert!(forall<x, r> path_up(nodes, x, r) && rank[x] < rank[id] ==> {
+                crate::independent::verification::edit::lemma_path_ranks_all(nodes, rank, r);
+                proof_assert!(forall<i> 0 <= i && i < r.len() ==> rank[r[i]] <= rank[x]);
+                lemma_count_add_absent(set, r, id);
+                true
+            } && !r.contains(id) && count_in(set.add(id), r) == count_in(set, r));
+            proof_assert!(forall<i> 0 <= i && i + 1 < path.len()
+                ==> nodes.contains(&path[i])
+                    && first_parent_shift_ok(nodes, rank, set, id, path[i], path[i + 1]));
+            true
+        } && first_best_up(nodes, set, path));
+        pre
+    }
+}
+
+/// The first best children along a path down from `id`, when `id` is counted in `set`, are those
+/// when it isn't: no path down from the child of a node of the path contains `id`.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank)
+    && 0 < path.len() && path[0] == id
+    && (forall<i> 0 <= i && i < path.len() ==> nodes.contains(&path[i]))
+    && (forall<i> 0 <= i && i + 1 < path.len() ==> nodes[path[i]]@.to.contains(path[i + 1]))
+    && first_best_down(nodes, set.add(id), path)))]
+#[ensures(result ==> first_best_down(nodes, set, path))]
+pub fn first_down_shift_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    set: FSet<Id<K>>,
+    id: Id<K>,
+    path: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = all_linked(nodes) && ranked(nodes, rank)
+            && 0 < path.len() && path[0] == id
+            && (forall<i> 0 <= i && i < path.len() ==> nodes.contains(&path[i]))
+            && (forall<i> 0 <= i && i + 1 < path.len() ==> nodes[path[i]]@.to.contains(path[i + 1]))
+            && first_best_down(nodes, set.add(id), path);
+        proof_assert!(pre ==> {
+            lemma_down_ranks(nodes, rank, path);
+            proof_assert!(forall<i> 0 <= i && i < path.len() ==> rank[id] <= rank[path[i]]);
+            proof_assert!(forall<x, r> path_down(nodes, x, r) && rank[id] < rank[x] ==> {
+                lemma_down_ranks(nodes, rank, r);
+                proof_assert!(forall<i> 0 <= i && i < r.len() ==> rank[x] <= rank[r[i]]);
+                lemma_count_add_absent(set, r, id);
+                true
+            } && !r.contains(id) && count_in(set.add(id), r) == count_in(set, r));
+            proof_assert!(forall<i> 0 <= i && i + 1 < path.len()
+                ==> first_child_shift_ok(nodes, rank, set, id, path[i], path[i + 1]));
+            true
+        } && first_best_down(nodes, set, path));
+        pre
+    }
+}
+
+/// [`rerouted_ok`], choosing the first best parents and children.
+#[logic]
+#[ensures(result == (same_graph(nodes, old)
+    && up_found(nodes, before.add(id), id, up)
+    && below_found(nodes, before, id, below)
+    && first_best_up(nodes, before, up)
+    && first_best_down(nodes, before, below)
+    && forall<k> after.contains(&k) == (up.contains(k) || below.contains(k))))]
+#[ensures(result ==> rerouted_first(old, before, id, after))]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "The paths and what they are found in"
+)]
+pub fn rerouted_first_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    old: Nodes<K, T, S>,
+    before: FSet<Id<K>>,
+    id: Id<K>,
+    after: FSet<Id<K>>,
+    up: Seq<Id<K>>,
+    below: Seq<Id<K>>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = same_graph(nodes, old)
+            && up_found(nodes, before.add(id), id, up)
+            && below_found(nodes, before, id, below)
+            && first_best_up(nodes, before, up)
+            && first_best_down(nodes, before, below)
+            && forall<k> after.contains(&k) == (up.contains(k) || below.contains(k));
+        proof_assert!(pre ==> {
+            lemma_best_up_shift(nodes, before, id, up);
+            proof_assert!(rerouted_first(nodes, before, id, after));
+            true
+        } && same_graph_first_ok(nodes, old) && rerouted_first(old, before, id, after));
         pre
     }
 }

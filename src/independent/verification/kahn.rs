@@ -845,3 +845,290 @@ where
 {
     pearlite! { |k| nodes.contains(&k) && descends(nodes, k, id) }
 }
+
+/// What `fix_orphaned_activations` lists: Kahn's algorithm over the admitted nodes, run from each
+/// admitted node of `roots` in turn, each run continuing from what the previous ones output.
+///
+/// This is only open in this module, like [`kahn_run`].
+#[logic(open(self))]
+#[variant(roots.len())]
+pub fn roots_kahn<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+) -> Seq<Id<K>>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        if roots.len() == 0 {
+            Seq::empty()
+        } else {
+            let prev = roots_kahn(nodes, admitted, roots.subsequence(0, roots.len() - 1));
+            if admitted[roots[roots.len() - 1]] {
+                kahn_run(
+                    nodes,
+                    admitted,
+                    nodes.len() + 1 - prev.len(),
+                    prev,
+                    Seq::singleton(roots[roots.len() - 1]),
+                )
+            } else {
+                prev
+            }
+        }
+    }
+}
+
+/// Before any root, nothing is output.
+#[logic]
+#[ensures(roots_kahn(nodes, admitted, roots.subsequence(0, 0)) == Seq::empty())]
+pub fn lemma_roots_kahn_empty<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    proof_assert!(roots.subsequence(0, 0).len() == 0);
+}
+
+/// Running from one more admitted root continues Kahn's algorithm from it.
+#[logic]
+#[requires(0 <= i && i < roots.len())]
+#[requires(admitted[roots[i]])]
+#[ensures(roots_kahn(nodes, admitted, roots.subsequence(0, i + 1)) == kahn_run(
+    nodes,
+    admitted,
+    nodes.len() + 1 - roots_kahn(nodes, admitted, roots.subsequence(0, i)).len(),
+    roots_kahn(nodes, admitted, roots.subsequence(0, i)),
+    Seq::singleton(roots[i]),
+))]
+pub fn lemma_roots_kahn_admitted<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    proof_assert!(roots.subsequence(0, i + 1).len() == i + 1);
+    proof_assert!(roots.subsequence(0, i + 1)[i] == roots[i]);
+    proof_assert!(
+        roots
+            .subsequence(0, i + 1)
+            .subsequence(0, i)
+            .ext_eq(roots.subsequence(0, i))
+    );
+}
+
+/// A root which isn't admitted adds nothing.
+#[logic]
+#[requires(0 <= i && i < roots.len())]
+#[requires(!admitted[roots[i]])]
+#[ensures(roots_kahn(nodes, admitted, roots.subsequence(0, i + 1))
+    == roots_kahn(nodes, admitted, roots.subsequence(0, i)))]
+pub fn lemma_roots_kahn_skip<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    proof_assert!(roots.subsequence(0, i + 1).len() == i + 1);
+    proof_assert!(roots.subsequence(0, i + 1)[i] == roots[i]);
+    proof_assert!(
+        roots
+            .subsequence(0, i + 1)
+            .subsequence(0, i)
+            .ext_eq(roots.subsequence(0, i))
+    );
+}
+
+/// The nodes [`ready`] keeps are among those it visits.
+#[logic]
+#[ensures(forall<x> ready(nodes, admitted, out, s).contains(x) ==> s.contains(x))]
+#[variant(s.len())]
+pub fn lemma_ready_within<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    out: Seq<Id<K>>,
+    s: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if 0 < s.len() {
+        pearlite! {
+            let prefix = s.subsequence(0, s.len() - 1);
+            lemma_ready_within(nodes, admitted, out, prefix);
+            let r = ready(nodes, admitted, out, prefix);
+            proof_assert!(forall<x> r.snoc(s[s.len() - 1]).contains(x)
+                == (r.contains(x) || x == s[s.len() - 1]) && {
+                    lemma_snoc_contains(r, s[s.len() - 1], x);
+                    true
+                });
+            proof_assert!(forall<x> prefix.contains(x) ==> s.contains(x))
+        }
+    }
+}
+
+/// [`ready`] only reads the parents of the nodes it visits.
+#[logic]
+#[requires(same_graph(new, old))]
+#[requires(forall<i> 0 <= i && i < s.len() ==> old.contains(&s[i]))]
+#[ensures(ready(new, admitted, out, s) == ready(old, admitted, out, s))]
+#[variant(s.len())]
+pub fn lemma_ready_same_graph<K, T, S>(
+    new: Nodes<K, T, S>,
+    old: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    out: Seq<Id<K>>,
+    s: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if 0 < s.len() {
+        pearlite! {
+            let c = s[s.len() - 1];
+            proof_assert!(old.contains(&c) && new[c]@.from == old[c]@.from);
+            proof_assert!(pending_parents(new, admitted, out, c) == pending_parents(old, admitted, out, c));
+            lemma_ready_same_graph(new, old, admitted, out, s.subsequence(0, s.len() - 1))
+        }
+    }
+}
+
+/// Kahn's algorithm only reads the links of the nodes it visits.
+#[logic]
+#[requires(same_graph(new, old))]
+#[requires(all_linked(old))]
+#[requires(forall<i> 0 <= i && i < stack.len() ==> old.contains(&stack[i]))]
+#[ensures(kahn_run(new, admitted, fuel, out, stack) == kahn_run(old, admitted, fuel, out, stack))]
+#[variant(fuel)]
+pub fn lemma_kahn_run_same_graph<K, T, S>(
+    new: Nodes<K, T, S>,
+    old: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    fuel: Int,
+    out: Seq<Id<K>>,
+    stack: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if 0 < fuel && 0 < stack.len() {
+        pearlite! {
+            let id = stack[stack.len() - 1];
+            let o = out.snoc(id);
+            let to = old[id]@.to;
+            proof_assert!(old.contains(&id) && linked(old, id) && new[id]@.to == to);
+            proof_assert!(forall<i> 0 <= i && i < to.reverse().len()
+                ==> to.reverse()[i] == to[to.len() - 1 - i] && old.contains(&to.reverse()[i]));
+            lemma_ready_same_graph(new, old, admitted, o, to.reverse());
+            lemma_ready_within(old, admitted, o, to.reverse());
+            let rest = stack.subsequence(0, stack.len() - 1);
+            let next = rest.concat(ready(old, admitted, o, to.reverse()));
+            proof_assert!(forall<i> 0 <= i && i < rest.len() ==> rest[i] == stack[i]);
+            proof_assert!(forall<i> 0 <= i && i < next.len() ==> next.contains(next[i]));
+            proof_assert!(forall<x> next.contains(x) ==> rest.contains(x)
+                || ready(old, admitted, o, to.reverse()).contains(x));
+            proof_assert!(forall<x> to.reverse().contains(x) ==> old.contains(&x));
+            proof_assert!(forall<i> 0 <= i && i < next.len() ==> old.contains(&next[i]));
+            lemma_kahn_run_same_graph(new, old, admitted, fuel - 1, o, next)
+        }
+    }
+}
+
+/// [`roots_kahn`] only reads the links of the admitted nodes.
+#[logic]
+#[requires(same_graph(new, old))]
+#[requires(all_linked(old))]
+#[requires(forall<k> admitted[k] ==> old.contains(&k))]
+#[ensures(roots_kahn(new, admitted, roots) == roots_kahn(old, admitted, roots))]
+#[variant(roots.len())]
+pub fn lemma_roots_kahn_same_graph<K, T, S>(
+    new: Nodes<K, T, S>,
+    old: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    if 0 < roots.len() {
+        pearlite! {
+            let prefix = roots.subsequence(0, roots.len() - 1);
+            let r = roots[roots.len() - 1];
+            lemma_roots_kahn_same_graph(new, old, admitted, prefix);
+            crate::verification::lemma_keys_subset_len(new, old);
+            crate::verification::lemma_keys_subset_len(old, new);
+            proof_assert!(new.len() == old.len());
+            let prev = roots_kahn(old, admitted, prefix);
+            proof_assert!(admitted[r] ==> {
+                lemma_kahn_run_same_graph(
+                    new,
+                    old,
+                    admitted,
+                    old.len() + 1 - prev.len(),
+                    prev,
+                    Seq::singleton(r),
+                );
+                true
+            } && kahn_run(new, admitted, new.len() + 1 - prev.len(), prev, Seq::singleton(r))
+                == kahn_run(old, admitted, old.len() + 1 - prev.len(), prev, Seq::singleton(r)))
+        }
+    }
+}
+
+/// [`lemma_roots_kahn_admitted`] and [`lemma_roots_kahn_skip`] as a fact, which applies wherever
+/// it is asserted.
+#[logic]
+#[ensures(result == (0 <= i && i < roots.len()))]
+#[ensures(result && admitted[roots[i]] ==> roots_kahn(nodes, admitted, roots.subsequence(0, i + 1))
+    == kahn_run(
+        nodes,
+        admitted,
+        nodes.len() + 1 - roots_kahn(nodes, admitted, roots.subsequence(0, i)).len(),
+        roots_kahn(nodes, admitted, roots.subsequence(0, i)),
+        Seq::singleton(roots[i]),
+    ))]
+#[ensures(result && !admitted[roots[i]] ==> roots_kahn(nodes, admitted, roots.subsequence(0, i + 1))
+    == roots_kahn(nodes, admitted, roots.subsequence(0, i)))]
+pub fn roots_kahn_step_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    roots: Seq<Id<K>>,
+    i: Int,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let pre = 0 <= i && i < roots.len();
+        proof_assert!(pre && admitted[roots[i]] ==> {
+            lemma_roots_kahn_admitted(nodes, admitted, roots, i);
+            true
+        });
+        proof_assert!(pre && !admitted[roots[i]] ==> {
+            lemma_roots_kahn_skip(nodes, admitted, roots, i);
+            true
+        });
+        pre
+    }
+}

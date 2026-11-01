@@ -591,9 +591,18 @@ where
         ==> (^active).model() == active.model())]
     #[ensures(result && value && !nodes.model()[id.deep_model()]@.active
         ==> activated(nodes.model(), active.model(), id.deep_model(), (^active).model()))]
+    #[ensures(result && value && !nodes.model()[id.deep_model()]@.active
+        ==> activated_first(nodes.model(), active.model(), id.deep_model(), (^active).model()))]
     #[ensures(result && !value && nodes.model()[id.deep_model()]@.active
         ==> longest_path_within(
             nodes.model(),
+            active.model().remove(id.deep_model()),
+            (^active).model(),
+        ))]
+    #[ensures(result && !value && nodes.model()[id.deep_model()]@.active
+        ==> reactivated_within(
+            nodes.model(),
+            roots.model(),
             active.model().remove(id.deep_model()),
             (^active).model(),
         ))]
@@ -666,7 +675,9 @@ where
                 forms_path(*n1, *a1)
             };
             proof_assert!(value ==> activated(*n0, *a0, *id0, *a1));
+            proof_assert!(value ==> activated_first(*n0, *a0, *id0, *a1));
             proof_assert!(!value ==> longest_whole_ok(*n0, *a1));
+            proof_assert!(!value ==> reactivated_whole_ok(*n0, roots.model(), *a1, *a1));
             return true;
         }
 
@@ -769,6 +780,10 @@ where
                 ==> exists<j> 0 <= j && j < i@ && topo[j] == k)]
             #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
                 ==> up_scored(*n1, *a1, scratchpad_map_2.model(), k))]
+            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
+                ==> forall<c> n1[k]@.from.contains(c) ==> scratchpad_map_2.model().contains(&c))]
+            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
+                ==> up_first(*n1, scratchpad_map_2.model(), k))]
             #[variant(topological.model().len() - i@)]
             while i < topological.len() {
                 let id = topological[i];
@@ -779,6 +794,7 @@ where
                     true
                 } && scratchpad_map_2.model().contains(&p));
 
+                proof_assert!(node@ == n1[id.deep_model()]@);
                 let best_parent = best_scored(&node.from, &scratchpad_map_2);
 
                 let (parent, score) = if let Some((parent, mut score)) = best_parent {
@@ -820,6 +836,8 @@ where
                     ==> scratchpad_map_2.model().contains(&p));
                 proof_assert!(up_entry(*n1, *a1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
                 proof_assert!(up_insert_ok(*n1, *a1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
+                proof_assert!(parent_first(*n1, scratchpad_map_2.model(), id.deep_model(), parent));
+                proof_assert!(up_first_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
 
                 scratchpad_map_2.insert(id, (score, parent));
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -840,6 +858,11 @@ where
             #[invariant(ancestor_walk(*n1, *rank, *scores, *chain, current.deep_model(), *id0))]
             #[invariant(forall<k> scratchpad_set.model().contains(&k) == chain.contains(k))]
             #[invariant(up_walk(*a1, *scores, *chain, current.deep_model(), *id0))]
+            #[invariant(forall<j> 0 <= j && j < chain.len() ==> scores.contains(&chain[j]))]
+            #[invariant(forall<j> 0 <= j && j + 1 < chain.len()
+                ==> scores[chain[j]].1.deep_model() == Some(chain[j + 1]))]
+            #[invariant(0 < chain.len()
+                ==> scores[chain[chain.len() - 1]].1.deep_model() == current.deep_model())]
             #[variant(match current.deep_model() { Some(x) => rank[x] + 1, None => 0 })]
             while let Some(id) = current {
                 proof_assert!(current.deep_model() == Some(id.deep_model()));
@@ -869,6 +892,11 @@ where
             };
             proof_assert!(path_up(*n1, *id0, *chain));
             proof_assert!(up_walk_done_ok(*n1, *a1, *scores, *chain, *id0));
+            proof_assert!(forall<k> scores.contains(&k) ==> up_first(*n1, *scores, k));
+            proof_assert!(forall<k> scores.contains(&k)
+                ==> forall<c> n1[k]@.from.contains(c) ==> scores.contains(&c));
+            proof_assert!(first_up_walk_ok(*n1, *a1, *scores, *chain));
+            proof_assert!(first_up_shift_ok(*n1, *rank, *a0, *id0, *chain));
             proof! {
                 let mut witness = snapshot!(*chain);
                 let mut down = snapshot!(Seq::singleton(*id0));
@@ -1007,6 +1035,7 @@ where
                                 && down_scored(*n1, *a1, scratchpad_map_2.model(), j));
                         proof_assert!(forall<c> n1[id.deep_model()]@.to.contains(c)
                             ==> scratchpad_map_2.model().contains(&c));
+                        proof_assert!(child_first(*n1, scratchpad_map_2.model(), id.deep_model(), child));
                         proof_assert!(down_entry(*n1, *a1, scratchpad_map_2.model(), id.deep_model(), (score, child)));
                         proof_assert!(down_insert_ok(*n1, *rank, *a1, scratchpad_map_2.model(), id.deep_model(), (score, child)));
 
@@ -1036,6 +1065,11 @@ where
                     #[invariant(down_walk(*n1, *a1, *scores, *down, current.deep_model(), *id0))]
                     #[invariant(forall<k> scratchpad_set.model().contains(&k)
                         == (chain.contains(k) || down.contains(k)))]
+                    #[invariant(forall<j> 0 <= j && j < down.len() ==> scores.contains(&down[j]))]
+                    #[invariant(forall<j> 0 <= j && j + 1 < down.len()
+                        ==> scores[down[j]].1.deep_model() == Some(down[j + 1]))]
+                    #[invariant(0 < down.len() && current.deep_model() != None
+                        ==> scores[down[down.len() - 1]].1.deep_model() == current.deep_model())]
                     #[variant(match current.deep_model() { Some(x) => set_bound(n1.keys(), *rank) - rank[x], None => 0 })]
                     while let Some(id) = current {
                         proof_assert!(current.deep_model() == Some(id.deep_model()));
@@ -1066,6 +1100,7 @@ where
                             || current.deep_model() == scores[id.deep_model()].1.deep_model());
                     }
                     proof_assert!(0 < down.len() && scores.contains(&down[down.len() - 1]));
+                    proof_assert!(first_down_walk_ok(*n1, *a1, *scores, *down));
                     proof_assert!(down_walk_done_ok(*n1, *rank, *a0, *a1, *scores, *down, *id0));
                 }
             }
@@ -1077,9 +1112,12 @@ where
             proof_assert!(forall<k> scratchpad_set.model().contains(&k)
                 == (chain.contains(k) || down.contains(k)));
             proof_assert!(rerouted_ok(*n1, *n0, *a0, *id0, scratchpad_set.model(), *chain, *down));
+            proof_assert!(first_best_down(*n1, *a0, *down));
+            proof_assert!(rerouted_first_ok(*n1, *n0, *a0, *id0, scratchpad_set.model(), *chain, *down));
 
             activate_exactly(nodes, active, &scratchpad_set, &mut topological);
             proof_assert!(!extends_path(*n0, *a0, *id0) && activated(*n0, *a0, *id0, active.model()));
+            proof_assert!(activated_first(*n0, *a0, *id0, active.model()));
             proof_assert!(same_graph(nodes.model(), *n1));
             proof_assert! {
                 lemma_same_graph_trans(nodes.model(), *n1, *n0);
@@ -1105,6 +1143,8 @@ where
             };
             proof_assert!(same_graph_activation_ok(*n1, *n0));
             proof_assert!(longest_path_within(*n0, a0.remove(*id0), active.model()));
+            proof_assert!(same_graph_reactivated_ok(*n1, *n0));
+            proof_assert!(reactivated_within(*n0, roots.model(), a0.remove(*id0), active.model()));
         }
 
         true
@@ -1115,6 +1155,7 @@ where
     #[ensures(structure((^nodes).model(), roots.model(), (^active).model()))]
     #[ensures(forms_path((^nodes).model(), (^active).model()))]
     #[ensures(longest_path_within(nodes.model(), active.model(), (^active).model()))]
+    #[ensures(reactivated_within(nodes.model(), roots.model(), active.model(), (^active).model()))]
     #[check(terminates)]
     fn fix_orphaned_activations(
         nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
@@ -1130,6 +1171,7 @@ where
         if active.is_empty() {
             proof_assert!(forall<k> !a0.contains(&k));
             proof_assert!(path_of(*n0, *a0, Seq::empty()));
+            proof_assert!(reactivated_whole_ok(*n0, roots.model(), *a0, *a0));
             proof_assert!(forall<q: Seq<Id<K>>> (forall<i> 0 <= i && i < q.len() ==> a0.contains(&q[i]))
                 ==> q.len() == 0);
             return;
@@ -1154,10 +1196,14 @@ where
         #[invariant(roots_of(*n0, closure.model(), ids(closure_roots.model())))]
         #[invariant(forall<j> 0 <= j && j < i@
             ==> closure.model().contains(&ids(active_ids.model())[j]))]
+        #[invariant(forall<k> closure.model().contains(&k) ==> ancestry(*n0, *a0)[k])]
         #[variant(active_ids.model().len() - i@)]
         while i < active_ids.len() {
             proof_assert!(ids(active_ids.model())[i@] == active_ids.model()[i@].deep_model());
             proof_assert!(ids(active_ids.model()).contains(active_ids.model()[i@].deep_model()));
+            proof! {
+                let before = snapshot!(closure.model());
+            }
             ancestor_subgraph(
                 nodes,
                 active_ids[i],
@@ -1165,6 +1211,14 @@ where
                 &mut closure,
                 &mut closure_roots,
             );
+            proof_assert!(ancestry_step_ok(
+                *n0,
+                rank_of(*n0),
+                *before,
+                closure.model(),
+                *a0,
+                ids(active_ids.model())[i@]
+            ));
             #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             {
                 i += 1;
@@ -1175,10 +1229,17 @@ where
         let mut topological = guard.vec_with_capacity(closure.len());
         let mut scratchpad_map = guard.map_with_capacity(closure.len(), default_hasher());
         let admitted = snapshot!(|k| closure.model().contains(&k));
+        proof! {
+            let anc = snapshot!(closure.model());
+        }
         proof_assert! {
             lemma_ids_empty(topological.model());
             lemma_kahn_empty(*n0, *admitted);
             kahn_state(*n0, *admitted, ids(topological.model()), scratchpad_map.model())
+        };
+        proof_assert! {
+            lemma_roots_kahn_empty(*n0, *admitted, roots.model());
+            ids(topological.model()) == roots_kahn(*n0, *admitted, roots.model().subsequence(0, 0))
         };
 
         let mut i = 0;
@@ -1190,6 +1251,8 @@ where
             ==> exists<j> 0 <= j && j < i@ && roots.model()[j] == k)]
         #[invariant(forall<j> 0 <= j && j < i@ && closure.model().contains(&roots.model()[j])
             ==> ids(topological.model()).contains(roots.model()[j]))]
+        #[invariant(ids(topological.model())
+            == roots_kahn(*n0, *admitted, roots.model().subsequence(0, i@)))]
         #[variant(roots.model().len() - i@)]
         while i < roots.len() {
             let root = roots[i];
@@ -1218,6 +1281,9 @@ where
                     ==> before.contains(k) || k == roots.model()[i@]);
                 proof_assert!(forall<k> before.contains(k) ==> ids(topological.model()).contains(k));
             }
+            proof_assert!(roots_kahn_step_ok(*n0, *admitted, roots.model(), i@));
+            proof_assert!(ids(topological.model())
+                == roots_kahn(*n0, *admitted, roots.model().subsequence(0, i@ + 1)));
             #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             {
                 i += 1;
@@ -1308,6 +1374,10 @@ where
 
         proof_assert!(forall<k> active.model().contains(&k) == path.contains(k));
         proof_assert!(path_of(*n0, active.model(), *path));
+        proof_assert!(forall<i> 0 <= i && i < path.len() ==> a0.contains(&path[i]));
+        proof_assert!(forall<q> valid_path(*n0, q) && no_dup(q)
+            && (forall<i> 0 <= i && i < q.len() ==> a0.contains(&q[i]))
+            ==> q.len() <= path.len());
         proof_assert!(longest_path_within(*n0, *a0, active.model()));
         proof_assert!(forall<k> n0.contains(&k) ==> nodes.model()[k]@.active == active.model().contains(&k));
         proof_assert! {
@@ -1318,6 +1388,21 @@ where
             lemma_same_graph_path_of(nodes.model(), *n0, active.model(), *path);
             path_of(nodes.model(), active.model(), *path)
         };
+        proof_assert! {
+            lemma_full_prefix(roots.model());
+            *topo == roots_kahn(*n0, *admitted, roots.model())
+        };
+        proof_assert!(fix_reactivated_ok(
+            *n0,
+            roots.model(),
+            *a0,
+            active.model(),
+            *anc,
+            *admitted,
+            *topo,
+            *candidate,
+            *path
+        ));
     }
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
@@ -1334,6 +1419,8 @@ where
     // Beyond the contract: which nodes become active, and that only which nodes are active changes.
     #[ensures(result && value
         ==> activated_at_end(self@.nodes, self@.active, id.deep_model(), (^self)@.active))]
+    #[ensures(result && value
+        ==> activated_at_end_first(self@.nodes, self@.active, id.deep_model(), (^self)@.active))]
     #[ensures(result && !value ==> (^self)@.active
         == if self@.active.contains(&id.deep_model())
             && !has_child_in(self@.nodes, self@.active, id.deep_model())
@@ -1525,6 +1612,10 @@ where
                 ==> exists<j> 0 <= j && j < i@ && topo[j] == k)]
             #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
                 ==> up_scored(*n1, old.active, scratchpad_map_2.model(), k))]
+            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
+                ==> forall<c> n1[k]@.from.contains(c) ==> scratchpad_map_2.model().contains(&c))]
+            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
+                ==> up_first(*n1, scratchpad_map_2.model(), k))]
             #[variant(topological.model().len() - i@)]
             while i < topological.len() {
                 let id = topological[i];
@@ -1578,6 +1669,8 @@ where
                     ==> scratchpad_map_2.model().contains(&p));
                 proof_assert!(up_entry(*n1, old.active, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
                 proof_assert!(up_insert_ok(*n1, old.active, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
+                proof_assert!(parent_first(*n1, scratchpad_map_2.model(), id.deep_model(), parent));
+                proof_assert!(up_first_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
 
                 scratchpad_map_2.insert(id, (score, parent));
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -1607,6 +1700,11 @@ where
             #[invariant(ancestor_walk(*n1, *rank, *scores, *chain, current.deep_model(), *id0))]
             #[invariant(forall<k> scratchpad_set.model().contains(&k) == chain.contains(k))]
             #[invariant(up_walk(old.active, *scores, *chain, current.deep_model(), *id0))]
+            #[invariant(forall<j> 0 <= j && j < chain.len() ==> scores.contains(&chain[j]))]
+            #[invariant(forall<j> 0 <= j && j + 1 < chain.len()
+                ==> scores[chain[j]].1.deep_model() == Some(chain[j + 1]))]
+            #[invariant(0 < chain.len()
+                ==> scores[chain[chain.len() - 1]].1.deep_model() == current.deep_model())]
             #[variant(match current.deep_model() { Some(x) => rank[x] + 1, None => 0 })]
             while let Some(id) = current {
                 proof_assert!(current.deep_model() == Some(id.deep_model()));
@@ -1641,12 +1739,17 @@ where
             proof_assert!(disjoint.model().len() == 0);
             proof_assert!(path_up(*n1, *id0, *chain));
             proof_assert!(up_walk_done_ok(*n1, old.active, *scores, *chain, *id0));
+            proof_assert!(forall<k> scores.contains(&k) ==> up_first(*n1, *scores, k));
+            proof_assert!(forall<k> scores.contains(&k)
+                ==> forall<c> n1[k]@.from.contains(c) ==> scores.contains(&c));
+            proof_assert!(first_up_walk_ok(*n1, old.active, *scores, *chain));
 
             activate_exactly(nodes, active, &scratchpad_set, &mut disjoint);
             proof_assert!(!(old.active.contains(&*id0) && !has_child_in(old.nodes, old.active, *id0)));
             proof_assert!(!(!old.active.contains(&*id0) && extends_path(old.nodes, old.active, *id0)));
             proof_assert!(forall<k> active.model().contains(&k) == chain.contains(k));
             proof_assert!(activated_at_end(old.nodes, old.active, *id0, active.model()));
+            proof_assert!(activated_at_end_first(old.nodes, old.active, *id0, active.model()));
             proof_assert!(same_graph(nodes.model(), *n1));
             proof_assert!(forall<k> active.model().contains(&k) ==> nodes.model().contains(&k));
             proof_assert!(forall<k> nodes.model().contains(&k)
@@ -1725,6 +1828,10 @@ where
         Some(a) => activated(result@.nodes, FSet::empty(), a, result@.active),
         None => result@.active == FSet::empty(),
     })]
+    #[ensures(match value@.active {
+        Some(a) => activated_first(result@.nodes, FSet::empty(), a, result@.active),
+        None => true,
+    })]
     #[check(terminates)]
     fn from(value: DependentWeave<K, T, M, S>) -> Self {
         proof! {
@@ -1758,6 +1865,7 @@ where
             output.set_active(&active, true);
         }
         proof_assert!(same_graph_activation_ok(output@.nodes, *mid));
+        proof_assert!(same_graph_first_ok(output@.nodes, *mid));
 
         debug_assert!(output.validate(), "Converted weave is malformed");
 
@@ -2190,6 +2298,19 @@ where
         ==> forall<q> descending_to(self@.nodes, q, id.deep_model())
             && self@.nodes[q[0]]@.from.len() == 0
             ==> (^output)@.len() <= q.len())]
+    // Beyond the contract: among the shortest such paths, its inactive nodes lead up along the first
+    // one in the order of `precedes`, which compares them from `id` up by the positions of their
+    // nodes among the parents of the nodes before them.
+    #[ensures(forall<i> 0 <= i && i < (^output)@.len()
+        && self@.active.contains(&ids((^output)@)[i])
+        && (forall<j> 0 <= j && j < i ==> !self@.active.contains(&ids((^output)@)[j]))
+        ==> first_descent_from(
+            self@.nodes,
+            ids((^output)@).subsequence(0, i + 1).reverse(),
+            id.deep_model(),
+        ))]
+    #[ensures((forall<j> 0 <= j && j < (^output)@.len() ==> !self@.active.contains(&ids((^output)@)[j]))
+        ==> first_descent_from_root(self@.nodes, ids((^output)@).reverse(), id.deep_model()))]
     #[check(terminates)]
     fn get_path_from(&mut self, id: &K, output: &mut Vec<K>) {
         output.clear();
@@ -2200,6 +2321,10 @@ where
                 lemma_descends_rank(self@.nodes, rank_of(self@.nodes), id.deep_model(), k);
                 false
             });
+            proof_assert! {
+                lemma_first_descent_from_root_empty(self@.nodes, ids(output@).reverse(), id.deep_model());
+                first_descent_from_root(self@.nodes, ids(output@).reverse(), id.deep_model())
+            };
             return;
         }
 
@@ -2366,12 +2491,13 @@ where
                 );
                 proof_assert!(0 < up.len() && up[0] == target.deep_model());
                 proof_assert!(admitted[up[0]] && ancestors.model().contains(&target.deep_model()));
+                let is_target = snapshot!(|node: IndependentNode<K, T, S>| node.id.deep_model()
+                    == target.deep_model());
                 shortest_path_to_ancestor(
                     &self.nodes,
                     id,
                     Some(&target),
-                    snapshot!(|node: IndependentNode<K, T, S>| node.id.deep_model()
-                        == target.deep_model()),
+                    is_target,
                     &mut stack,
                     &mut scratchpad_map_2,
                     output,
@@ -2445,12 +2571,23 @@ where
                 proof_assert!(forall<q> descending_to(*nodes, q, *id0) && q[0] == target.deep_model()
                     ==> nodes[q[0]].id.deep_model() == target.deep_model() && *n <= q.len());
                 proof_assert!(pre.len() + 1 == *n && ids(output@)[pre.len()] == target.deep_model());
+                proof_assert!(first_descent_from_ok(*nodes, *down, *id0, *is_target, target.deep_model()));
+                proof_assert! {
+                    lemma_reverse_prefix_concat(*down, *up);
+                    ids(output@).subsequence(0, *n).reverse() == *down
+                };
+                proof_assert!(forall<i> 0 <= i && i < output@.len()
+                    && active.model().contains(&ids(output@)[i])
+                    && (forall<j> 0 <= j && j < i ==> !active.model().contains(&ids(output@)[j]))
+                    ==> i == pre.len()
+                        && first_descent_from(*nodes, ids(output@).subsequence(0, i + 1).reverse(), *id0));
             } else {
+                let is_root = snapshot!(|node: IndependentNode<K, T, S>| node.from.model().len() == 0);
                 shortest_path_to_ancestor(
                     &self.nodes,
                     id,
                     None,
-                    snapshot!(|node: IndependentNode<K, T, S>| node.from.model().len() == 0),
+                    is_root,
                     &mut stack,
                     &mut scratchpad_map_2,
                     output,
@@ -2483,6 +2620,10 @@ where
                 proof_assert!(output@.len() == down.len());
                 proof_assert!(forall<q> descending_to(*nodes, q, *id0) && nodes[q[0]]@.from.len() == 0
                     ==> output@.len() <= q.len());
+                proof_assert!(first_descent_from_root_ok(*nodes, *down, *id0, *is_root));
+                proof_assert! { lemma_ids_reverse(output@); ids(output@) == down.reverse() };
+                proof_assert!(ids(output@).reverse().ext_eq(*down));
+                proof_assert!(first_descent_from_root(*nodes, ids(output@).reverse(), *id0));
             }
         }
         proof_assert!(self@ == *old);
@@ -2508,6 +2649,8 @@ where
     #[ensures(result && !inserted_active(self@, node@) ==> (^self)@.active == self@.active)]
     #[ensures(result && inserted_active(self@, node@)
         ==> activated((^self)@.nodes, self@.active, node@.id, (^self)@.active))]
+    #[ensures(result && inserted_active(self@, node@)
+        ==> activated_first((^self)@.nodes, self@.active, node@.id, (^self)@.active))]
     // Beyond the contract: when insertion succeeds, and how it links the node, which keeps its
     // contents, while the other nodes keep theirs.
     #[ensures(result == insertable(self@.nodes, node@))]
@@ -2798,6 +2941,7 @@ where
         if extends_active {
             self.active.insert(id);
             proof_assert!(activated(view.nodes, old.active, n.id, self.active.model()));
+            proof_assert!(activated_first(view.nodes, old.active, n.id, self.active.model()));
         } else if active {
             proof_assert!(!view.nodes[n.id]@.active && view.active == old.active);
             Self::update_node_activity_in_place(
@@ -2813,6 +2957,7 @@ where
                 self.nodes.model().len() == view.nodes.len()
             };
             proof_assert!(same_graph_activation_ok(self.nodes.model(), view.nodes));
+            proof_assert!(same_graph_first_ok(self.nodes.model(), view.nodes));
             proof_assert!(same_graph(self.nodes.model(), view.nodes));
             proof_assert!(
                 self.roots.model() == view.roots && self.bookmarked.model() == view.bookmarked
@@ -2833,9 +2978,18 @@ where
     #[ensures(self@.active.contains(&id.deep_model()) == value ==> (^self)@.active == self@.active)]
     #[ensures(result && value && !self@.active.contains(&id.deep_model())
         ==> activated(self@.nodes, self@.active, id.deep_model(), (^self)@.active))]
+    #[ensures(result && value && !self@.active.contains(&id.deep_model())
+        ==> activated_first(self@.nodes, self@.active, id.deep_model(), (^self)@.active))]
     #[ensures(result && !value && self@.active.contains(&id.deep_model())
         ==> longest_path_within(
             self@.nodes,
+            self@.active.remove(id.deep_model()),
+            (^self)@.active,
+        ))]
+    #[ensures(result && !value && self@.active.contains(&id.deep_model())
+        ==> reactivated_within(
+            self@.nodes,
+            self@.roots,
             self@.active.remove(id.deep_model()),
             (^self)@.active,
         ))]
@@ -2880,6 +3034,8 @@ where
     #[ensures(forall<k> (^self)@.nodes.contains(&k) ==> self@.nodes.contains(&k))]
     #[ensures(result != None
         ==> longest_path_within((^self)@.nodes, self@.active, (^self)@.active))]
+    #[ensures(result != None
+        ==> reactivated_within((^self)@.nodes, (^self)@.roots, self@.active, (^self)@.active))]
     // Beyond the contract: exactly the node and the nodes left without parents are removed, the
     // rest of the weave keeps its contents and order, and a failed removal changes nothing.
     #[ensures(result != None ==> exists<done: Seq<Id<K>>> removal(self@.nodes, id.deep_model(), done)
@@ -3061,6 +3217,12 @@ where
             proof_assert!((*self)@.valid());
             proof_assert!(longest_whole_ok(self.nodes.model(), self.active.model()));
             proof_assert!(longest_widen_ok(self.nodes.model(), self.active.model(), old.active, self.active.model()));
+            proof_assert!(reactivated_whole_ok(
+                self.nodes.model(),
+                self.roots.model(),
+                old.active,
+                self.active.model()
+            ));
             return Some(node);
         }
 
@@ -3654,6 +3816,8 @@ where
             ==> mid.active.contains(&k));
         proof_assert!(forall<k> mid.active.contains(&k) ==> old.active.contains(&k));
         proof_assert!(!removed_active ==> longest_whole_ok(mid.nodes, mid.active));
+        proof_assert!(!removed_active
+            ==> reactivated_whole_ok(mid.nodes, mid.roots, mid.active, mid.active));
         if removed_active {
             Self::fix_orphaned_activations(nodes, roots, active, scratchpad);
             proof_assert!(same_keys_len_ok(nodes.model(), mid.nodes));
@@ -3661,6 +3825,7 @@ where
             proof_assert!(fset_subset_len_ok(active.model(), old.active));
             proof_assert!(active.model().len() <= old.active.len());
             proof_assert!(same_graph_activation_ok(nodes.model(), mid.nodes));
+            proof_assert!(same_graph_reactivated_ok(nodes.model(), mid.nodes));
             proof_assert!(removal_reactivated_ok(
                 *old,
                 *mid,
@@ -3676,6 +3841,14 @@ where
         proof_assert!(longest_path_within(
             nodes.model(),
             mid.active,
+            active.model()
+        ));
+        proof_assert!(reactivated_within(nodes.model(), roots.model(), mid.active, active.model()));
+        proof_assert!(reactivated_widen_ok(
+            nodes.model(),
+            roots.model(),
+            mid.active,
+            old.active,
             active.model()
         ));
         proof_assert!(longest_widen_ok(
@@ -3715,6 +3888,8 @@ where
     // through the nodes which were active.
     #[ensures(forall<k> (^self)@.nodes.contains(&k) ==> self@.nodes.contains(&k))]
     #[ensures(result ==> longest_path_within((^self)@.nodes, self@.active, (^self)@.active))]
+    #[ensures(result
+        ==> reactivated_within((^self)@.nodes, (^self)@.roots, self@.active, (^self)@.active))]
     // Beyond the contract: exactly the node and the nodes left without parents are removed, the
     // rest of the weave keeps its contents and order, and a failed removal changes nothing.
     #[ensures(result ==> exists<done: Seq<Id<K>>> removal(self@.nodes, id.deep_model(), done)
@@ -3727,6 +3902,10 @@ where
             && removal_order(self@.nodes, id.deep_model(), done))
         && (!result ==> done.len() == 0)
         && as_removed(self@.nodes, done, passed)
+        && fed(on_removal, passed))]
+    // Beyond the contract: the nodes come in the order of Kahn's algorithm from `id`.
+    #[ensures(result ==> exists<passed: Seq<IndependentNode<K, T, S>>>
+        as_removed(self@.nodes, removal_sequence(self@.nodes, id.deep_model()), passed)
         && fed(on_removal, passed))]
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
@@ -3812,9 +3991,12 @@ where
                 if let Some(parent) = self.nodes.get_mut(&node.from[i]) {
                     proof! {
                         let pto = snapshot!(parent@.to);
+                        let pv = snapshot!(*parent);
                     }
                     parent.to.shift_remove(id);
                     proof_assert!(shift_removed_ok(parent@.to, *pto, *t));
+                    proof_assert!(parent@.id == pv@.id && parent@.from == pv@.from
+                        && parent@.active == pv@.active && parent@.bookmarked == pv@.bookmarked);
                 }
                 proof_assert!(forall<k> k != *key ==> self.nodes.model().lookup(k) == before.lookup(k));
                 proof_assert!(self.nodes.model().contains(&*key) == before.contains(&*key));
@@ -3914,6 +4096,12 @@ where
             proof_assert!((*self)@.valid());
             proof_assert!(longest_whole_ok(self.nodes.model(), self.active.model()));
             proof_assert!(longest_widen_ok(self.nodes.model(), self.active.model(), old.active, self.active.model()));
+            proof_assert!(reactivated_whole_ok(
+                self.nodes.model(),
+                self.roots.model(),
+                old.active,
+                self.active.model()
+            ));
             proof_assert!(callback.hist_inv(on_removal));
             proof! {
                 let x = snapshot!(node);
@@ -3938,6 +4126,7 @@ where
                 lemma_removal_order(old.nodes, *t, Seq::singleton(*t));
                 removal_order(old.nodes, *t, Seq::singleton(*t))
             };
+            proof_assert!(removal_sequence_leaf_ok(old.nodes, *t));
             return true;
         }
 
@@ -3985,6 +4174,7 @@ where
 
             let mut i = node.to.len();
             proof_assert! { lemma_full_prefix(n.to); n.to.subsequence(0, i@) == n.to };
+            proof_assert!(cascade_ready_ok(old.nodes, Seq::<Id<K>>::empty().snoc(*t), n.to, Seq::<Id<K>>::empty(), i@));
             #[invariant(i@ <= n.to.len())]
             #[invariant(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
                 ids(stack.model()), remaining_parents.model()))]
@@ -3993,6 +4183,14 @@ where
             #[invariant(forall<k> active.model().contains(&k) == (old.active.contains(&k) && k != *t))]
             #[invariant(bookmarked.model() == old.bookmarked)]
             #[invariant(ids(removed.model()) == Seq::<Id<K>>::empty().snoc(*t))]
+            #[invariant(cascade_stack(
+                old.nodes,
+                Seq::<Id<K>>::empty().snoc(*t),
+                n.to,
+                Seq::<Id<K>>::empty(),
+                i@,
+                ids(stack.model()),
+            ))]
             while i > 0 {
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                 {
@@ -4040,6 +4238,15 @@ where
                     stack.push(child);
                 }
                 proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
+                proof_assert!(cascade_ready_ok(old.nodes, Seq::<Id<K>>::empty().snoc(*t), n.to, Seq::<Id<K>>::empty(), i@));
+                proof_assert!(cascade_stack(
+                    old.nodes,
+                    Seq::<Id<K>>::empty().snoc(*t),
+                    n.to,
+                    Seq::<Id<K>>::empty(),
+                    i@,
+                    ids(stack.model()),
+                ));
                 proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, Seq::empty(), *t, i@, *st, *counts, *nv));
                 proof_assert!(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
                     ids(stack.model()), remaining_parents.model()));
@@ -4062,6 +4269,8 @@ where
                 remaining_parents.model()
             ));
             proof_assert!(forall<k> ids(removed.model()).contains(k) == (k == *t));
+            proof_assert!(cascade_run_start_ok(old.nodes, *t, ids(stack.model())));
+            proof_assert!(cascade_run(old.nodes, *t, ids(removed.model()), ids(stack.model())));
 
             proof_assert!(callback.hist_inv(on_removal));
             proof! {
@@ -4103,6 +4312,7 @@ where
                 && states[passed.len()] == on_removal)]
             #[invariant(as_removed(old.nodes, ids(removed.model()), *passed))]
             #[invariant(parents_first(old.nodes, ids(removed.model())))]
+            #[invariant(cascade_run(old.nodes, *t, ids(removed.model()), ids(stack.model())))]
             while let Some(id) = stack.pop() {
                 proof! {
                     let prev = snapshot!(ids(removed.model()));
@@ -4117,6 +4327,7 @@ where
                     id.deep_model(),
                     remaining_parents.model()
                 ));
+                proof_assert!(cascade_run(old.nodes, *t, *prev, rest.snoc(id.deep_model())));
                 proof_assert! {
                     lemma_cascade_parents_first(
                         old.nodes,
@@ -4174,6 +4385,7 @@ where
                     lemma_full_prefix(node.to.model());
                     old.nodes[*cur]@.to.subsequence(0, i@) == old.nodes[*cur]@.to
                 };
+                proof_assert!(cascade_ready_ok(old.nodes, prev.snoc(*cur), old.nodes[*cur]@.to, *rest, i@));
                 #[invariant(i@ <= node.to.model().len())]
                 #[invariant(node.to.model() == old.nodes[*cur]@.to)]
                 #[invariant(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
@@ -4185,6 +4397,14 @@ where
                 #[invariant(roots.model() == *r1)]
                 #[invariant(bookmarked.model() == old.bookmarked)]
                 #[invariant(ids(removed.model()) == prev.snoc(*cur))]
+                #[invariant(cascade_stack(
+                    old.nodes,
+                    prev.snoc(*cur),
+                    old.nodes[*cur]@.to,
+                    *rest,
+                    i@,
+                    ids(stack.model()),
+                ))]
                 while i > 0 {
                     #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
                     {
@@ -4233,6 +4453,15 @@ where
                         stack.push(child);
                     }
                     proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
+                    proof_assert!(cascade_ready_ok(old.nodes, prev.snoc(*cur), old.nodes[*cur]@.to, *rest, i@));
+                    proof_assert!(cascade_stack(
+                        old.nodes,
+                        prev.snoc(*cur),
+                        old.nodes[*cur]@.to,
+                        *rest,
+                        i@,
+                        ids(stack.model()),
+                    ));
                     proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, *prev, *cur, i@, *st, *counts, *nv));
                     proof_assert!(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
                         old.nodes[*cur]@.to.subsequence(0, i@), ids(stack.model()),
@@ -4255,6 +4484,17 @@ where
                     ids(stack.model()),
                     remaining_parents.model()
                 ));
+                proof_assert!(cascade_run_pop_ok(
+                    old.nodes,
+                    *rank,
+                    *t,
+                    *prev,
+                    *rest,
+                    *cur,
+                    ids(stack.model()),
+                    remaining_parents.model()
+                ));
+                proof_assert!(cascade_run(old.nodes, *t, ids(removed.model()), ids(stack.model())));
 
                 proof! {
                     let x = snapshot!(node);
@@ -4291,6 +4531,8 @@ where
                 removal_order(old.nodes, *t, *done)
             };
             proof_assert! { lemma_ids_empty(stack.model()); ids(stack.model()) == Seq::empty() };
+            proof_assert!(cascade_run_end_ok(old.nodes, *t, *done));
+            proof_assert!(*done == removal_sequence(old.nodes, *t));
             proof_assert!(cascade_end_ok(
                 old.nodes,
                 *rank,
@@ -4530,6 +4772,11 @@ where
                 }
             }
 
+            proof_assert!(forall<k> n2.contains(&k) == (n1.contains(&k) && !done.contains(k)));
+            proof_assert!(forall<k> n2.contains(&k) ==> n2[k] == n1[k]);
+            proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model())));
+            proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
+                ==> ids(children.model()).contains(k));
             proof_assert!(unparenting_done_ok(
                 *n1,
                 *n2,
@@ -4605,6 +4852,8 @@ where
             ==> mid.active.contains(&k));
         proof_assert!(forall<k> mid.active.contains(&k) ==> old.active.contains(&k));
         proof_assert!(!removed_active ==> longest_whole_ok(mid.nodes, mid.active));
+        proof_assert!(!removed_active
+            ==> reactivated_whole_ok(mid.nodes, mid.roots, mid.active, mid.active));
         if removed_active {
             Self::fix_orphaned_activations(nodes, roots, active, scratchpad);
             proof_assert!(same_keys_len_ok(nodes.model(), mid.nodes));
@@ -4612,6 +4861,7 @@ where
             proof_assert!(fset_subset_len_ok(active.model(), old.active));
             proof_assert!(active.model().len() <= old.active.len());
             proof_assert!(same_graph_activation_ok(nodes.model(), mid.nodes));
+            proof_assert!(same_graph_reactivated_ok(nodes.model(), mid.nodes));
             proof_assert!(removal_reactivated_ok(
                 *old,
                 *mid,
@@ -4627,6 +4877,14 @@ where
         proof_assert!(longest_path_within(
             nodes.model(),
             mid.active,
+            active.model()
+        ));
+        proof_assert!(reactivated_within(nodes.model(), roots.model(), mid.active, active.model()));
+        proof_assert!(reactivated_widen_ok(
+            nodes.model(),
+            roots.model(),
+            mid.active,
+            old.active,
             active.model()
         ));
         proof_assert!(longest_widen_ok(
@@ -4650,6 +4908,7 @@ where
         );
         proof_assert!(no_dup(*done) && as_removed(old.nodes, *done, *passed));
         proof_assert!(removal_order(old.nodes, *t, *done));
+        proof_assert!(*done == removal_sequence(old.nodes, *t));
         proof_assert!(
             calls(*states, *passed) && states[0] == *callback && states[passed.len()] == on_removal
         );
@@ -4978,7 +5237,8 @@ where
     // nodes which `active` lists.
     #[ensures(exists<listed: Seq<K>, requested: FSet<Id<K>>> iterates(active, listed)
         && (forall<k> requested.contains(&k) == (ids(listed).contains(k) && self@.nodes.contains(&k)))
-        && longest_path_within(self@.nodes, requested, (^self)@.active))]
+        && longest_path_within(self@.nodes, requested, (^self)@.active)
+        && reactivated_within(self@.nodes, self@.roots, requested, (^self)@.active))]
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
     fn set_active_path(&mut self, mut active: impl VerifiableIterator<Item = K>) {
@@ -5036,6 +5296,13 @@ where
             &mut self.scratchpad,
         );
         proof_assert!(same_graph_activation_ok(*listed_nodes, old.nodes));
+        proof_assert!(same_graph_reactivated_ok(*listed_nodes, old.nodes));
+        proof_assert!(reactivated_within(
+            old.nodes,
+            old.roots,
+            *requested,
+            self.active.model()
+        ));
         proof_assert!(longest_path_within(
             old.nodes,
             *requested,
@@ -5590,6 +5857,14 @@ where
             id.deep_model(),
             (^self)@.active,
         ))]
+    #[ensures(result && self@.active.contains(&id.deep_model())
+        && self@.nodes[id.deep_model()]@.from != ids(new_parents@)
+        ==> activated_first(
+            (^self)@.nodes,
+            self@.active.remove(id.deep_model()),
+            id.deep_model(),
+            (^self)@.active,
+        ))]
     // Beyond the contract: when moving succeeds, that a failed move changes nothing, and how a
     // successful one relinks the node.
     #[ensures(result == ((forall<i> 0 <= i && i < new_parents@.len()
@@ -5874,6 +6149,7 @@ where
             proof_assert!(!mid.nodes[*id0]@.active);
             Self::update_node_activity_in_place(nodes, roots, active, scratchpad, id, true);
             proof_assert!(same_graph_activation_ok(nodes.model(), mid.nodes));
+            proof_assert!(same_graph_first_ok(nodes.model(), mid.nodes));
             proof_assert!(same_graph(nodes.model(), mid.nodes));
         }
 
