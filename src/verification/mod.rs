@@ -284,6 +284,14 @@ pub fn lemma_keys_subset_len<K, V, W>(a: FMap<K, V>, b: FMap<K, W>) {
     proof_assert!(a.keys().is_subset(b.keys()));
 }
 
+/// A set of keys of `m` is no larger than `m`.
+#[logic]
+#[requires(forall<k> a.contains(&k) ==> m.contains(&k))]
+#[ensures(a.len() <= m.len())]
+pub fn lemma_set_in_keys_len<K, V>(a: FSet<K>, m: FMap<K, V>) {
+    proof_assert!(a.is_subset(m.keys()));
+}
+
 /// A subset is no larger.
 #[logic]
 #[requires(forall<k> a.contains(&k) ==> b.contains(&k))]

@@ -7,8 +7,6 @@ use hashbrown::HashMap;
 use indexmap::IndexSet;
 use scratchpads::{ScratchpadSet, ScratchpadVec};
 
-#[cfg(creusot)]
-use creusot_std::{invariant::inv, prelude::*};
 
 use super::Predicate;
 use crate::{IndependentContents, Verifiable, independent::IndependentNode};
@@ -17,11 +15,14 @@ use crate::{IndependentContents, Verifiable, independent::IndependentNode};
 use crate::independent::verification::*;
 
 #[cfg(creusot)]
-use crate::verification::{Id, Model, ids, lemma_ids_snoc, lemma_no_dup_snoc, lemma_snoc_contains};
+use crate::verification::{
+    Id, Model, ids, lemma_ids_snoc, lemma_no_dup_snoc, lemma_set_in_keys_len, lemma_snoc_contains,
+};
 
 /// Adds `id` and its ancestors to `identifiers`, and those of them without parents to `roots`.
 ///
 /// Elements already in `identifiers` are assumed to have been added along with their ancestors.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()))]
 #[requires(nodes.model().contains(&id.deep_model()))]
 #[requires(stack.model().len() == 0)]
@@ -59,14 +60,22 @@ pub(in crate::independent) fn ancestor_subgraph<K, T, S>(
     if identifiers.insert(id) {
         stack.push(id);
     }
+    proof_assert! {
+        lemma_set_in_keys_len(identifiers.model(), nodes.model());
+        identifiers.model().len() <= nodes.model().len()
+    };
 
     #[invariant(ancestor_search(nodes.model(), *old_set, identifiers.model(), ids(stack.model()), *id0))]
     #[invariant(identifiers.model().contains(&*id0))]
     #[invariant(parent_closed_except(nodes.model(), identifiers.model(), ids(stack.model())))]
     #[invariant(roots_except(nodes.model(), identifiers.model(), ids(stack.model()), ids(roots.model())))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant((nodes.model().len() - identifiers.model().len(), stack.model().len()))]
     while let Some(id) = stack.pop() {
         proof! {
             let x = snapshot!(id.deep_model());
+            let size = snapshot!(identifiers.model().len());
+            let depth = snapshot!(stack.model().len());
         }
         let from = &nodes[&id].from;
 
@@ -75,6 +84,10 @@ pub(in crate::independent) fn ancestor_subgraph<K, T, S>(
         } else {
             let mut i = from.len();
             #[invariant(i@ <= from.model().len())]
+            #[invariant(*size <= identifiers.model().len())]
+            #[invariant(identifiers.model().len() <= nodes.model().len())]
+            #[invariant(stack.model().len() <= *depth + identifiers.model().len() - *size)]
+            #[variant(i@)]
             #[invariant(ancestor_search(
                 nodes.model(), *old_set, identifiers.model(), ids(stack.model()).snoc(*x), *id0))]
             #[invariant(identifiers.model().contains(&*id0))]
@@ -103,6 +116,10 @@ pub(in crate::independent) fn ancestor_subgraph<K, T, S>(
                         ancestor_search(
                             nodes.model(), *old_set, identifiers.model(), ids(stack.model()).snoc(*x), *id0)
                     };
+                    proof_assert! {
+                        lemma_set_in_keys_len(identifiers.model(), nodes.model());
+                        identifiers.model().len() <= nodes.model().len()
+                    };
                 }
             }
         }
@@ -111,13 +128,12 @@ pub(in crate::independent) fn ancestor_subgraph<K, T, S>(
 
 /// Returns `true` if `target` accepts one of `ids` or their ancestors; otherwise, adds all of them
 /// to `identifiers`.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()))]
 #[requires(forall<k> ids.model().contains(k) ==> nodes.model().contains(&k))]
 #[requires(stack.model().len() == 0)]
 #[requires(identifiers.model().len() == 0)]
-#[requires(forall<k: &K> inv(k) ==> target.precondition((k,)))]
-#[requires(forall<k: &K, accept: bool> target.postcondition((k,), accept)
-    ==> accept == is_target[k.deep_model()])]
+#[requires(forall<k> is_target[k] == target.model().contains(k))]
 #[ensures(!result ==> (forall<k> ids.model().contains(k) ==> (^identifiers).model().contains(&k))
     && (forall<k> (^identifiers).model().contains(&k) ==> nodes.model().contains(&k))
     && parent_closed(nodes.model(), (^identifiers).model())
@@ -131,7 +147,7 @@ pub(in crate::independent) fn ancestor_subgraph<K, T, S>(
 pub(in crate::independent) fn ancestor_subgraph_reaches<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     ids: &IndexSet<K, S>,
-    target: impl Fn(&K) -> bool,
+    target: &IndexSet<K, S>,
     is_target: Predicate<K>,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
@@ -156,6 +172,8 @@ where
     #[invariant(above_some(nodes.model(), identifiers.model(), ids.model()))]
     #[invariant(forall<j> i@ <= j && j < ids.model().len()
         ==> identifiers.model().contains(&ids.model()[j]))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant(i@)]
     while i > 0 {
         #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
         {
@@ -166,12 +184,16 @@ where
             ids.model().contains(id.deep_model()) && nodes.model().contains(&id.deep_model())
         );
         if identifiers.insert(id) {
-            if target(&id) {
+            if target.contains(&id) {
                 return true;
             }
 
             stack.push(id);
         }
+        proof_assert! {
+            lemma_set_in_keys_len(identifiers.model(), nodes.model());
+            identifiers.model().len() <= nodes.model().len()
+        };
     }
 
     #[invariant(reach_search(
@@ -180,9 +202,13 @@ where
         nodes.model(), identifiers.model(), crate::verification::ids(stack.model())))]
     #[invariant(above_some(nodes.model(), identifiers.model(), ids.model()))]
     #[invariant(forall<k> ids.model().contains(k) ==> identifiers.model().contains(&k))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant((nodes.model().len() - identifiers.model().len(), stack.model().len()))]
     while let Some(id) = stack.pop() {
         proof! {
             let x = snapshot!(id.deep_model());
+            let size = snapshot!(identifiers.model().len());
+            let depth = snapshot!(stack.model().len());
         }
         proof_assert!(
             identifiers.model().contains(&*x)
@@ -198,8 +224,12 @@ where
             nodes.model(), identifiers.model(), crate::verification::ids(stack.model()).snoc(*x)))]
         #[invariant(above_some(nodes.model(), identifiers.model(), ids.model()))]
         #[invariant(forall<k> ids.model().contains(k) ==> identifiers.model().contains(&k))]
+        #[invariant(*size <= identifiers.model().len())]
+        #[invariant(identifiers.model().len() <= nodes.model().len())]
+        #[invariant(stack.model().len() <= *depth + identifiers.model().len() - *size)]
         #[invariant(forall<j> i@ <= j && j < from.model().len()
             ==> identifiers.model().contains(&from.model()[j]))]
+        #[variant(i@)]
         while i > 0 {
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             {
@@ -210,11 +240,15 @@ where
                 && nodes.model().contains(&parent.deep_model()));
             proof_assert!(exists<j> ids.model().contains(j) && descends(nodes.model(), j, parent.deep_model()));
             if identifiers.insert(parent) {
-                if target(&parent) {
+                if target.contains(&parent) {
                     return true;
                 }
 
                 stack.push(parent);
+                proof_assert! {
+                    lemma_set_in_keys_len(identifiers.model(), nodes.model());
+                    identifiers.model().len() <= nodes.model().len()
+                };
             }
         }
     }
@@ -223,6 +257,7 @@ where
 }
 
 /// Adds `id` and its descendants to `identifiers`.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()))]
 #[requires(nodes.model().contains(&id.deep_model()))]
 #[requires(stack.model().len() == 0)]
@@ -253,17 +288,30 @@ pub(in crate::independent) fn descendant_subgraph<K, T, S>(
     if identifiers.insert(id) {
         stack.push(id);
     }
+    proof_assert! {
+        lemma_set_in_keys_len(identifiers.model(), nodes.model());
+        identifiers.model().len() <= nodes.model().len()
+    };
 
     #[invariant(descendant_search(nodes.model(), identifiers.model(), ids(stack.model()), *id0))]
     #[invariant(identifiers.model().contains(&*id0))]
     #[invariant(child_closed_except(nodes.model(), identifiers.model(), ids(stack.model())))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant((nodes.model().len() - identifiers.model().len(), stack.model().len()))]
     while let Some(id) = stack.pop() {
         proof! {
             let x = snapshot!(id.deep_model());
+            let size = snapshot!(identifiers.model().len());
+            let depth = snapshot!(stack.model().len());
         }
+        proof_assert!(nodes.model().contains(&*x) && linked(nodes.model(), *x));
         let to = &nodes[&id].to;
         let mut i = to.len();
         #[invariant(i@ <= to.model().len())]
+        #[invariant(*size <= identifiers.model().len())]
+        #[invariant(identifiers.model().len() <= nodes.model().len())]
+        #[invariant(stack.model().len() <= *depth + identifiers.model().len() - *size)]
+        #[variant(i@)]
         #[invariant(descendant_search(
             nodes.model(), identifiers.model(), ids(stack.model()).snoc(*x), *id0))]
         #[invariant(identifiers.model().contains(&*id0))]
@@ -277,8 +325,14 @@ pub(in crate::independent) fn descendant_subgraph<K, T, S>(
                 i -= 1;
             }
             let child = to[i];
+            proof_assert!(nodes.model()[*x]@.to.contains(child.deep_model())
+                && nodes.model().contains(&child.deep_model()));
             if identifiers.insert(child) {
                 stack.push(child);
+                proof_assert! {
+                    lemma_set_in_keys_len(identifiers.model(), nodes.model());
+                    identifiers.model().len() <= nodes.model().len()
+                };
             }
         }
     }
@@ -286,13 +340,12 @@ pub(in crate::independent) fn descendant_subgraph<K, T, S>(
 
 /// Returns `true` if `target` accepts one of `ids` or their descendants; otherwise, adds all of
 /// them to `identifiers`.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()))]
 #[requires(forall<k> ids.model().contains(k) ==> nodes.model().contains(&k))]
 #[requires(stack.model().len() == 0)]
 #[requires(identifiers.model().len() == 0)]
-#[requires(forall<k: &K> inv(k) ==> target.precondition((k,)))]
-#[requires(forall<k: &K, accept: bool> target.postcondition((k,), accept)
-    ==> accept == is_target[k.deep_model()])]
+#[requires(forall<k> is_target[k] == target.model().contains(k))]
 #[ensures(!result ==> (forall<k> ids.model().contains(k) ==> (^identifiers).model().contains(&k))
     && (forall<k> (^identifiers).model().contains(&k) ==> nodes.model().contains(&k))
     && child_closed(nodes.model(), (^identifiers).model())
@@ -306,7 +359,7 @@ pub(in crate::independent) fn descendant_subgraph<K, T, S>(
 pub(in crate::independent) fn descendant_subgraph_reaches<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     ids: &IndexSet<K, S>,
-    target: impl Fn(&K) -> bool,
+    target: &IndexSet<K, S>,
     is_target: Predicate<K>,
     stack: &mut ScratchpadVec<'_, K>,
     identifiers: &mut ScratchpadSet<'_, K, S>,
@@ -331,6 +384,8 @@ where
     #[invariant(below_some(nodes.model(), identifiers.model(), ids.model()))]
     #[invariant(forall<j> i@ <= j && j < ids.model().len()
         ==> identifiers.model().contains(&ids.model()[j]))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant(i@)]
     while i > 0 {
         #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
         {
@@ -341,12 +396,16 @@ where
             ids.model().contains(id.deep_model()) && nodes.model().contains(&id.deep_model())
         );
         if identifiers.insert(id) {
-            if target(&id) {
+            if target.contains(&id) {
                 return true;
             }
 
             stack.push(id);
         }
+        proof_assert! {
+            lemma_set_in_keys_len(identifiers.model(), nodes.model());
+            identifiers.model().len() <= nodes.model().len()
+        };
     }
 
     #[invariant(reach_search(
@@ -355,9 +414,13 @@ where
         nodes.model(), identifiers.model(), crate::verification::ids(stack.model())))]
     #[invariant(below_some(nodes.model(), identifiers.model(), ids.model()))]
     #[invariant(forall<k> ids.model().contains(k) ==> identifiers.model().contains(&k))]
+    #[invariant(identifiers.model().len() <= nodes.model().len())]
+    #[variant((nodes.model().len() - identifiers.model().len(), stack.model().len()))]
     while let Some(id) = stack.pop() {
         proof! {
             let x = snapshot!(id.deep_model());
+            let size = snapshot!(identifiers.model().len());
+            let depth = snapshot!(stack.model().len());
         }
         proof_assert!(
             identifiers.model().contains(&*x)
@@ -373,8 +436,12 @@ where
             nodes.model(), identifiers.model(), crate::verification::ids(stack.model()).snoc(*x)))]
         #[invariant(below_some(nodes.model(), identifiers.model(), ids.model()))]
         #[invariant(forall<k> ids.model().contains(k) ==> identifiers.model().contains(&k))]
+        #[invariant(*size <= identifiers.model().len())]
+        #[invariant(identifiers.model().len() <= nodes.model().len())]
+        #[invariant(stack.model().len() <= *depth + identifiers.model().len() - *size)]
         #[invariant(forall<j> i@ <= j && j < to.model().len()
             ==> identifiers.model().contains(&to.model()[j]))]
+        #[variant(i@)]
         while i > 0 {
             #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
             {
@@ -385,11 +452,15 @@ where
                 && nodes.model().contains(&child.deep_model()));
             proof_assert!(exists<j> ids.model().contains(j) && descends(nodes.model(), child.deep_model(), j));
             if identifiers.insert(child) {
-                if target(&child) {
+                if target.contains(&child) {
                     return true;
                 }
 
                 stack.push(child);
+                proof_assert! {
+                    lemma_set_in_keys_len(identifiers.model(), nodes.model());
+                    identifiers.model().len() <= nodes.model().len()
+                };
             }
         }
     }

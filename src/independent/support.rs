@@ -19,9 +19,10 @@ use scratchpads::{Scratchpad, ScratchpadMap, ScratchpadSet, ScratchpadVec};
 use creusot_std::{invariant::inv, prelude::*};
 
 use super::{IndependentNode, graph::longest_candidate_path_to_root};
+use crate::dependent::DependentNode;
 use crate::{IndependentContents, Step, Verifiable, default_hasher, same_id};
 
-pub(super) use crate::dependent::{all_entries, contains_all};
+pub(super) use crate::dependent::contains_all;
 
 #[cfg(creusot)]
 use super::verification::*;
@@ -60,10 +61,103 @@ where
     contains_all(roots, nodes)
         && all_present(active, nodes)
         && contains_all(bookmarked, nodes)
-        && all_entries(nodes, |key, value| {
-            validate_node(nodes, roots, active, bookmarked, key, value)
-        })
+        && all_nodes_valid(nodes, roots, active, bookmarked)
         && valid_topology(nodes, roots, active)
+}
+
+/// Checks [`validate_node`] for every node of `nodes`.
+#[trusted]
+#[check(terminates)]
+#[ensures(result == forall<k> nodes.model().contains(&k) ==> linked(nodes.model(), k)
+    && (nodes.model()[k]@.from.len() == 0) == roots.model().contains(k)
+    && nodes.model()[k]@.active == active.model().contains(&k)
+    && nodes.model()[k]@.bookmarked == bookmarked.model().contains(k))]
+fn all_nodes_valid<K, T, S>(
+    nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
+    roots: &IndexSet<K, S>,
+    active: &HashSet<K, S>,
+    bookmarked: &IndexSet<K, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    nodes
+        .iter()
+        .all(|(key, value)| validate_node(nodes, roots, active, bookmarked, key, value))
+}
+
+/// Converts the nodes of a [`DependentWeave`](crate::dependent::DependentWeave), making them
+/// inactive.
+#[trusted]
+#[check(terminates)]
+#[ensures(converted_from(result.model(), nodes.model()))]
+pub(super) fn independent_nodes<K, T, S>(
+    nodes: HashMap<K, DependentNode<K, T, S>, S>,
+) -> HashMap<K, IndependentNode<K, T, S>, S>
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    let mut map = HashMap::with_capacity_and_hasher(nodes.capacity(), S::default());
+    map.extend(nodes.into_iter().map(|(id, mut node)| {
+        node.active = false;
+        (id, node.into())
+    }));
+
+    map
+}
+
+/// Checks that every node has at most one parent.
+#[trusted]
+#[check(terminates)]
+#[ensures(result == forall<k> nodes.model().contains(&k) ==> nodes.model()[k]@.from.len() < 2)]
+pub(super) fn all_single_parent<K, T, S>(nodes: &HashMap<K, IndependentNode<K, T, S>, S>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    nodes.iter().all(|(_, node)| node.from.len() < 2)
+}
+
+/// Converts nodes with at most one parent into [`DependentNode`]s, keeping active only those
+/// which end the active path `active`, and returns the last of those.
+#[trusted]
+#[check(terminates)]
+#[requires(forall<k> nodes.model().contains(&k) ==> nodes.model()[k]@.from.len() < 2)]
+#[ensures(converted_to(result.0.model(), nodes.model(), active.model()))]
+#[ensures(match result.1 {
+    Some(a) => result.0.model().contains(&a.deep_model()) && result.0.model()[a.deep_model()]@.active,
+    None => forall<k> result.0.model().contains(&k) ==> !result.0.model()[k]@.active,
+})]
+#[allow(clippy::unreachable, reason = "Should never panic")]
+#[allow(clippy::type_complexity, reason = "The converted nodes and the active one")]
+pub(super) fn dependent_nodes<K, T, S>(
+    nodes: HashMap<K, IndependentNode<K, T, S>, S>,
+    active: &HashSet<K, S>,
+) -> (HashMap<K, DependentNode<K, T, S>, S>, Option<K>)
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    let mut end = None;
+
+    let mut map = HashMap::with_capacity_and_hasher(nodes.capacity(), S::default());
+    map.extend(nodes.into_iter().map(|(id, mut node)| {
+        node.active = node.active && !node.to.iter().any(|id| active.contains(id));
+        if node.active {
+            end = Some(id);
+        }
+
+        node.try_into()
+            .map_or_else(|_| unreachable!(), |node| (id, node))
+    }));
+
+    (map, end)
 }
 
 /// Checks that the node `value`, stored at `key`, is consistent with the given parts of a weave.
@@ -409,6 +503,7 @@ where
 }
 
 /// Checks that one of `from` is active and has no active child: the end of the active path.
+#[check(terminates)]
 #[requires(forall<p> from.model().contains(p) ==> nodes.model().contains(&p))]
 #[ensures(result == exists<p> from.model().contains(p) && active.model().contains(&p)
     && !has_child_in(nodes.model(), active.model(), p))]
@@ -426,6 +521,7 @@ where
     #[invariant(i@ <= from.model().len())]
     #[invariant(forall<j> 0 <= j && j < i@ ==> !(active.model().contains(&from.model()[j])
         && !has_child_in(nodes.model(), active.model(), from.model()[j])))]
+    #[variant(from.model().len() - i@)]
     while i < from.len() {
         let parent = from[i];
         if active.contains(&parent) && !any_active(active, &nodes[&parent].to) {
@@ -441,6 +537,7 @@ where
 }
 
 /// Checks whether one of `ids` is active.
+#[check(terminates)]
 #[ensures(result == exists<c> ids.model().contains(c) && active.model().contains(&c))]
 pub(super) fn any_active<K, S>(active: &HashSet<K, S>, ids: &IndexSet<K, S>) -> bool
 where
@@ -451,6 +548,7 @@ where
 
     #[invariant(i@ <= ids.model().len())]
     #[invariant(forall<j> 0 <= j && j < i@ ==> !active.model().contains(&ids.model()[j]))]
+    #[variant(ids.model().len() - i@)]
     while i < ids.len() {
         if active.contains(&ids[i]) {
             return true;
@@ -466,12 +564,19 @@ where
 
 /// The first of `ids` with the best score (most active nodes, then fewest inactive ones), and its
 /// score.
+#[check(terminates)]
 #[requires(forall<k> ids.model().contains(k) ==> scores.model().contains(&k))]
 #[ensures(match result {
     Some((id, score)) => ids.model().contains(id.deep_model())
         && scores.model()[id.deep_model()].0 == score
         && forall<c> ids.model().contains(c) ==> score_le(scores.model()[c].0, score),
     None => ids.model().len() == 0,
+})]
+// The first of them: every earlier element scores strictly worse.
+#[ensures(match result {
+    Some((id, score)) => exists<b> 0 <= b && b < ids.model().len() && ids.model()[b] == id.deep_model()
+        && forall<j> 0 <= j && j < b ==> !score_le(score, scores.model()[ids.model()[j]].0),
+    None => true,
 })]
 pub(super) fn best_scored<K, S>(
     ids: &IndexSet<K, S>,
@@ -483,6 +588,9 @@ where
 {
     let mut best: Option<(K, (usize, usize))> = None;
     let mut i = 0;
+    proof! {
+        let mut at = snapshot!(0);
+    }
 
     #[invariant(i@ <= ids.model().len())]
     #[invariant(match best {
@@ -491,15 +599,28 @@ where
             && forall<j> 0 <= j && j < i@ ==> score_le(scores.model()[ids.model()[j]].0, score),
         None => i@ == 0,
     })]
+    #[invariant(match best {
+        Some((id, score)) => 0 <= *at && *at < i@ && ids.model()[*at] == id.deep_model()
+            && forall<j> 0 <= j && j < *at ==> !score_le(score, scores.model()[ids.model()[j]].0),
+        None => true,
+    })]
+    #[variant(ids.model().len() - i@)]
     while i < ids.len() {
         let id = ids[i];
         let score = scores[&id].0;
         // score: (connectors, active)
-        // `Ordering::then` is spelled out, as Creusot has no specification for it.
-        if best.is_none_or(|(_, best)| {
-            best.1.cmp(&score.1).then(score.0.cmp(&best.0)) == Ordering::Less
-        }) {
+        let better = match best {
+            Some((_, best)) => matches!(
+                best.1.cmp(&score.1).then(score.0.cmp(&best.0)),
+                Ordering::Less
+            ),
+            None => true,
+        };
+        if better {
             best = Some((id, score));
+            proof! {
+                at = snapshot!(i@);
+            }
         }
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
         {
@@ -511,11 +632,13 @@ where
 }
 
 /// The index of the first root in `roots` which is one of `to`.
+#[check(terminates)]
 #[ensures(match result {
     Some(i) => i@ < roots.model().len() && to.model().contains(roots.model()[i@])
         && forall<j> 0 <= j && j < i@ ==> !to.model().contains(roots.model()[j]),
     None => forall<c> to.model().contains(c) ==> !roots.model().contains(c),
 })]
+#[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
 pub(super) fn first_root_index<K, S>(roots: &IndexSet<K, S>, to: &IndexSet<K, S>) -> Option<usize>
 where
     K: Hash + Copy + Eq + Ord + Verifiable,
@@ -531,9 +654,13 @@ where
             && forall<r, j> 0 <= r && r < m@ && 0 <= j && j < i@ ==> to.model()[j] != roots.model()[r],
         None => forall<j> 0 <= j && j < i@ ==> !roots.model().contains(to.model()[j]),
     })]
+    #[variant(to.model().len() - i@)]
     while i < to.len() {
         if let Some(index) = roots.get_index_of(&to[i])
-            && min.is_none_or(|min| index < min)
+            && match min {
+                Some(min) => index < min,
+                None => true,
+            }
         {
             min = Some(index);
         }
@@ -547,6 +674,7 @@ where
 }
 
 /// Checks that every identifier in `slice` is a key of `nodes`.
+#[check(terminates)]
 #[ensures(result == forall<i> 0 <= i && i < slice@.len() ==> nodes.model().contains(&slice@[i].deep_model()))]
 pub(super) fn all_present_in_slice<K, V, S>(slice: &[K], nodes: &HashMap<K, V, S>) -> bool
 where
@@ -557,6 +685,7 @@ where
 
     #[invariant(i@ <= slice@.len())]
     #[invariant(forall<j> 0 <= j && j < i@ ==> nodes.model().contains(&slice@[j].deep_model()))]
+    #[variant(slice@.len() - i@)]
     while i < slice.len() {
         if !nodes.contains_key(&slice[i]) {
             return false;
@@ -571,6 +700,7 @@ where
 }
 
 /// Checks that `set` lists exactly `slice`, in order.
+#[check(terminates)]
 #[ensures(result == (set.model() == ids(slice@)))]
 pub(super) fn same_ids<K, S>(set: &IndexSet<K, S>, slice: &[K]) -> bool
 where
@@ -585,8 +715,9 @@ where
 
     #[invariant(i@ <= slice@.len())]
     #[invariant(forall<j> 0 <= j && j < i@ ==> set.model()[j] == slice@[j].deep_model())]
+    #[variant(slice@.len() - i@)]
     while i < set.len() {
-        if set[i] != slice[i] {
+        if !same_id(&set[i], &slice[i]) {
             return false;
         }
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -613,6 +744,7 @@ where
 
 /// Checks whether one of `a` other than `id` is in `b`.
 #[trusted]
+#[check(terminates)]
 #[ensures(result == exists<k> a.model().contains(&k) && b.model().contains(&k) && k != id.deep_model())]
 pub(super) fn contains_other<K, S>(a: &ScratchpadSet<'_, K, S>, b: &HashSet<K, S>, id: &K) -> bool
 where
@@ -628,6 +760,7 @@ where
 
 /// Makes exactly the nodes in `set` active.
 #[trusted]
+#[check(terminates)]
 #[requires(forall<k> set.model().contains(&k) ==> nodes.model().contains(&k))]
 #[requires(forall<k> active.model().contains(&k) ==> nodes.model().contains(&k))]
 #[requires(forall<k> nodes.model().contains(&k)
@@ -669,6 +802,7 @@ pub(super) fn activate_exactly<K, T, S>(
 
 /// Makes every node of `active` inactive, and empties it.
 #[trusted]
+#[check(terminates)]
 #[requires(forall<k> active.model().contains(&k) ==> nodes.model().contains(&k))]
 #[ensures((^active).model() == FSet::empty())]
 #[ensures(forall<k> (^nodes).model().contains(&k) == nodes.model().contains(&k))]
@@ -693,6 +827,7 @@ pub(super) fn deactivate_all<K, T, S>(
 
 /// Pushes the elements of `set` onto `output`, which is empty.
 #[trusted]
+#[check(terminates)]
 #[requires(output.model().len() == 0)]
 #[ensures(no_dup(ids((^output).model())))]
 #[ensures(forall<k> ids((^output).model()).contains(k) == set.model().contains(&k))]
@@ -705,6 +840,7 @@ where
 
 /// Pushes the elements of `a` which aren't in `b` onto `output`, which is empty.
 #[trusted]
+#[check(terminates)]
 #[requires(output.model().len() == 0)]
 #[ensures(no_dup(ids((^output).model())))]
 #[ensures(forall<k> ids((^output).model()).contains(k)
@@ -721,17 +857,41 @@ pub(super) fn extend_difference<K, S>(
 }
 
 /// Appends `items` to `output`.
-#[trusted]
+#[check(terminates)]
 #[ensures(ids((^output)@) == ids(output@).concat(ids(items.model())))]
 pub(super) fn extend_from_scratch<K>(output: &mut Vec<K>, items: &ScratchpadVec<'_, K>)
 where
     K: Copy + Verifiable,
 {
-    output.extend_from_slice(items);
+    snapshot! { lemma_ids_snoc::<K> };
+    snapshot! { crate::verification::lemma_concat_snoc::<Id<K>> };
+    proof! {
+        let old = snapshot!(ids(output@));
+    }
+    output.reserve(items.len());
+    proof_assert!(ids(output@) == *old);
+    let mut i = 0;
+
+    #[invariant(i@ <= items.model().len())]
+    #[invariant(ids(output@) == old.concat(ids(items.model()).subsequence(0, i@)))]
+    #[variant(items.model().len() - i@)]
+    while i < items.len() {
+        proof_assert!(ids(items.model())[i@] == items.model()[i@].deep_model());
+        proof_assert!(ids(items.model())
+            .subsequence(0, i@ + 1)
+            .ext_eq(ids(items.model()).subsequence(0, i@).snoc(items.model()[i@].deep_model())));
+        output.push(items[i]);
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            i += 1;
+        }
+    }
+    proof_assert!(ids(items.model()).subsequence(0, i@).ext_eq(ids(items.model())));
 }
 
 /// Pushes the keys of `map` onto `output`, which is empty.
 #[trusted]
+#[check(terminates)]
 #[requires(output.model().len() == 0)]
 #[ensures(no_dup(ids((^output).model())))]
 #[ensures(forall<k> ids((^output).model()).contains(k) == map.model().contains(&k))]
@@ -746,6 +906,7 @@ pub(super) fn extend_keys<K, S>(
 
 /// Pushes the keys of `map` with a non-zero value onto `output`, which is empty.
 #[trusted]
+#[check(terminates)]
 #[requires(output.model().len() == 0)]
 #[ensures(no_dup(ids((^output).model())))]
 #[ensures(forall<k> ids((^output).model()).contains(k)
@@ -765,6 +926,7 @@ pub(super) fn extend_surviving_keys<K, S>(
 
 /// Checks whether `map` has an active key with a non-zero value.
 #[trusted]
+#[check(terminates)]
 #[ensures(result == exists<k> map.model().contains(&k) && map.model()[k]@ > 0
     && active.model().contains(&k))]
 pub(super) fn any_active_survivor<K, S>(
@@ -779,14 +941,31 @@ where
         .any(|(child, remaining)| *remaining > 0 && active.contains(child))
 }
 
+/// Removes the identifiers in `listed` from `set`, keeping the others in order.
+///
+/// Its body is `IndexSet::retain`, called with a closure, which verification can't show terminates.
+#[trusted]
+#[check(terminates)]
+#[ensures(crate::verification::in_order((^set).model(), set.model()))]
+#[ensures(forall<x> (^set).model().contains(x)
+    == (set.model().contains(x) && !listed.model().contains(x)))]
+pub(super) fn retain_unlisted<K, S>(set: &mut IndexSet<K, S>, listed: &IndexSet<K, S>)
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    S: BuildHasher + Default + Clone,
+{
+    set.retain(|id| !listed.contains(id));
+}
+
 /// Collects `slice` into a set, which keeps the first occurrence of each identifier, in order.
+#[check(terminates)]
 #[ensures(result.model() == dedup(ids(slice@)))]
 pub(super) fn index_set_from_slice<K, S>(slice: &[K]) -> IndexSet<K, S>
 where
     K: Hash + Copy + Eq + Ord + Verifiable,
     S: BuildHasher + Default + Clone,
 {
-    let mut set = IndexSet::with_capacity_and_hasher(slice.len(), S::default());
+    let mut set = IndexSet::with_capacity_and_hasher(slice.len(), default_hasher());
     let mut i = 0;
 
     #[invariant(i@ <= slice@.len())]
@@ -806,7 +985,6 @@ where
 }
 
 /// Pushes `Enter` steps for the identifiers in `set` onto `stack`, in reverse order.
-#[trusted]
 #[check(terminates)]
 #[ensures(forall<i> 0 <= i && i < stack.model().len() ==> (^stack).model()[i] == stack.model()[i])]
 #[ensures((^stack).model().len() == stack.model().len() + set.model().len())]
@@ -819,7 +997,27 @@ fn extend_steps_rev<K, S>(stack: &mut ScratchpadVec<'_, Step<K, K>>, set: &Index
 where
     K: Copy + Verifiable,
 {
-    stack.extend(set.iter().copied().rev().map(Step::Enter));
+    proof! {
+        let old = snapshot!(stack.model());
+    }
+    let mut i = set.len();
+
+    #[invariant(i@ <= set.model().len())]
+    #[invariant(stack.model().len() == old.len() + set.model().len() - i@)]
+    #[invariant(forall<j> 0 <= j && j < old.len() ==> stack.model()[j] == old[j])]
+    #[invariant(forall<j> 0 <= j && j < set.model().len() - i@
+        ==> match stack.model()[old.len() + j] {
+            Step::Enter(k) => k.deep_model() == set.model()[set.model().len() - 1 - j],
+            Step::Exit(_) => false,
+        })]
+    #[variant(i@)]
+    while i > 0 {
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+        {
+            i -= 1;
+        }
+        stack.push(Step::Enter(set[i]));
+    }
 }
 
 /// Sorts the identifiers in `set` by comparing their nodes with `cmp`.

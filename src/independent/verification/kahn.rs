@@ -668,3 +668,180 @@ pub fn lemma_kahn_sorted_all<K, T, S>(
         crate::dependent::verification::lemma_lists_len(output, nodes)
     }
 }
+
+/// The nodes of `s` which Kahn's algorithm makes ready once `out` is output, in the order of `s`:
+/// those which `admitted` accepts and whose admitted parents are all in `out`.
+///
+/// This is only open in this module: the lemmas below give what the graph searches need, so that
+/// the provers don't unfold it in the methods' proofs.
+#[logic(open(self))]
+#[variant(s.len())]
+pub fn ready<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    out: Seq<Id<K>>,
+    s: Seq<Id<K>>,
+) -> Seq<Id<K>>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        if s.len() == 0 {
+            Seq::empty()
+        } else {
+            let c = s[s.len() - 1];
+            let r = ready(nodes, admitted, out, s.subsequence(0, s.len() - 1));
+            if admitted[c] && pending_parents(nodes, admitted, out, c) == 0 { r.snoc(c) } else { r }
+        }
+    }
+}
+
+/// What Kahn's algorithm outputs after `output`, when `stack` holds the nodes ready to be output,
+/// in at most `fuel` more steps: it pops the last node of the stack, outputs it, and pushes those
+/// of its children which become ready, from its last child to its first.
+///
+/// This is only open in this module, like [`ready`].
+#[logic(open(self))]
+#[variant(fuel)]
+pub fn kahn_run<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    fuel: Int,
+    output: Seq<Id<K>>,
+    stack: Seq<Id<K>>,
+) -> Seq<Id<K>>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        if fuel <= 0 || stack.len() == 0 {
+            output
+        } else {
+            let id = stack[stack.len() - 1];
+            let out = output.snoc(id);
+            kahn_run(
+                nodes,
+                admitted,
+                fuel - 1,
+                out,
+                stack.subsequence(0, stack.len() - 1).concat(ready(nodes, admitted, out, nodes[id]@.to.reverse())),
+            )
+        }
+    }
+}
+
+/// The order in which `topological_sort` lists the nodes: Kahn's algorithm, starting with the
+/// roots on the stack, so that the first root is output first.
+#[logic(open)]
+pub fn kahn_sorted<K, T, S>(nodes: Nodes<K, T, S>, roots: Seq<Id<K>>) -> Seq<Id<K>>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { kahn_run(nodes, admit_all(), nodes.len() + 1, Seq::empty(), roots.reverse()) }
+}
+
+/// Popping `id` from the stack outputs it, and pushes those of its children which become ready.
+#[logic]
+#[requires(0 < fuel)]
+#[ensures(kahn_run(nodes, admitted, fuel, output, rest.snoc(id))
+    == kahn_run(
+        nodes,
+        admitted,
+        fuel - 1,
+        output.snoc(id),
+        rest.concat(ready(nodes, admitted, output.snoc(id), nodes[id]@.to.reverse())),
+    ))]
+pub fn lemma_kahn_run_step<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    fuel: Int,
+    output: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    id: Id<K>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    proof_assert!(rest.snoc(id).subsequence(0, rest.len()).ext_eq(rest));
+    proof_assert!(rest.snoc(id)[rest.len()] == id);
+}
+
+/// With nothing ready, Kahn's algorithm outputs nothing more.
+#[logic]
+#[ensures(kahn_run(nodes, admitted, fuel, output, Seq::empty()) == output)]
+pub fn lemma_kahn_run_done<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    fuel: Int,
+    output: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
+/// Visiting one more child, `to[i - 1]`, pushes it if it becomes ready.
+#[logic]
+#[requires(0 < i && i <= to.len())]
+#[ensures(ready(nodes, admitted, out, to.subsequence(i - 1, to.len()).reverse())
+    == if admitted[to[i - 1]] && pending_parents(nodes, admitted, out, to[i - 1]) == 0 {
+        ready(nodes, admitted, out, to.subsequence(i, to.len()).reverse()).snoc(to[i - 1])
+    } else {
+        ready(nodes, admitted, out, to.subsequence(i, to.len()).reverse())
+    })]
+pub fn lemma_ready_step<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+    i: Int,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let a = to.subsequence(i - 1, to.len()).reverse();
+        let b = to.subsequence(i, to.len()).reverse();
+        proof_assert!(a.len() == b.len() + 1);
+        proof_assert!(a[a.len() - 1] == to[i - 1]);
+        proof_assert!(a.subsequence(0, a.len() - 1).ext_eq(b))
+    }
+}
+
+/// Visiting no children pushes nothing, and visiting all of them visits `to`, last child first.
+#[logic]
+#[ensures(ready(nodes, admitted, out, to.subsequence(to.len(), to.len()).reverse()) == Seq::empty())]
+#[ensures(to.subsequence(0, to.len()).reverse() == to.reverse())]
+pub fn lemma_ready_ends<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    admitted: Mapping<Id<K>, bool>,
+    out: Seq<Id<K>>,
+    to: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    proof_assert!(to.subsequence(to.len(), to.len()).reverse().len() == 0);
+    proof_assert!(to.subsequence(0, to.len()).ext_eq(to));
+}
+
+/// The nodes which are `id` or one of its descendants.
+#[logic(open)]
+pub fn descendant_of<K, T, S>(nodes: Nodes<K, T, S>, id: Id<K>) -> Mapping<Id<K>, bool>
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { |k| nodes.contains(&k) && descends(nodes, k, id) }
+}

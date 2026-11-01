@@ -4,12 +4,12 @@ use alloc::vec::Vec;
 use core::hash::{BuildHasher, Hash};
 
 use creusot_std::macros::*;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
-use scratchpads::{ScratchpadMap, ScratchpadVec};
+use scratchpads::{ScratchpadMap, ScratchpadSet, ScratchpadVec, allocator_api2::alloc::Allocator};
 
 #[cfg(creusot)]
-use creusot_std::{invariant::inv, prelude::*};
+use creusot_std::prelude::*;
 
 use super::{Predicate, count_parents, extend_from_set_rev};
 use crate::{IndependentContents, Verifiable, independent::IndependentNode};
@@ -18,12 +18,16 @@ use crate::{IndependentContents, Verifiable, independent::IndependentNode};
 use crate::independent::verification::*;
 
 #[cfg(creusot)]
-use crate::verification::{
-    Id, Model, ids, lemma_full_prefix, lemma_ids_empty, lemma_ids_singleton, lemma_ids_snoc,
-    lemma_reverse, lemma_snoc_contains,
+use crate::{
+    dependent::verification::lemma_no_dup_len,
+    verification::{
+        Id, Model, ids, lemma_concat_snoc, lemma_full_prefix, lemma_ids_empty, lemma_ids_singleton,
+        lemma_ids_snoc, lemma_reverse, lemma_snoc_contains,
+    },
 };
 
 /// Outputs every node, each after its parents (Kahn's algorithm), starting from `roots`.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()) && acyclic(nodes.model()))]
 #[requires(forall<k> roots.model().contains(k)
     == (nodes.model().contains(&k) && nodes.model()[k]@.from.len() == 0))]
@@ -32,6 +36,7 @@ use crate::verification::{
 #[requires(identifier_map.model().len() == 0)]
 #[ensures((^output)@.len() == nodes.model().len())]
 #[ensures(topological(nodes.model(), ids((^output)@)))]
+#[ensures(ids((^output)@) == kahn_sorted(nodes.model(), roots.model()))]
 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
 pub(in crate::independent) fn topological_sort<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
@@ -59,13 +64,34 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
         kahn_outer(nodes.model(), admit_all(), ids(output@), ids(stack.model()), identifier_map.model())
     };
 
+    proof_assert! { lemma_no_dup_len(ids(output@), nodes.model()); output@.len() <= nodes.model().len() };
+
     #[invariant(kahn_outer(nodes.model(), admit_all(), ids(output@), ids(stack.model()), identifier_map.model()))]
     #[invariant(forall<k> nodes.model().contains(&k) ==> identifier_map.model().contains(&k))]
+    #[invariant(output@.len() <= nodes.model().len())]
+    #[variant(nodes.model().len() - output@.len())]
+    #[invariant(kahn_run(nodes.model(), admit_all(), nodes.model().len() + 1 - output@.len(), ids(output@), ids(stack.model()))
+        == kahn_sorted(nodes.model(), roots.model()))]
     while let Some(id) = stack.pop() {
         proof! {
             let prev = snapshot!(ids(output@));
             let rest = snapshot!(ids(stack.model()));
         }
+        proof_assert! {
+            lemma_kahn_run_step(nodes.model(), admit_all(), nodes.model().len() + 1 - output@.len(), *prev, *rest, id.deep_model());
+            kahn_run(
+                nodes.model(),
+                admit_all(),
+                nodes.model().len() + 1 - output@.len() - 1,
+                prev.snoc(id.deep_model()),
+                rest.concat(ready(
+                    nodes.model(),
+                    admit_all(),
+                    prev.snoc(id.deep_model()),
+                    nodes.model()[id.deep_model()]@.to.reverse(),
+                )),
+            ) == kahn_sorted(nodes.model(), roots.model())
+        };
         output.push(id);
         proof_assert! {
             lemma_kahn_pop(nodes.model(), admit_all(), *prev, *rest, id.deep_model(), identifier_map.model());
@@ -83,6 +109,16 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
         let to = &nodes[&id].to;
         let mut i = to.len();
         proof_assert! { lemma_full_prefix(to.model()); to.model().subsequence(0, i@) == to.model() };
+        proof_assert! {
+            lemma_ready_ends(nodes.model(), admit_all(), prev.snoc(id.deep_model()), to.model());
+            rest.concat_empty();
+            ids(stack.model()) == rest.concat(ready(
+                nodes.model(),
+                admit_all(),
+                prev.snoc(id.deep_model()),
+                to.model().subsequence(i@, to.model().len()).reverse(),
+            ))
+        };
         #[invariant(i@ <= to.model().len())]
         #[invariant(to.model() == nodes.model()[id.deep_model()]@.to)]
         #[invariant(ids(output@) == prev.snoc(id.deep_model()))]
@@ -96,6 +132,13 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
             identifier_map.model(),
         ))]
         #[invariant(forall<k> nodes.model().contains(&k) ==> identifier_map.model().contains(&k))]
+        #[invariant(ids(stack.model()) == rest.concat(ready(
+            nodes.model(),
+            admit_all(),
+            prev.snoc(id.deep_model()),
+            to.model().subsequence(i@, to.model().len()).reverse(),
+        )))]
+        #[variant(i@)]
         while i > 0 {
             i -= 1;
             let child = to[i];
@@ -122,6 +165,25 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
                 stack.push(child);
             }
             proof_assert! {
+                lemma_ready_step(nodes.model(), admit_all(), prev.snoc(id.deep_model()), to.model(), i@ + 1);
+                lemma_concat_snoc(
+                    *rest,
+                    ready(
+                        nodes.model(),
+                        admit_all(),
+                        prev.snoc(id.deep_model()),
+                        to.model().subsequence(i@ + 1, to.model().len()).reverse(),
+                    ),
+                    child.deep_model(),
+                );
+                ids(stack.model()) == rest.concat(ready(
+                    nodes.model(),
+                    admit_all(),
+                    prev.snoc(id.deep_model()),
+                    to.model().subsequence(i@, to.model().len()).reverse(),
+                ))
+            };
+            proof_assert! {
                 lemma_kahn_visit(
                     nodes.model(),
                     admit_all(),
@@ -144,24 +206,38 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
             };
         }
         proof_assert! {
+            lemma_ready_ends(nodes.model(), admit_all(), prev.snoc(id.deep_model()), to.model());
+            ids(stack.model()) == rest.concat(ready(
+                nodes.model(),
+                admit_all(),
+                prev.snoc(id.deep_model()),
+                nodes.model()[id.deep_model()]@.to.reverse(),
+            ))
+        };
+        proof_assert! {
             lemma_kahn_next(nodes.model(), admit_all(), *prev, id.deep_model(), ids(stack.model()), identifier_map.model());
             kahn_outer(nodes.model(), admit_all(), ids(output@), ids(stack.model()), identifier_map.model())
         };
+        proof_assert! { lemma_no_dup_len(ids(output@), nodes.model()); output@.len() <= nodes.model().len() };
     }
     proof_assert! {
         lemma_ids_empty(stack.model());
         lemma_kahn_sorted_all(nodes.model(), ids(output@), identifier_map.model());
         ids(output@).len() == nodes.model().len() && topological(nodes.model(), ids(output@))
     };
+    proof_assert! {
+        lemma_kahn_run_done(nodes.model(), admit_all(), nodes.model().len() + 1 - output@.len(), ids(output@));
+        ids(output@) == kahn_sorted(nodes.model(), roots.model())
+    };
 }
 
-/// Outputs the nodes accepted by `filter` which can be reached from `subgraph_root` through
-/// accepted nodes, each after its accepted parents, continuing a topological sort of the accepted
-/// nodes (Kahn's algorithm) whose state is `output` and `identifier_map`.
+/// Outputs the nodes in `filter` (and, if given, in `within`) which can be reached from
+/// `subgraph_root` through such nodes, each after its accepted parents, continuing a topological
+/// sort of the accepted nodes (Kahn's algorithm) whose state is `output` and `identifier_map`.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()) && acyclic(nodes.model()))]
-#[requires(forall<k: &K> inv(k) ==> filter.precondition((k,)))]
-#[requires(forall<k: &K, admit: bool> filter.postcondition((k,), admit)
-    ==> admit == admitted[k.deep_model()])]
+#[requires(forall<k> admitted[k] == (filter.model().contains(&k)
+    && match within { Some(within) => within.model().contains(&k), None => true }))]
 #[requires(nodes.model().contains(&subgraph_root.deep_model()))]
 #[requires(admitted[subgraph_root.deep_model()])]
 #[requires(forall<p> !admitted_parent(nodes.model(), *admitted, subgraph_root.deep_model(), p))]
@@ -173,15 +249,29 @@ pub(in crate::independent) fn topological_sort<K, T, S>(
 #[ensures(output.model().len() < (^output).model().len())]
 #[ensures(forall<i> 0 <= i && i < output.model().len() ==> (^output).model()[i] == output.model()[i])]
 #[ensures((^output).model()[output.model().len()].deep_model() == subgraph_root.deep_model())]
+#[ensures(ids((^output).model()) == kahn_run(
+    nodes.model(),
+    *admitted,
+    nodes.model().len() + 1 - output.model().len(),
+    ids(output.model()),
+    Seq::singleton(subgraph_root.deep_model()),
+))]
 #[ensures(forall<i> output.model().len() < i && i < (^output).model().len()
     ==> exists<p> admitted_parent(nodes.model(), *admitted, (^output).model()[i].deep_model(), p))]
 #[allow(
     clippy::arithmetic_side_effects,
     reason = "Can never overflow or underflow"
 )]
-pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
+#[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "The filter is a set and an optional set it must also be in, as closures can't be proven to end"
+)]
+#[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
+pub(in crate::independent) fn topological_sort_subgraph<K, T, S, A>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
-    filter: impl Fn(&K) -> bool,
+    filter: &HashSet<K, S, A>,
+    within: Option<&ScratchpadSet<'_, K, S>>,
     admitted: Predicate<K>,
     subgraph_root: K,
     stack: &mut ScratchpadVec<'_, K>,
@@ -191,6 +281,7 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
     K: Hash + Copy + Eq + Ord + Verifiable,
     T: IndependentContents,
     S: BuildHasher + Default + Clone,
+    A: Allocator,
 {
     snapshot! { lemma_ids_snoc::<K> };
     proof! {
@@ -211,6 +302,11 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
             && kahn_counted(nodes.model(), *admitted, ids(output.model()), identifier_map.model())
     };
 
+    proof_assert! {
+        lemma_no_dup_len(ids(output.model()), nodes.model());
+        output.model().len() <= nodes.model().len()
+    };
+
     #[invariant(kahn_outer(nodes.model(), *admitted, ids(output.model()), ids(stack.model()), identifier_map.model()))]
     #[invariant(kahn_counted(nodes.model(), *admitted, ids(output.model()), identifier_map.model()))]
     #[invariant(out0.len() <= output.model().len())]
@@ -223,11 +319,30 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
                 ==> exists<p> admitted_parent(nodes.model(), *admitted, k, p)))]
     #[invariant(forall<i> #[trigger(output.model()[i])] out0.len() < i && i < output.model().len()
         ==> exists<p> admitted_parent(nodes.model(), *admitted, output.model()[i].deep_model(), p))]
+    #[invariant(output.model().len() <= nodes.model().len())]
+    #[variant(nodes.model().len() - output.model().len())]
+    #[invariant(kahn_run(nodes.model(), *admitted, nodes.model().len() + 1 - output.model().len(), ids(output.model()), ids(stack.model()))
+        == kahn_run(nodes.model(), *admitted, nodes.model().len() + 1 - out0.len(), ids(*out0), Seq::singleton(subgraph_root.deep_model())))]
     while let Some(id) = stack.pop() {
         proof! {
             let prev = snapshot!(ids(output.model()));
             let rest = snapshot!(ids(stack.model()));
         }
+        proof_assert! {
+            lemma_kahn_run_step(nodes.model(), *admitted, nodes.model().len() + 1 - output.model().len(), *prev, *rest, id.deep_model());
+            kahn_run(
+                nodes.model(),
+                *admitted,
+                nodes.model().len() + 1 - output.model().len() - 1,
+                prev.snoc(id.deep_model()),
+                rest.concat(ready(
+                    nodes.model(),
+                    *admitted,
+                    prev.snoc(id.deep_model()),
+                    nodes.model()[id.deep_model()]@.to.reverse(),
+                )),
+            ) == kahn_run(nodes.model(), *admitted, nodes.model().len() + 1 - out0.len(), ids(*out0), Seq::singleton(subgraph_root.deep_model()))
+        };
         proof_assert! {
             lemma_snoc_contains(*rest, id.deep_model(), id.deep_model());
             rest.snoc(id.deep_model()).contains(id.deep_model())
@@ -252,6 +367,16 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
         let to = &nodes[&id].to;
         let mut i = to.len();
         proof_assert! { lemma_full_prefix(to.model()); to.model().subsequence(0, i@) == to.model() };
+        proof_assert! {
+            lemma_ready_ends(nodes.model(), *admitted, prev.snoc(id.deep_model()), to.model());
+            rest.concat_empty();
+            ids(stack.model()) == rest.concat(ready(
+                nodes.model(),
+                *admitted,
+                prev.snoc(id.deep_model()),
+                to.model().subsequence(i@, to.model().len()).reverse(),
+            ))
+        };
         #[invariant(i@ <= to.model().len())]
         #[invariant(to.model() == nodes.model()[id.deep_model()]@.to)]
         #[invariant(ids(output.model()) == prev.snoc(id.deep_model()))]
@@ -266,6 +391,13 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
         ))]
         #[invariant(forall<k> ids(stack.model()).contains(k)
             ==> exists<p> admitted_parent(nodes.model(), *admitted, k, p))]
+        #[invariant(ids(stack.model()) == rest.concat(ready(
+            nodes.model(),
+            *admitted,
+            prev.snoc(id.deep_model()),
+            to.model().subsequence(i@, to.model().len()).reverse(),
+        )))]
+        #[variant(i@)]
         while i > 0 {
             i -= 1;
             let child = to[i];
@@ -288,7 +420,12 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
                 }
             };
 
-            if filter(&child) {
+            let accepted = filter.contains(&child)
+                && match within {
+                    Some(within) => within.contains(&child),
+                    None => true,
+                };
+            if accepted {
                 proof_assert! {
                     lemma_kahn_count(nodes.model(), *admitted, *prev, id.deep_model(), i@, *st, *counts);
                     nodes.model().contains(&child.deep_model())
@@ -314,9 +451,12 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
                                     child.deep_model(),
                                 ) + 1)
                 };
-                let remaining = identifier_map
-                    .entry(child)
-                    .or_insert_with(|| count_admitted(&nodes[&child].from, &filter, admitted));
+                let remaining = match identifier_map.entry(child) {
+                    Entry::Occupied(entry) => entry.into_mut(),
+                    Entry::Vacant(entry) => {
+                        entry.insert(count_admitted(&nodes[&child].from, filter, within, admitted))
+                    }
+                };
                 *remaining -= 1;
                 proof! {
                     let n = snapshot!(*remaining);
@@ -356,11 +496,43 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
                     )
                 };
             }
+            proof_assert! {
+                lemma_ready_step(nodes.model(), *admitted, prev.snoc(id.deep_model()), to.model(), i@ + 1);
+                lemma_concat_snoc(
+                    *rest,
+                    ready(
+                        nodes.model(),
+                        *admitted,
+                        prev.snoc(id.deep_model()),
+                        to.model().subsequence(i@ + 1, to.model().len()).reverse(),
+                    ),
+                    child.deep_model(),
+                );
+                ids(stack.model()) == rest.concat(ready(
+                    nodes.model(),
+                    *admitted,
+                    prev.snoc(id.deep_model()),
+                    to.model().subsequence(i@, to.model().len()).reverse(),
+                ))
+            };
         }
+        proof_assert! {
+            lemma_ready_ends(nodes.model(), *admitted, prev.snoc(id.deep_model()), to.model());
+            ids(stack.model()) == rest.concat(ready(
+                nodes.model(),
+                *admitted,
+                prev.snoc(id.deep_model()),
+                nodes.model()[id.deep_model()]@.to.reverse(),
+            ))
+        };
         proof_assert! {
             lemma_kahn_next(nodes.model(), *admitted, *prev, id.deep_model(), ids(stack.model()), identifier_map.model());
             kahn_outer(nodes.model(), *admitted, ids(output.model()), ids(stack.model()), identifier_map.model())
                 && kahn_counted(nodes.model(), *admitted, ids(output.model()), identifier_map.model())
+        };
+        proof_assert! {
+            lemma_no_dup_len(ids(output.model()), nodes.model());
+            output.model().len() <= nodes.model().len()
         };
     }
     proof_assert! {
@@ -368,25 +540,37 @@ pub(in crate::independent) fn topological_sort_subgraph<K, T, S>(
         lemma_kahn_end(nodes.model(), *admitted, ids(output.model()), identifier_map.model());
         kahn_state(nodes.model(), *admitted, ids(output.model()), identifier_map.model())
     };
+    proof_assert! {
+        lemma_kahn_run_done(
+            nodes.model(),
+            *admitted,
+            nodes.model().len() + 1 - output.model().len(),
+            ids(output.model()),
+        );
+        ids(output.model()) == kahn_run(nodes.model(), *admitted, nodes.model().len() + 1 - out0.len(), ids(*out0), Seq::singleton(subgraph_root.deep_model()))
+    };
 }
 
-/// Counts the identifiers in `from` which `filter` accepts.
-#[requires(forall<k: &K> inv(k) ==> filter.precondition((k,)))]
-#[requires(forall<k: &K, admit: bool> filter.postcondition((k,), admit)
-    ==> admit == admitted[k.deep_model()])]
+/// Counts the identifiers in `from` which are in `filter` and, if given, in `within`.
+#[check(terminates)]
+#[requires(forall<k> admitted[k] == (filter.model().contains(&k)
+    && match within { Some(within) => within.model().contains(&k), None => true }))]
 #[ensures(result@ == count_where(from.model(), *admitted))]
 #[cfg_attr(
     not(creusot),
     allow(unused_variables, reason = "Used by the specification")
 )]
-fn count_admitted<K, S>(
+#[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
+fn count_admitted<K, S, A>(
     from: &IndexSet<K, S>,
-    filter: &impl Fn(&K) -> bool,
+    filter: &HashSet<K, S, A>,
+    within: Option<&ScratchpadSet<'_, K, S>>,
     admitted: Predicate<K>,
 ) -> usize
 where
     K: Hash + Copy + Eq + Ord + Verifiable,
     S: BuildHasher + Default + Clone,
+    A: Allocator,
 {
     snapshot! { lemma_count_prefix::<Id<K>> };
     snapshot! { crate::verification::lemma_full_prefix::<Id<K>> };
@@ -398,7 +582,12 @@ where
     #[invariant(count@ <= i@)]
     #[variant(from.model().len() - i@)]
     while i < from.len() {
-        if filter(&from[i]) {
+        let accepted = filter.contains(&from[i])
+            && match within {
+                Some(within) => within.contains(&from[i]),
+                None => true,
+            };
+        if accepted {
             #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             {
                 count += 1;

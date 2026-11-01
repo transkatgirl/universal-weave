@@ -262,6 +262,126 @@ where
     }
 }
 
+/// After its first element, `done` lists each node after all of its parents.
+///
+/// This is only open in this module, like [`removal_order`].
+#[logic(open(self))]
+pub fn parents_first<K, T, S>(nodes: Nodes<K, T, S>, done: Seq<Id<K>>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        forall<i, p> 1 <= i && i < done.len() && nodes[done[i]]@.from.contains(p)
+            ==> done.subsequence(0, i).contains(p)
+    }
+}
+
+/// Appending a node whose parents are all listed keeps [`parents_first`].
+#[logic]
+#[requires(parents_first(nodes, done))]
+#[requires(0 < done.len())]
+#[requires(forall<p> nodes[x]@.from.contains(p) ==> done.contains(p))]
+#[ensures(parents_first(nodes, done.snoc(x)))]
+pub fn lemma_parents_first_snoc<K, T, S>(nodes: Nodes<K, T, S>, done: Seq<Id<K>>, x: Id<K>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(forall<i> 0 <= i && i <= done.len()
+            ==> done.snoc(x).subsequence(0, i).ext_eq(done.subsequence(0, i)));
+        proof_assert!(done.subsequence(0, done.len()).ext_eq(done));
+        proof_assert!(forall<i> 1 <= i && i < done.len() ==> done.snoc(x)[i] == done[i]);
+        proof_assert!(done.snoc(x)[done.len()] == x)
+    }
+}
+
+/// `done` lists `t` first, and then each node after all of its parents ([`parents_first`]).
+///
+/// This is only open in this module, so that the existential postcondition of
+/// `remove_tracked`, which states it, stays easy to instantiate.
+#[logic(open(self))]
+pub fn removal_order<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>, done: Seq<Id<K>>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { 0 < done.len() && done[0] == t && parents_first(nodes, done) }
+}
+
+/// A single node is listed after its parents.
+#[logic]
+#[ensures(parents_first(nodes, Seq::singleton(t)))]
+pub fn lemma_parents_first_single<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
+/// Deleting the node `x` at the top of the removal's stack lists it after its parents.
+#[logic]
+#[requires(cascade_outer(nodes, rank, t, prev, rest.snoc(x), counts))]
+#[requires(parents_first(nodes, prev))]
+#[ensures(parents_first(nodes, prev.snoc(x)))]
+pub fn lemma_cascade_parents_first<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    t: Id<K>,
+    prev: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    x: Id<K>,
+    counts: FMap<Id<K>, usize>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(rest.snoc(x).contains(x));
+        proof_assert!(!prev.contains(x) && cascade_removable(nodes, rank, t, prev, x));
+        proof_assert!(x != t);
+        lemma_parents_first_snoc(nodes, prev, x)
+    }
+}
+
+/// The removal lists `t` first, so it lists the nodes in [`removal_order`] once they are listed
+/// after their parents.
+#[logic]
+#[requires(cascade_outer(nodes, rank, t, done, stack, counts))]
+#[requires(parents_first(nodes, done))]
+#[ensures(removal_order(nodes, t, done))]
+pub fn lemma_cascade_removal_order<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    t: Id<K>,
+    done: Seq<Id<K>>,
+    stack: Seq<Id<K>>,
+    counts: FMap<Id<K>, usize>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
+/// Gives [`removal_order`].
+#[logic]
+#[requires(0 < done.len() && done[0] == t && parents_first(nodes, done))]
+#[ensures(removal_order(nodes, t, done))]
+pub fn lemma_removal_order<K, T, S>(nodes: Nodes<K, T, S>, t: Id<K>, done: Seq<Id<K>>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
 /// `passed` lists the nodes of `nodes` whose identifiers `done` lists, in the same order, as they
 /// are in `nodes`: with the same links, flags and contents.
 #[logic(open)]

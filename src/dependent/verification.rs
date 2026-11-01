@@ -1546,7 +1546,11 @@ where
 
 /// The pre-order traversal of the subtrees rooted at the nodes of `s`, in order: each node,
 /// followed by the traversals of its children's subtrees, in order.
-#[logic(open)]
+///
+/// This is only open in this module: the lemmas here give what the code needs
+/// (`lemma_preorder_empty`, `lemma_preorder_concat`, `lemma_preorder_step` and
+/// `lemma_preorder_pop`), so that the provers don't unfold it in the methods' proofs.
+#[logic(open(self))]
 #[requires(valid_tree(nodes))]
 #[requires(forall<i> 0 <= i && i < s.len() ==> nodes.contains(&s[i]))]
 pub fn preorder<K, T, S>(nodes: Nodes<K, T, S>, s: Seq<Id<K>>) -> Seq<Id<K>>
@@ -1590,6 +1594,17 @@ pub fn lemma_preorder_by_concat<K, T, S>(
             head.concat_assoc(preorder_by(nodes, rank, bound, t), preorder_by(nodes, rank, bound, b))
         }
     }
+}
+
+/// The traversal of no subtrees is empty.
+#[logic]
+#[requires(valid_tree(nodes))]
+#[ensures(preorder(nodes, Seq::empty()) == Seq::empty())]
+pub fn lemma_preorder_empty<K, T, S>(nodes: Nodes<K, T, S>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    S: BuildHasher + Default + Clone,
+{
 }
 
 /// The traversal of two sequences of subtrees is the concatenation of their traversals.
@@ -1636,5 +1651,42 @@ where
         proof_assert!(to.reverse().reverse().ext_eq(to));
         lemma_preorder_concat(nodes, to, r);
         Seq::singleton(s).concat_assoc(preorder(nodes, to), preorder(nodes, r))
+    }
+}
+
+/// Visiting the node `s` at the top of a depth-first search's stack, after `added`, and replacing
+/// it with its children in reverse order, keeps `added` followed by the traversal of the stack
+/// equal to the traversal of the sources.
+#[logic]
+#[requires(valid_tree(nodes))]
+#[requires(nodes.contains(&s))]
+#[requires(forall<i> 0 <= i && i < sources.len() ==> nodes.contains(&sources[i]))]
+#[requires(forall<i> 0 <= i && i < rest.len() ==> nodes.contains(&rest[i]))]
+#[requires(added.concat(preorder(nodes, rest.snoc(s).reverse())) == preorder(nodes, sources))]
+#[ensures(added.snoc(s).concat(preorder(nodes, rest.concat(nodes[s]@.to.reverse()).reverse()))
+    == preorder(nodes, sources))]
+pub fn lemma_preorder_pop<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    sources: Seq<Id<K>>,
+    added: Seq<Id<K>>,
+    rest: Seq<Id<K>>,
+    s: Id<K>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let to = nodes[s]@.to;
+        let next = rest.concat(to.reverse());
+        proof_assert!(linked(nodes, s));
+        proof_assert!(forall<i> 0 <= i && i < to.len() ==> nodes.contains(&to[i]));
+        proof_assert!(forall<i> 0 <= i && i < to.len() ==> to.reverse()[i] == to[to.len() - 1 - i]);
+        proof_assert!(forall<i> 0 <= i && i < next.len() ==> nodes.contains(&next[i]));
+        proof_assert!(forall<i> 0 <= i && i < next.len() ==> next.reverse()[i] == next[next.len() - 1 - i]);
+        proof_assert!(forall<i> 0 <= i && i < next.len() ==> nodes.contains(&next.reverse()[i]));
+        let after = preorder(nodes, next.reverse());
+        lemma_preorder_step(nodes, rest, s);
+        proof_assert!(added.snoc(s).ext_eq(added.concat(Seq::singleton(s))));
+        added.concat_assoc(Seq::singleton(s), after)
     }
 }

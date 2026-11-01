@@ -15,7 +15,7 @@
 
 #![no_std]
 #![cfg_attr(creusot, feature(allocator_api, const_destruct))]
-#![cfg_attr(creusot, recursion_limit = "256")]
+#![cfg_attr(creusot, recursion_limit = "512")]
 #![forbid(non_ascii_idents)]
 #![warn(missing_docs)]
 #![warn(let_underscore)]
@@ -248,6 +248,16 @@ where
     S::default()
 }
 
+/// Returns the smaller of two lengths.
+///
+/// `Ord::min` has no specification which verification can show terminates for `usize`.
+#[check(terminates)]
+#[ensures(result@ == if a@ <= b@ { a@ } else { b@ })]
+#[inline]
+pub(crate) const fn min_len(a: usize, b: usize) -> usize {
+    if a <= b { a } else { b }
+}
+
 /// An item within a [`Weave`] which can be connected to other items.
 #[must_use]
 pub trait Node<K, T>
@@ -302,9 +312,11 @@ pub trait DiscreteContents: Sized {
     #[logic]
     fn units(self) -> Seq<Self::Unit>;
     /// Returns the length of the item.
+    #[check(terminates)]
     #[ensures(result@ == self.units().len())]
     fn len(&self) -> usize;
     /// Returns `true` if the item has a length of zero.
+    #[check(terminates)]
     #[ensures(result == (self.units().len() == 0))]
     fn is_empty(&self) -> bool;
     /// Splitting `self` at `at` can return `outcome`: what [`DiscreteContents::split`] promises,
@@ -327,6 +339,7 @@ pub trait DiscreteContents: Sized {
     /// Splits the item at the specified index.
     ///
     /// If splitting the item fails, the original contents are returned.
+    #[check(terminates)]
     #[ensures(match result {
         DiscreteContentResult::One(contents) => contents == self,
         DiscreteContentResult::Two(_, _) => true,
@@ -336,6 +349,7 @@ pub trait DiscreteContents: Sized {
     /// Merges two items together.
     ///
     /// If merging the two items fails, the original contents are returned in the order they were specified.
+    #[check(terminates)]
     #[ensures(match result {
         DiscreteContentResult::One(_) => true,
         DiscreteContentResult::Two(left, right) => left == self && right == value,
@@ -363,11 +377,13 @@ impl DiscreteContents for () {
         Seq::empty()
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result@ == 0)]
     fn len(&self) -> usize {
         0
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result)]
     fn is_empty(&self) -> bool {
         true
@@ -381,11 +397,13 @@ impl DiscreteContents for () {
         pearlite! { outcome == DiscreteContentResult::One(()) }
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result == DiscreteContentResult::Two((), ()))]
     fn split(self, _at: usize) -> DiscreteContentResult<Self> {
         DiscreteContentResult::Two((), ())
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result == DiscreteContentResult::One(()))]
     fn merge(self, _value: Self) -> DiscreteContentResult<Self> {
         DiscreteContentResult::One(())
@@ -401,11 +419,13 @@ impl DiscreteContents for Vec<u8> {
         pearlite! { self@ }
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result@ == self@.len())]
     fn len(&self) -> usize {
         self.len()
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(result == (self@.len() == 0))]
     fn is_empty(&self) -> bool {
         self.is_empty()
@@ -432,6 +452,7 @@ impl DiscreteContents for Vec<u8> {
         }
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(match result {
         DiscreteContentResult::One(contents) => contents == self && (at@ == 0 || at@ >= self@.len()),
         DiscreteContentResult::Two(left, right) => 0 < at@ && at@ < self@.len()
@@ -447,6 +468,7 @@ impl DiscreteContents for Vec<u8> {
         }
     }
     #[inline]
+    #[check(terminates)]
     #[ensures(match result {
         DiscreteContentResult::One(contents) => contents@ == self@.concat(value@),
         DiscreteContentResult::Two(_, _) => false,

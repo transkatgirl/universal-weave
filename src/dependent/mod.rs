@@ -8,15 +8,12 @@ use core::{
 };
 
 use creusot_std::macros::*;
-use hashbrown::{HashMap, hash_map::Entry};
+use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
-use scratchpads::{Scratchpad, ScratchpadVec};
+use scratchpads::{Scratchpad, ScratchpadVec, allocator_api2::alloc::Allocator};
 
 #[cfg(creusot)]
 use creusot_std::prelude::*;
-
-#[cfg(feature = "rkyv")]
-use hashbrown::HashSet;
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -37,7 +34,7 @@ use serde::{
 use crate::{
     ActiveSingularWeave, BookmarkableWeave, BuildableNode, DiscreteContentResult, DiscreteContents,
     DiscreteWeave, IndependentContents, MetadataWeave, Node, SemiIndependentWeave,
-    SortableBookmarkableWeave, SortableWeave, Verifiable, Weave, same_id,
+    SortableBookmarkableWeave, SortableWeave, Verifiable, Weave, default_hasher, min_len, same_id,
 };
 
 #[cfg(feature = "rkyv")]
@@ -389,6 +386,7 @@ where
     S: BuildHasher + Default + Clone,
 {
     /// Creates a new, empty [`DependentWeave`].
+    #[check(terminates)]
     #[ensures(result@.nodes.len() == 0)]
     #[ensures(result.metadata == metadata)]
     #[inline]
@@ -396,10 +394,10 @@ where
         snapshot! { lemma_empty_acyclic::<K, T, S> };
 
         Self {
-            nodes: HashMap::with_hasher(S::default()),
-            roots: IndexSet::with_hasher(S::default()),
+            nodes: HashMap::with_hasher(default_hasher()),
+            roots: IndexSet::with_hasher(default_hasher()),
             active: None,
-            bookmarked: IndexSet::with_hasher(S::default()),
+            bookmarked: IndexSet::with_hasher(default_hasher()),
             scratchpad: Scratchpad::new(),
             metadata,
         }
@@ -407,20 +405,21 @@ where
     /// Creates a new, empty [`DependentWeave`] with at least the specified capacity.
     ///
     /// This function over-allocates for worst-case memory usage rather than average-case.
+    #[check(terminates)]
     #[ensures(result@.nodes.len() == 0)]
     #[ensures(result.metadata == metadata)]
     #[inline]
     pub fn with_capacity(capacity: usize, metadata: M) -> Self {
         snapshot! { lemma_empty_acyclic::<K, T, S> };
 
-        let nodes = HashMap::with_capacity_and_hasher(capacity, S::default());
+        let nodes = HashMap::with_capacity_and_hasher(capacity, default_hasher());
         let capacity = nodes.capacity();
 
         Self {
             nodes,
-            roots: IndexSet::with_capacity_and_hasher(capacity, S::default()),
+            roots: IndexSet::with_capacity_and_hasher(capacity, default_hasher()),
             active: None,
-            bookmarked: IndexSet::with_capacity_and_hasher(capacity, S::default()),
+            bookmarked: IndexSet::with_capacity_and_hasher(capacity, default_hasher()),
             scratchpad: Scratchpad::new(),
             metadata,
         }
@@ -429,11 +428,12 @@ where
     ///
     /// May be lower than `self.len()`.
     #[inline]
+    #[check(terminates)]
     pub fn capacity(&self) -> usize {
-        self.nodes
-            .capacity()
-            .min(self.roots.capacity())
-            .min(self.bookmarked.capacity())
+        min_len(
+            min_len(self.nodes.capacity(), self.roots.capacity()),
+            self.bookmarked.capacity(),
+        )
     }
     /// Reserves capacity for at least `additional` more nodes.
     #[check(terminates)]
@@ -583,6 +583,11 @@ where
         let mut stack = guard.vec();
 
         let mut i = 0;
+        proof_assert! {
+            lemma_preorder_empty(view.nodes);
+            view.roots.subsequence(0, 0).ext_eq(Seq::empty())
+                && ids(output@) == preorder(view.nodes, view.roots.subsequence(0, 0))
+        };
 
         #[invariant(i@ <= view.roots.len())]
         #[invariant(stack.model().len() == 0)]
@@ -807,6 +812,7 @@ where
             None => false,
         }
     }
+    #[check(terminates)]
     #[ensures(!(^self)@.nodes.contains(&id.deep_model()))]
     #[ensures((result != None) == self@.nodes.contains(&id.deep_model()))]
     #[ensures(match result { Some(node) => node@.id == id.deep_model(), None => true })]
@@ -832,6 +838,7 @@ where
     #[ensures(result == None ==> (^self)@ == self@)]
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
+    #[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
     fn remove(&mut self, id: &K) -> Option<DependentNode<K, T, S>> {
         snapshot! { lemma_ids_snoc::<K> };
         snapshot! { lemma_ids_singleton::<K> };
@@ -856,7 +863,7 @@ where
 
         let guard = scratchpad.guard();
         let mut stack = guard.vec();
-        let mut removed_bookmarks = guard.set(S::default());
+        let mut removed_bookmarks = guard.set(default_hasher());
 
         stack.push(*id);
         proof_assert! {
@@ -945,7 +952,11 @@ where
                         None => false,
                     }
             );
-            if let Some(parent_node) = removed.from.as_ref().and_then(|id| nodes.get_mut(id)) {
+            let parent_node = match &removed.from {
+                Some(parent_id) => nodes.get_mut(parent_id),
+                None => None,
+            };
+            if let Some(parent_node) = parent_node {
                 proof! {
                     let children = snapshot!(parent_node.to.model());
                 }
@@ -956,12 +967,14 @@ where
                 };
             }
             if !removed_bookmarks.is_empty() {
-                bookmarked.retain(|id| !removed_bookmarks.contains(id));
+                retain_absent(bookmarked, &removed_bookmarks);
             }
             if removed_active {
                 *active = removed.from;
 
-                if let Some(node) = active.and_then(|id| nodes.get_mut(&id)) {
+                if let Some(parent_id) = *active
+                    && let Some(node) = nodes.get_mut(&parent_id)
+                {
                     node.active = true;
                 }
             }
@@ -1033,10 +1046,14 @@ where
         ==> in_order((^self)@.nodes[k]@.to, self@.nodes[k]@.to))]
     #[ensures(!result ==> (^self)@ == self@)]
     // Beyond the contract: `on_removal` is called with each removed node, as it was, in the order of
-    // a traversal of the subtree.
+    // a traversal of the subtree: the pre-order traversal.
     #[ensures(exists<order: Seq<Id<K>>> (result ==> traversal(self@.nodes, id.deep_model(), order))
         && (!result ==> order.len() == 0)
         && fed(on_removal, order.map(value_of(self@.nodes))))]
+    #[ensures(result ==> fed(
+        on_removal,
+        preorder(self@.nodes, Seq::singleton(id.deep_model())).map(value_of(self@.nodes)),
+    ))]
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
     #[allow(clippy::option_if_let_else, reason = "The branches hold proofs")]
@@ -1070,7 +1087,7 @@ where
 
         let guard = scratchpad.guard();
         let mut stack = guard.vec();
-        let mut removed_bookmarks = guard.set(S::default());
+        let mut removed_bookmarks = guard.set(default_hasher());
 
         stack.push(*id);
         proof_assert! {
@@ -1078,6 +1095,14 @@ where
                 lemma_single_source(old.nodes, *target);
                 lemma_dfs_init(old.nodes, *sources);
                 dfs(old.nodes, *sources, *added, ids(stack.model()))
+            }
+        };
+        proof_assert!(sources.reverse().ext_eq(*sources));
+        proof_assert! {
+            old.nodes.contains(&*target) ==> {
+                preorder(old.nodes, *sources).concat_empty();
+                added.concat(preorder(old.nodes, ids(stack.model()).reverse()))
+                    == preorder(old.nodes, *sources)
             }
         };
 
@@ -1101,6 +1126,9 @@ where
         #[invariant(in_order(roots.model(), old.roots))]
         #[invariant(added.len() == 0 ==> roots.model() == old.roots)]
         #[invariant(bookmarked.model() == old.bookmarked)]
+        #[invariant(old.nodes.contains(&*target)
+            ==> added.concat(preorder(old.nodes, ids(stack.model()).reverse()))
+                == preorder(old.nodes, *sources))]
         #[invariant(callback.hist_inv(on_removal))]
         #[invariant(calls(*states, added.map(value_of(old.nodes))))]
         #[invariant(states[0] == *callback && states[added.len()] == on_removal)]
@@ -1109,6 +1137,9 @@ where
             proof! {
                 let rest = snapshot!(ids(stack.model()));
             }
+            proof_assert!(old.nodes.contains(&*target)
+                ==> added.concat(preorder(old.nodes, rest.snoc(id.deep_model()).reverse()))
+                    == preorder(old.nodes, *sources));
             if let Some(node) = nodes.remove(&id) {
                 proof! {
                     let prev = snapshot!(*added);
@@ -1134,6 +1165,20 @@ where
                     );
                     dfs(old.nodes, *sources, added.snoc(id.deep_model()), ids(stack.model()))
                 };
+                proof_assert!(old.nodes.contains(&*target) ==> node@.to == old.nodes[id.deep_model()]@.to
+                    && ids(stack.model()) == rest.concat(old.nodes[id.deep_model()]@.to.reverse()));
+                proof_assert! {
+                    old.nodes.contains(&*target) ==> {
+                        lemma_preorder_pop(old.nodes, *sources, *added, *rest, id.deep_model());
+                        added.snoc(id.deep_model()).concat(preorder(
+                            old.nodes,
+                            rest.concat(old.nodes[id.deep_model()]@.to.reverse()).reverse(),
+                        )) == preorder(old.nodes, *sources)
+                    }
+                };
+                proof_assert!(old.nodes.contains(&*target)
+                    ==> added.snoc(id.deep_model()).concat(preorder(old.nodes, ids(stack.model()).reverse()))
+                        == preorder(old.nodes, *sources));
                 proof_assert!(added.len() == 0 ==> id.deep_model() == *target);
                 proof! {
                     added = snapshot!(added.snoc(id.deep_model()));
@@ -1179,6 +1224,12 @@ where
                 traversal(old.nodes, *target, *added)
             };
             proof_assert! {
+                Seq::<Id<K>>::reverse_empty();
+                lemma_preorder_empty(old.nodes);
+                added.concat_empty();
+                *added == preorder(old.nodes, *sources)
+            };
+            proof_assert! {
                 lemma_parent_outside(old.nodes, *target);
                 match old.nodes[*target]@.from {
                     Some(p) => nodes.model().contains(&p) && old.nodes[p]@.to.contains(*target),
@@ -1194,7 +1245,11 @@ where
                         None => false,
                     }
             );
-            if let Some(parent_node) = parent.as_ref().and_then(|id| nodes.get_mut(id)) {
+            let parent_node = match &parent {
+                Some(parent_id) => nodes.get_mut(parent_id),
+                None => None,
+            };
+            if let Some(parent_node) = parent_node {
                 proof! {
                     let children = snapshot!(parent_node.to.model());
                 }
@@ -1205,12 +1260,14 @@ where
                 };
             }
             if !removed_bookmarks.is_empty() {
-                bookmarked.retain(|id| !removed_bookmarks.contains(id));
+                retain_absent(bookmarked, &removed_bookmarks);
             }
             if removed_active {
                 *active = parent;
 
-                if let Some(node) = active.and_then(|id| nodes.get_mut(&id)) {
+                if let Some(parent_id) = *active
+                    && let Some(node) = nodes.get_mut(&parent_id)
+                {
                     node.active = true;
                 }
             }
@@ -1572,6 +1629,7 @@ where
     T: DiscreteContents,
     S: BuildHasher + Default + Clone,
 {
+    #[check(terminates)]
     #[ensures(result ==> (^self)@.nodes.len() == self@.nodes.len() + 1)]
     #[ensures(result ==> (^self)@.nodes.contains(&id.deep_model()))]
     #[ensures(result ==> (^self)@.nodes.contains(&new_id.deep_model()))]
@@ -1619,7 +1677,7 @@ where
             let old = snapshot!((*self)@);
         }
 
-        if self.nodes.contains_key(&new_id) || *id == new_id {
+        if self.nodes.contains_key(&new_id) || same_id(id, &new_id) {
             return false;
         }
 
@@ -1630,7 +1688,7 @@ where
                         id: node.id,
                         from: node.from,
                         to: {
-                            let mut to = IndexSet::with_capacity_and_hasher(1, S::default());
+                            let mut to = IndexSet::with_capacity_and_hasher(1, default_hasher());
                             to.insert(new_id);
                             to
                         },
@@ -1646,6 +1704,8 @@ where
                     node.bookmarked = false;
 
                     proof_assert!(linked(old.nodes, id.deep_model()));
+                    let mut i = 0;
+                    #[invariant(i@ <= node.to.model().len())]
                     #[invariant(self.nodes.model().len() == old.nodes.len() - 1)]
                     #[invariant(forall<k> self.nodes.model().contains(&k)
                         == (old.nodes.contains(&k) && k != id.deep_model()))]
@@ -1657,15 +1717,20 @@ where
                             && self.nodes.model()[k]@.active == old.nodes[k]@.active
                             && self.nodes.model()[k]@.bookmarked == old.nodes[k]@.bookmarked
                             && self.nodes.model()[k]@.from
-                                == if node.to.model().subsequence(0, produced.len()).contains(k) {
+                                == if node.to.model().subsequence(0, i@).contains(k) {
                                     Some(new_id.deep_model())
                                 } else {
                                     old.nodes[k]@.from
                                 })]
-                    for i in 0..node.to.len() {
+                    #[variant(node.to.model().len() - i@)]
+                    while i < node.to.len() {
                         proof_assert!(old.nodes[id.deep_model()]@.to.contains(node.to.model()[i@]));
                         let child = self.nodes.get_mut(&node.to[i]).unwrap();
                         child.from = Some(node.id);
+                        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                        {
+                            i += 1;
+                        }
                     }
 
                     self.nodes.insert(left_node.id, left_node);
@@ -1703,6 +1768,7 @@ where
             false
         }
     }
+    #[check(terminates)]
     #[ensures(result != None ==> (^self)@.nodes.len() == self@.nodes.len() - 1)]
     #[ensures(result != None ==> !(^self)@.nodes.contains(&id.deep_model()))]
     #[ensures(result != None ==> self@.nodes.contains(&id.deep_model()))]
@@ -1785,7 +1851,11 @@ where
                 });
             }
             snapshot! { lemma_merge(*old, id.deep_model(), *p) };
-            if let Some(mut parent) = node.from.as_ref().and_then(|id| self.nodes.remove(id)) {
+            let parent = match &node.from {
+                Some(parent_id) => self.nodes.remove(parent_id),
+                None => None,
+            };
+            if let Some(mut parent) = parent {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
                     self.nodes.insert(node.id, node);
@@ -1807,6 +1877,8 @@ where
                         parent.to = node.to;
 
                         proof_assert!(linked(old.nodes, id.deep_model()) && linked(old.nodes, *p));
+                        let mut i = 0;
+                        #[invariant(i@ <= parent.to.model().len())]
                         #[invariant(self.nodes.model().len() == old.nodes.len() - 2)]
                         #[invariant(forall<k> self.nodes.model().contains(&k)
                             == (old.nodes.contains(&k) && k != id.deep_model() && k != *p))]
@@ -1818,15 +1890,20 @@ where
                                 && self.nodes.model()[k]@.active == old.nodes[k]@.active
                                 && self.nodes.model()[k]@.bookmarked == old.nodes[k]@.bookmarked
                                 && self.nodes.model()[k]@.from
-                                    == if parent.to.model().subsequence(0, produced.len()).contains(k) {
+                                    == if parent.to.model().subsequence(0, i@).contains(k) {
                                         Some(*p)
                                     } else {
                                         old.nodes[k]@.from
                                     })]
-                        for i in 0..parent.to.len() {
+                        #[variant(parent.to.model().len() - i@)]
+                        while i < parent.to.len() {
                             proof_assert!(old.nodes[id.deep_model()]@.to.contains(parent.to.model()[i@]));
                             let child = self.nodes.get_mut(&parent.to[i]).unwrap();
                             child.from = Some(parent.id);
+                            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                            {
+                                i += 1;
+                            }
                         }
 
                         if node.active {
@@ -2357,6 +2434,7 @@ fn topological_sort<K, T, S>(
     proof_assert! { lemma_ids_empty(stack.model()); ids(stack.model()) == Seq::empty() };
     proof_assert! {
         Seq::<Id<K>>::reverse_empty();
+        lemma_preorder_empty(nodes.model());
         added.concat_empty();
         *added == preorder(nodes.model(), *sources)
     };
@@ -2407,9 +2485,7 @@ where
     contains_all(roots, nodes)
         && active_present
         && contains_all(bookmarked, nodes)
-        && all_entries(nodes, |key, value| {
-            validate_node(nodes, roots, active, bookmarked, key, value)
-        })
+        && all_nodes_valid(nodes, roots, active, bookmarked)
         && !detect_cycles(nodes, roots, &mut Vec::with_capacity(roots.len()))
 }
 
@@ -2617,14 +2693,36 @@ where
 }
 
 /// Pushes the identifiers in `set` onto `stack`, in reverse order.
-#[trusted]
 #[check(terminates)]
 #[ensures(ids((^stack).model()) == ids(stack.model()).concat(set.model().reverse()))]
-fn extend_from_set_rev<K, S>(stack: &mut ScratchpadVec<'_, K>, set: &IndexSet<K, S>)
+pub(crate) fn extend_from_set_rev<K, S>(stack: &mut ScratchpadVec<'_, K>, set: &IndexSet<K, S>)
 where
     K: Copy + Verifiable,
 {
-    stack.extend(set.iter().rev().copied());
+    snapshot! { lemma_ids_snoc::<K> };
+    snapshot! { lemma_concat_snoc::<Id<K>> };
+    proof! {
+        let old = snapshot!(ids(stack.model()));
+        let reversed = snapshot!(set.model().reverse());
+    }
+    let mut i = set.len();
+
+    #[invariant(i@ <= set.model().len())]
+    #[invariant(ids(stack.model())
+        == old.concat(reversed.subsequence(0, set.model().len() - i@)))]
+    #[variant(i@)]
+    while i > 0 {
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+        {
+            i -= 1;
+        }
+        proof_assert!(reversed[set.model().len() - 1 - i@] == set.model()[i@]);
+        proof_assert!(reversed
+            .subsequence(0, set.model().len() - i@)
+            .ext_eq(reversed.subsequence(0, set.model().len() - 1 - i@).snoc(set.model()[i@])));
+        stack.push(set[i]);
+    }
+    proof_assert! { lemma_full_prefix(*reversed); reversed.subsequence(0, set.model().len()) == *reversed };
 }
 
 /// Sorts the identifiers in `set` by comparing their nodes with `cmp`.
@@ -2662,40 +2760,102 @@ fn sort_by_nodes<K, T, S, F>(
 }
 
 /// Pushes the identifiers in `set` onto `stack`, in order.
-#[trusted]
 #[check(terminates)]
 #[ensures(ids((^stack).model()) == ids(stack.model()).concat(set.model()))]
 fn extend_from_set<K, S>(stack: &mut ScratchpadVec<'_, K>, set: &IndexSet<K, S>)
 where
     K: Copy + Verifiable,
 {
-    stack.extend(set.iter().copied());
+    snapshot! { lemma_ids_snoc::<K> };
+    snapshot! { lemma_concat_snoc::<Id<K>> };
+    proof! {
+        let old = snapshot!(ids(stack.model()));
+    }
+    let mut i = 0;
+
+    #[invariant(i@ <= set.model().len())]
+    #[invariant(ids(stack.model()) == old.concat(set.model().subsequence(0, i@)))]
+    #[variant(set.model().len() - i@)]
+    while i < set.len() {
+        proof_assert!(set
+            .model()
+            .subsequence(0, i@ + 1)
+            .ext_eq(set.model().subsequence(0, i@).snoc(set.model()[i@])));
+        stack.push(set[i]);
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            i += 1;
+        }
+    }
+    proof_assert! { lemma_full_prefix(set.model()); set.model().subsequence(0, i@) == set.model() };
 }
 
 /// Pushes the identifiers in `set` onto `stack`, in order.
-#[trusted]
 #[check(terminates)]
 #[ensures(ids((^stack)@) == ids(stack@).concat(set.model()))]
 fn extend_vec_from_set<K, S>(stack: &mut Vec<K>, set: &IndexSet<K, S>)
 where
     K: Copy + Verifiable,
 {
-    stack.extend(set.iter().copied());
+    snapshot! { lemma_ids_snoc::<K> };
+    snapshot! { lemma_concat_snoc::<Id<K>> };
+    proof! {
+        let old = snapshot!(ids(stack@));
+    }
+    let mut i = 0;
+
+    #[invariant(i@ <= set.model().len())]
+    #[invariant(ids(stack@) == old.concat(set.model().subsequence(0, i@)))]
+    #[variant(set.model().len() - i@)]
+    while i < set.len() {
+        proof_assert!(set
+            .model()
+            .subsequence(0, i@ + 1)
+            .ext_eq(set.model().subsequence(0, i@).snoc(set.model()[i@])));
+        stack.push(set[i]);
+        #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+        {
+            i += 1;
+        }
+    }
+    proof_assert! { lemma_full_prefix(set.model()); set.model().subsequence(0, i@) == set.model() };
 }
 
-/// Checks that `f` holds for every entry of `map`.
+/// Removes the identifiers in `removed` from `set`, keeping the others in order.
+///
+/// Its body is `IndexSet::retain`, called with a closure, which verification can't show terminates.
 #[trusted]
 #[check(terminates)]
-#[requires(forall<k: &K, v: &V> inv(k) && inv(v) && map.model().lookup(k.deep_model()) == Some(*v)
-    ==> f.precondition((k, v)))]
-#[ensures(result ==> forall<k: Id<K>> map.model().contains(&k)
-    ==> exists<key: &K, value: &V> key.deep_model() == k && map.model().lookup(k) == Some(*value)
-        && f.postcondition((key, value), true))]
-#[ensures(!result ==> exists<key: &K, value: &V>
-    map.model().lookup(key.deep_model()) == Some(*value) && f.postcondition((key, value), false))]
-pub(crate) fn all_entries<K, V, S>(map: &HashMap<K, V, S>, f: impl Fn(&K, &V) -> bool) -> bool
+#[ensures(in_order((^set).model(), set.model()))]
+#[ensures(forall<x> (^set).model().contains(x)
+    == (set.model().contains(x) && !removed.model().contains(&x)))]
+pub(crate) fn retain_absent<K, S, A>(set: &mut IndexSet<K, S>, removed: &HashSet<K, S, A>)
 where
-    K: Verifiable,
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    S: BuildHasher + Default + Clone,
+    A: Allocator,
 {
-    map.iter().all(|(key, value)| f(key, value))
+    set.retain(|id| !removed.contains(id));
+}
+
+/// Checks [`validate_node`] for every node of `nodes`.
+#[trusted]
+#[check(terminates)]
+#[ensures(result == forall<k> nodes.model().contains(&k) ==> linked(nodes.model(), k)
+    && (nodes.model()[k]@.from == None) == roots.model().contains(k)
+    && nodes.model()[k]@.active == (active.deep_model() == Some(k))
+    && nodes.model()[k]@.bookmarked == bookmarked.model().contains(k))]
+fn all_nodes_valid<K, T, S>(
+    nodes: &HashMap<K, DependentNode<K, T, S>, S>,
+    roots: &IndexSet<K, S>,
+    active: Option<&K>,
+    bookmarked: &IndexSet<K, S>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    S: BuildHasher + Default + Clone,
+{
+    nodes
+        .iter()
+        .all(|(key, value)| validate_node(nodes, roots, active, bookmarked, key, value))
 }

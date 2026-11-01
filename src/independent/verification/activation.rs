@@ -8,7 +8,7 @@ use creusot_std::logic::{FMap, FSet, Mapping, such_that};
 use super::*;
 use crate::{
     IndependentContents,
-    verification::{Id, no_dup},
+    verification::{Id, no_dup, set_bound},
 };
 
 /// The scores which `update_node_activity_in_place` records for each node: ((inactive nodes,
@@ -245,6 +245,63 @@ where
                     && (x == path[0] || nodes[x]@.from.contains(path[0])),
                 None => true,
             }
+    }
+}
+
+/// The walk along recorded parents goes from `x` to a node of lower rank, which bounds its length.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&x)
+    && scores.contains(&x) && parent_linked(nodes, scores, x)))]
+#[ensures(result ==> 0 <= rank[x])]
+#[ensures(result ==> match scores[x].1 {
+    Some(p) => nodes.contains(&p.deep_model()) && 0 <= rank[p.deep_model()] && rank[p.deep_model()] < rank[x],
+    None => true,
+})]
+pub fn up_rank_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    scores: ScoreMap<K>,
+    x: Id<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(all_linked(nodes) && nodes.contains(&x) ==> linked(nodes, x));
+        all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&x) && scores.contains(&x)
+            && parent_linked(nodes, scores, x)
+    }
+}
+
+/// The walk along recorded children goes from `x` to a node of higher rank, below the ranks' bound,
+/// which bounds its length.
+#[logic]
+#[ensures(result == (all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&x)
+    && scores.contains(&x) && child_linked(nodes, scores, x)))]
+#[ensures(result ==> rank[x] < set_bound(nodes.keys(), rank))]
+#[ensures(result ==> match scores[x].1 {
+    Some(c) => nodes.contains(&c.deep_model()) && rank[x] < rank[c.deep_model()]
+        && rank[c.deep_model()] < set_bound(nodes.keys(), rank),
+    None => true,
+})]
+pub fn down_rank_ok<K, T, S>(
+    nodes: Nodes<K, T, S>,
+    rank: Mapping<Id<K>, Int>,
+    scores: ScoreMap<K>,
+    x: Id<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&x)
+            && child_linked(nodes, scores, x) ==> linked(nodes, x));
+        all_linked(nodes) && ranked(nodes, rank) && nodes.contains(&x) && scores.contains(&x)
+            && child_linked(nodes, scores, x)
     }
 }
 

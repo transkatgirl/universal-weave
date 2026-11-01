@@ -747,6 +747,7 @@ where
 }
 
 pub mod activation;
+pub mod conversion;
 pub mod edit;
 pub mod graph;
 pub mod kahn;
@@ -759,6 +760,8 @@ pub mod validation;
 
 #[allow(unused_imports)]
 pub use activation::*;
+#[allow(unused_imports)]
+pub use conversion::*;
 pub use edit::*;
 pub use graph::*;
 #[allow(unused_imports)]

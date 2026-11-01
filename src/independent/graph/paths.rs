@@ -9,7 +9,7 @@ use indexmap::IndexSet;
 use scratchpads::{ScratchpadMap, ScratchpadSet, ScratchpadVec};
 
 #[cfg(creusot)]
-use creusot_std::{invariant::inv, prelude::*};
+use creusot_std::prelude::*;
 
 use super::Predicate;
 use crate::{IndependentContents, Verifiable, independent::IndependentNode, same_id};
@@ -18,7 +18,10 @@ use crate::{IndependentContents, Verifiable, independent::IndependentNode, same_
 use crate::independent::verification::*;
 
 #[cfg(creusot)]
-use crate::verification::{Id, Model, ids, no_dup};
+use crate::{
+    dependent::verification::lemma_no_dup_len,
+    verification::{Id, Model, ids, no_dup, set_bound},
+};
 
 /// Outputs, from its first node to a root, the longest path through the nodes of
 /// `topological_order` which are in `candidates` and, if given, in `within`.
@@ -340,6 +343,13 @@ pub(in crate::independent) fn longest_candidate_path_to_root<K, T, S>(
             ==> distances.model()[q].0@ <= d@,
     None => forall<q> from.model().contains(q) ==> !distances.model().contains(&q),
 })]
+// The first of them: every earlier parent with a distance has a smaller one.
+#[ensures(match result {
+    Some((d, p)) => exists<b> 0 <= b && b < from.model().len() && from.model()[b] == p.deep_model()
+        && forall<j> 0 <= j && j < b && distances.model().contains(&from.model()[j])
+            ==> distances.model()[from.model()[j]].0@ < d@,
+    None => true,
+})]
 fn best_parent<K, S>(
     from: &IndexSet<K, S>,
     distances: &ScratchpadMap<'_, K, (usize, K), S>,
@@ -350,8 +360,17 @@ where
 {
     let mut best: Option<(usize, K)> = None;
     let mut i = 0;
+    proof! {
+        let mut at = snapshot!(0);
+    }
 
     #[invariant(i@ <= from.model().len())]
+    #[invariant(match best {
+        Some((d, p)) => 0 <= *at && *at < i@ && from.model()[*at] == p.deep_model()
+            && forall<j> 0 <= j && j < *at && distances.model().contains(&from.model()[j])
+                ==> distances.model()[from.model()[j]].0@ < d@,
+        None => true,
+    })]
     #[invariant(match best {
         Some((d, p)) => from.model().contains(p.deep_model())
             && distances.model().lookup(p.deep_model()) != None
@@ -370,6 +389,9 @@ where
             }
         {
             best = Some((distance, parent));
+            proof! {
+                at = snapshot!(i@);
+            }
         }
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
         {
@@ -380,13 +402,15 @@ where
     best
 }
 
-/// Finds a shortest path from `id` up to an ancestor accepted by `target`, listing the ancestor
-/// first.
+/// Finds a shortest path from `id` up to an ancestor which is `target`, or a root if there is no
+/// target, listing the ancestor first.
+#[check(terminates)]
 #[requires(all_linked(nodes.model()) && acyclic(nodes.model()))]
 #[requires(nodes.model().contains(&id.deep_model()))]
-#[requires(forall<node: &IndependentNode<K, T, S>> inv(node) ==> target.precondition((node,)))]
-#[requires(forall<node: &IndependentNode<K, T, S>, accept: bool> target.postcondition((node,), accept)
-    ==> accept == is_target[*node])]
+#[requires(forall<node: IndependentNode<K, T, S>> is_target[node] == match target {
+    Some(target) => node@.id == target.deep_model(),
+    None => node@.from.len() == 0,
+})]
 #[requires(scratchpad.model().len() == 0)]
 #[requires(scratchpad_map.model().len() == 0)]
 #[requires(path@.len() == 0)]
@@ -407,10 +431,11 @@ where
     not(creusot),
     allow(unused_variables, reason = "Used by the specification")
 )]
+#[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
 pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
     nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
     id: &K,
-    target: impl Fn(&IndependentNode<K, T, S>) -> bool,
+    target: Option<&K>,
     is_target: Snapshot<Mapping<IndependentNode<K, T, S>, bool>>,
     scratchpad: &mut ScratchpadVec<'_, K>,
     scratchpad_map: &mut ScratchpadMap<'_, K, K, S>,
@@ -431,6 +456,10 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
     proof_assert!(forall<k> !scratchpad_map.model().contains(&k));
     scratchpad.push(*id);
     scratchpad_map.insert(*id, *id);
+    proof_assert! {
+        lemma_no_dup_len(ids(scratchpad.model()), nodes.model());
+        scratchpad.model().len() <= nodes.model().len()
+    };
 
     let mut head = 0;
 
@@ -447,6 +476,10 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
                 ==> scratchpad_map.model().contains(&p))]
     #[invariant(bfs_found(*start, ids(scratchpad.model()), scratchpad_map.model(), *level, head@))]
     #[invariant(bfs_expanded(nodes.model(), ids(scratchpad.model()), scratchpad_map.model(), *level, head@))]
+    #[invariant(scratchpad.model().len() <= nodes.model().len())]
+    #[invariant(forall<j> 0 <= j && j < scratchpad.model().len()
+        ==> nodes.model().contains(&ids(scratchpad.model())[j]))]
+    #[variant(nodes.model().len() - head@)]
     while head < scratchpad.len() {
         let id = scratchpad[head];
         #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
@@ -457,8 +490,13 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
         proof_assert!(bfs_found(*start, ids(scratchpad.model()), scratchpad_map.model(), *level, head@));
 
         let node = &nodes[&id];
+        proof_assert!(linked(nodes.model(), id.deep_model()));
 
-        if target(node) {
+        let reached = match target {
+            Some(target) => same_id(&node.id, target),
+            None => node.from.is_empty(),
+        };
+        if reached {
             proof_assert!(forall<q> descending_to(nodes.model(), q, *start)
                 && is_target[nodes.model()[q[0]]] ==> {
                     lemma_bfs_shortest(
@@ -502,6 +540,10 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
             head@ - 1))]
         #[invariant(forall<j> 0 <= j && j < i@
             ==> level[node.from.model()[j]] <= level[id.deep_model()] + 1)]
+        #[invariant(scratchpad.model().len() <= nodes.model().len())]
+        #[invariant(forall<j> 0 <= j && j < scratchpad.model().len()
+            ==> nodes.model().contains(&ids(scratchpad.model())[j]))]
+        #[variant(node.from.model().len() - i@)]
         while i < node.from.len() {
             let parent = node.from[i];
             if let Entry::Vacant(entry) = scratchpad_map.entry(parent) {
@@ -521,6 +563,10 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
                     parent.deep_model(),
                 );
                 level[parent.deep_model()] <= level[id.deep_model()] + 1
+            };
+            proof_assert! {
+                lemma_no_dup_len(ids(scratchpad.model()), nodes.model());
+                scratchpad.model().len() <= nodes.model().len()
             };
             #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
             {
@@ -550,9 +596,22 @@ pub(in crate::independent) fn shortest_path_to_ancestor<K, T, S>(
     #[invariant(0 < path@.len() ==> level[ids(path@)[path@.len() - 1]] + path@.len() == *found + 1)]
     #[invariant(0 < path@.len() ==> forall<q> descending_to(nodes.model(), q, *start)
         && is_target[nodes.model()[q[0]]] ==> *found + 1 <= q.len())]
+    #[invariant(forall<k> scratchpad_map.model().contains(&k) ==> nodes.model().contains(&k))]
+    #[invariant(forall<i> 0 <= i && i < path@.len() ==> nodes.model().contains(&ids(path@)[i]))]
+    #[variant(if path@.len() == 0 {
+        0
+    } else {
+        set_bound(nodes.model().keys(), *rank) - rank[ids(path@)[path@.len() - 1]]
+    })]
     while let Some(last) = path.last()
-        && last != id
+        && !same_id(last, id)
     {
+        proof_assert!(last.deep_model() == ids(path@)[path@.len() - 1]);
+        proof_assert!(nodes.model().contains(&last.deep_model())
+            && scratchpad_map.model().contains(&last.deep_model()));
+        proof_assert!(last.deep_model() != *start);
+        proof_assert!(scratchpad_map.model().contains(&scratchpad_map.model()[last.deep_model()].deep_model())
+            && nodes.model().contains(&scratchpad_map.model()[last.deep_model()].deep_model()));
         proof_assert!(
             rank[last.deep_model()] < rank[scratchpad_map.model()[last.deep_model()].deep_model()]
         );
