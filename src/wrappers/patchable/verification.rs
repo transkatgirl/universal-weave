@@ -108,6 +108,42 @@ where
     text(view.nodes, active_line(view))
 }
 
+/// Some line of `nodes`, leading down from a root, has the text `t`. It is opaque outside of this
+/// module, so that the provers don't search for the line where callers pass the fact on:
+/// [`lemma_line_has_text`] gives it from a line, and [`lemma_has_text`] says what it is.
+#[logic(open(self))]
+pub fn has_text<K, T, S>(nodes: Nodes<K, T, S>, t: Seq<T::Unit>) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents + DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! { exists<line: Seq<Id<K>>> downward(nodes, line) && text(nodes, line) == t }
+}
+
+/// What [`has_text`] is.
+#[logic]
+#[ensures(has_text(nodes, t) == exists<line: Seq<Id<K>>> downward(nodes, line) && text(nodes, line) == t)]
+pub fn lemma_has_text<K, T, S>(nodes: Nodes<K, T, S>, t: Seq<T::Unit>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents + DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
+/// A line of `nodes` has its text.
+#[logic]
+#[requires(downward(nodes, line))]
+#[ensures(has_text(nodes, text(nodes, line)))]
+pub fn lemma_line_has_text<K, T, S>(nodes: Nodes<K, T, S>, line: Seq<Id<K>>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents + DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
+}
+
 /// `t` with the units from `start` to `end` replaced by `x`, as [`Vec::splice`] does, except that
 /// `start` and `end` are clamped to the length of `t`, and that a range which ends before it
 /// starts is empty.
@@ -2207,6 +2243,90 @@ where
     pearlite! { text(nodes, line.subsequence(0, j)).len() }
 }
 
+/// Where the text of a line's first nodes ends doesn't decrease with their number.
+#[logic]
+#[requires(0 <= i && i <= j && j <= line.len())]
+#[ensures(offset(nodes, line, i) <= offset(nodes, line, j))]
+#[variant(j - i)]
+pub fn lemma_offset_mono<K, T, S>(nodes: Nodes<K, T, S>, line: Seq<Id<K>>, i: Int, j: Int)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents + DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        if i < j {
+            lemma_offset_mono(nodes, line, i, j - 1);
+            lemma_text_step(nodes, line, j - 1);
+        }
+    }
+}
+
+/// The part of `l` up to `p`, when it is that of `line`, holds `line`'s first `p` elements, and
+/// only elements of `line`.
+#[logic]
+#[requires(0 <= p && p <= line.len() && p <= l.len())]
+#[requires(l.subsequence(0, p) == line.subsequence(0, p))]
+#[ensures(forall<i> 0 <= i && i < p ==> l.subsequence(0, p).contains(line[i]))]
+#[ensures(forall<k> l.subsequence(0, p).contains(k) ==> line.contains(k))]
+pub fn lemma_prefix_part<I>(l: Seq<I>, line: Seq<I>, p: Int) {
+    proof_assert!(forall<i> 0 <= i && i < p ==> line.subsequence(0, p)[i] == line[i]);
+}
+
+/// The part of `l` from `q`, when it is `e` followed by the elements of `line` from `s`, holds `e`
+/// and those elements, and nothing else.
+#[logic]
+#[requires(0 <= s && s <= line.len() && 0 <= q && q <= l.len())]
+#[requires(l.subsequence(q, l.len()) == Seq::singleton(e).concat(line.subsequence(s, line.len())))]
+#[ensures(l.subsequence(q, l.len()).contains(e))]
+#[ensures(forall<i> s <= i && i < line.len() ==> l.subsequence(q, l.len()).contains(line[i]))]
+#[ensures(forall<k> l.subsequence(q, l.len()).contains(k) ==> line.contains(k) || k == e)]
+pub fn lemma_suffix_part<I>(l: Seq<I>, line: Seq<I>, q: Int, s: Int, e: I) {
+    pearlite! {
+        let t = Seq::singleton(e).concat(line.subsequence(s, line.len()));
+        proof_assert!(t[0] == e);
+        proof_assert!(forall<i> s <= i && i < line.len() ==> t[i - s + 1] == line[i]);
+        proof_assert!(forall<j> 1 <= j && j < t.len() ==> t[j] == line[j - 1 + s]);
+    }
+}
+
+/// A line cut from `p` to `q` holds exactly the elements of its part before `p` and of its part
+/// from `q`.
+#[logic]
+#[ensures(forall<k> cut(line, p, q).contains(k)
+    == (line.subsequence(0, p).contains(k) || line.subsequence(q, line.len()).contains(k)))]
+pub fn lemma_cut_contains<I>(line: Seq<I>, p: Int, q: Int) {
+    proof_assert!(forall<k> {
+        lemma_concat_contains(line.subsequence(0, p), line.subsequence(q, line.len()), k);
+        true
+    } && cut(line, p, q).contains(k)
+        == (line.subsequence(0, p).contains(k) || line.subsequence(q, line.len()).contains(k)))
+}
+
+/// A line cut from `p` to `q` with `id` in between holds exactly `id` and the elements of its part
+/// before `p` and of its part from `q`.
+#[logic]
+#[ensures(forall<k> between(line, p, q, id).contains(k)
+    == (line.subsequence(0, p).contains(k) || line.subsequence(q, line.len()).contains(k) || k == id))]
+pub fn lemma_between_contains<I>(line: Seq<I>, p: Int, q: Int, id: I) {
+    proof_assert!(forall<k> {
+        lemma_concat_contains(line.subsequence(0, p).concat(Seq::singleton(id)), line.subsequence(q, line.len()), k);
+        lemma_concat_contains(line.subsequence(0, p), Seq::singleton(id), k);
+        true
+    } && between(line, p, q, id).contains(k)
+        == (line.subsequence(0, p).contains(k) || line.subsequence(q, line.len()).contains(k) || k == id))
+}
+
+/// A map whose keys are keys of another map, or `x`, is at most one longer. The bound goes through
+/// the other map's keys and `x`, so that the provers can apply it: they don't learn `x` otherwise.
+#[logic]
+#[requires(forall<k> a.contains(&k) ==> b.contains(&k) || k == x)]
+#[ensures(a.len() <= b.keys().add(x).len())]
+#[ensures(b.keys().add(x).len() <= b.len() + 1)]
+pub fn lemma_keys_one_more_len<K, V, W>(a: FMap<K, V>, b: FMap<K, W>, x: K) {
+    proof_assert!(a.keys().is_subset(b.keys().add(x)));
+}
+
 /// The suffixes of a line with `y` inserted after its `t`th element, from after it.
 #[logic]
 #[requires(0 <= t && t < line.len())]
@@ -2332,8 +2452,9 @@ pub fn lemma_spliced_empty_range<U>(t: Seq<U>, start: Int, end: Int, x: Seq<U>) 
 /// What `locate_range` finds for the range from `start` to `end` in a line, whose identifiers are
 /// `keys`: `prefix_len` nodes come before the range, which starts `at` units into the
 /// `index`th node if `start_split` is `Some((index, at))`, and ends `at` units into the `index`th
-/// node, whose identifier is `id`, if `end` is `Some((index, at, id))`. A range starting at 0
-/// starts after the empty nodes at the start of the line.
+/// node, whose identifier is `id`, if `end` is `Some((index, at, id))`, and the text of every
+/// node before that one starts before the end; if `end` is `None`, the text of every node does. A
+/// range starting at 0 starts after the empty nodes at the start of the line.
 #[logic(open(self))]
 pub fn located<K, T, S>(
     nodes: Nodes<K, T, S>,
@@ -2370,10 +2491,12 @@ where
                     && at@ + offset(nodes, line, index@) == end
                     && (at@ == 0 || end < offset(nodes, line, index@ + 1))
                     && (start == 0 ==> prefix_len <= index@)
-                    && (start > 0 ==> prefix_len - 1 <= index@),
+                    && (start > 0 ==> prefix_len - 1 <= index@)
+                    && forall<j> 0 <= j && j < index@ ==> offset(nodes, line, j) < end,
                 None => text(nodes, line).len() <= end
                     && start <= text(nodes, line).len()
-                    && (start == text(nodes, line).len() ==> prefix_len < line.len()),
+                    && (start == text(nodes, line).len() ==> prefix_len < line.len())
+                    && forall<j> 0 <= j && j < line.len() ==> offset(nodes, line, j) < end,
             }
     }
 }
@@ -2401,10 +2524,12 @@ where
                 && at@ + offset(nodes, line, index@) == end
                 && (at@ == 0 || end < offset(nodes, line, index@ + 1))
                 && (start == 0 ==> prefix_len <= index@)
-                && (start > 0 ==> prefix_len - 1 <= index@),
+                && (start > 0 ==> prefix_len - 1 <= index@)
+                && forall<j> 0 <= j && j < index@ ==> offset(nodes, line, j) < end,
             None => text(nodes, line).len() <= end
                 && start <= text(nodes, line).len()
-                && (start == text(nodes, line).len() ==> prefix_len < line.len()),
+                && (start == text(nodes, line).len() ==> prefix_len < line.len())
+                && forall<j> 0 <= j && j < line.len() ==> offset(nodes, line, j) < end,
         }
 ))]
 pub fn lemma_located<K, T, S>(
@@ -2530,6 +2655,29 @@ pub fn lemma_insert_keeps_line<K, T, S>(
         proof_assert!(forall<i> 0 <= i && i + 1 < line.len()
             ==> new.nodes[line[i + 1]]@.from.contains(line[i]));
         proof_assert!(0 < line.len() ==> new.nodes[line[0]]@.from == old.nodes[line[0]]@.from);
+    }
+}
+
+/// Inserting a node keeps the text of a line of the old weave.
+#[logic]
+#[requires(inserted(old, new, n, contents))]
+#[requires(downward(old.nodes, line))]
+#[ensures(inserted(old, new, n, contents) && text(new.nodes, line) == text(old.nodes, line))]
+pub fn lemma_insert_keeps_text<K, T, S>(
+    old: IndependentWeaveView<K, T, S>,
+    new: IndependentWeaveView<K, T, S>,
+    n: NodeView<Id<K>>,
+    contents: T,
+    line: Seq<Id<K>>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents + DiscreteContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(forall<i> 0 <= i && i < line.len()
+            ==> new.nodes[line[i]].contents == old.nodes[line[i]].contents);
+        lemma_text_same(new.nodes, old.nodes, line)
     }
 }
 

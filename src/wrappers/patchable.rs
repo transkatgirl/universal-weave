@@ -32,13 +32,14 @@ use crate::{
     Verifiable,
     independent::{self, IndependentNode},
     independent::verification::{
-        NodeView, activated, descends, extends_path, has_child_in, insertable, inserted, linked,
-        longest_path_within, not_below, rank_of, ranked, same_graph, split_shape, valid_path,
+        NodeView, activated, descending_to, descends, extends_path, first_descent_from,
+        first_descent_from_root, has_child_in, insertable, inserted, linked, longest_path_within,
+        not_below, rank_of, ranked, same_graph, split_shape, valid_path,
     },
     verification::{
-        Id, Model, first, ids, increasing_steps, iterates, lemma_dedup_no_dup, lemma_full_prefix,
-        lemma_ids_prefix, lemma_ids_reverse, lemma_increasing, lemma_no_dup_snoc, lemma_snoc_contains,
-        no_dup,
+        Id, Model, first, ids, increasing_steps, iterates, lemma_concat_contains, lemma_dedup_no_dup,
+        lemma_full_prefix, lemma_ids_prefix, lemma_ids_reverse, lemma_increasing,
+        lemma_keys_subset_len, lemma_no_dup_snoc, lemma_snoc_contains, no_dup,
     },
 };
 
@@ -583,6 +584,28 @@ macro_rules! path_methods {
         #[ensures(forall<i, j> 0 <= i && i < j && j < result@.len()
             && self.weave@.active.contains(&ids(result@)[i])
             ==> self.weave@.active.contains(&ids(result@)[j]))]
+        // Its inactive nodes lead up from `id` through as few nodes as possible: to its first
+        // active node, or to a root if none of them is active. Among the shortest such paths, they
+        // lead up along the first one in the order of `precedes`.
+        #[ensures(forall<i, q> 0 <= i && i < result@.len()
+            && self.weave@.active.contains(&ids(result@)[i])
+            && (forall<j> 0 <= j && j < i ==> !self.weave@.active.contains(&ids(result@)[j]))
+            && descending_to(self.weave@.nodes, q, id.deep_model()) && q[0] == ids(result@)[i]
+            ==> i + 1 <= q.len())]
+        #[ensures((forall<j> 0 <= j && j < result@.len() ==> !self.weave@.active.contains(&ids(result@)[j]))
+            ==> forall<q> descending_to(self.weave@.nodes, q, id.deep_model())
+                && self.weave@.nodes[q[0]]@.from.len() == 0
+                ==> result@.len() <= q.len())]
+        #[ensures(forall<i> 0 <= i && i < result@.len()
+            && self.weave@.active.contains(&ids(result@)[i])
+            && (forall<j> 0 <= j && j < i ==> !self.weave@.active.contains(&ids(result@)[j]))
+            ==> first_descent_from(
+                self.weave@.nodes,
+                ids(result@).subsequence(0, i + 1).reverse(),
+                id.deep_model(),
+            ))]
+        #[ensures((forall<j> 0 <= j && j < result@.len() ==> !self.weave@.active.contains(&ids(result@)[j]))
+            ==> first_descent_from_root(self.weave@.nodes, ids(result@).reverse(), id.deep_model()))]
         #[ensures((^self).weave@ == self.weave@)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         pub fn path_vec(&mut self, id: &K) -> &mut Vec<K> {
@@ -641,6 +664,26 @@ macro_rules! path_methods {
         #[ensures(active_text((^self).weave@)
             == spliced(active_text(self.weave@), range.start@, range.end@, Seq::empty()))]
         #[ensures(forall<k> self.weave@.nodes.contains(&k) ==> (^self).weave@.nodes.contains(&k))]
+        // An empty range, or one which starts past the end of the active path's text, changes
+        // nothing.
+        #[ensures(range.end@ <= range.start@ || active_text(self.weave@).len() < range.start@
+            ==> (^self).weave@ == self.weave@)]
+        // The rest of the active path stays active: its nodes whose text starts before the range,
+        // or at or after its end. No other node of the weave becomes active.
+        #[ensures(forall<i> 0 <= i && i < active_line(self.weave@).len()
+            && (offset(self.weave@.nodes, active_line(self.weave@), i) < range.start@
+                || range.end@ <= offset(self.weave@.nodes, active_line(self.weave@), i))
+            ==> (^self).weave@.active.contains(&active_line(self.weave@)[i]))]
+        #[ensures(forall<k> (^self).weave@.active.contains(&k) && self.weave@.nodes.contains(&k)
+            ==> self.weave@.active.contains(&k))]
+        // The removed units stay in the weave: the active path's former text is the text of a line
+        // of the new weave, and the nodes off the former active path keep their contents. At most
+        // two nodes are added.
+        #[ensures(has_text((^self).weave@.nodes, active_text(self.weave@)))]
+        #[ensures(forall<k> self.weave@.nodes.contains(&k) && !active_line(self.weave@).contains(k)
+            ==> (^self).weave@.nodes[k].contents == self.weave@.nodes[k].contents)]
+        #[ensures((^self).weave@.nodes.len() <= self.weave@.nodes.len() + 2)]
+        #[ensures((^self).weave@.bookmarked == self.weave@.bookmarked)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
         pub fn split_out<F>(&mut self, range: Range<usize>, mut generate_id: F)
@@ -653,6 +696,10 @@ macro_rules! path_methods {
             snapshot! { lemma_collected::<K> };
             snapshot! { lemma_ids_concat::<K> };
             proof_assert! { lemma_active_line(*old); line_of(old.nodes, old.active, active_line(*old)) };
+            proof_assert! {
+                lemma_line_has_text(old.nodes, active_line(*old));
+                has_text(old.nodes, text(old.nodes, active_line(*old))) && has_text(old.nodes, active_text(*old))
+            };
 
             if range.is_empty() {
                 proof_assert! {
@@ -714,6 +761,18 @@ macro_rules! path_methods {
                         == Seq::singleton(e.deep_model()).concat(line.subsequence(suffix_index@, line.len())),
                 None => *q2 == l2.len() && total.len() <= range.end@,
             });
+            proof_assert!(forall<i> 0 <= i && i < line.len()
+                && (offset(old.nodes, *line, i) < range.start@ || range.end@ <= offset(old.nodes, *line, i))
+                ==> l2.subsequence(0, prefix_len@).contains(line[i])
+                    || l2.subsequence(*q2, l2.len()).contains(line[i]));
+            proof_assert!(forall<k> (l2.subsequence(0, prefix_len@).contains(k)
+                || l2.subsequence(*q2, l2.len()).contains(k))
+                && old.nodes.contains(&k)
+                ==> old.active.contains(&k));
+            proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                ==> v2.nodes[k].contents == old.nodes[k].contents);
+            proof_assert!(v2.nodes.len() <= old.nodes.len() + 2);
+            proof_assert!(prefix_len@ == 0 ==> v2.nodes.len() <= old.nodes.len() + 1);
 
             let prefix = &self.scratchpad[..prefix_len];
             proof_assert!(prefix@ == self.scratchpad@.subsequence(0, prefix_len@) && prefix@.len() == prefix_len@);
@@ -795,6 +854,10 @@ macro_rules! path_methods {
                             lemma_snoc_contains(v2.nodes[end.deep_model()]@.from, prefix_tail.deep_model(), prefix_tail.deep_model());
                             self.weave@.nodes[end.deep_model()]@.from.contains(prefix_tail.deep_model())
                         };
+                        proof_assert! {
+                            lemma_keys_subset_len(self.weave@.nodes, v2.nodes);
+                            self.weave@.nodes.len() <= v2.nodes.len()
+                        };
 
                         proof! {
                             let extended = snapshot!(self.scratchpad@);
@@ -813,6 +876,7 @@ macro_rules! path_methods {
                     proof_assert!(downward(linked_view.nodes, *l2) && text(linked_view.nodes, *l2) == *total);
                     proof_assert!(forall<k> v2.nodes.contains(&k)
                         ==> linked_view.nodes[k].contents == v2.nodes[k].contents);
+                    proof_assert!(linked_view.nodes.len() <= v2.nodes.len());
                     proof_assert!(forall<i> 0 <= i && i < l2.len() ==> v2.nodes.contains(&l2[i]));
                     proof_assert!(prefix_len@ <= *q2 && *q2 < l2.len());
                     proof_assert!(forall<i> 0 <= i && i < prefix_len@ ==> l2.subsequence(0, prefix_len@)[i] == l2[i]
@@ -886,6 +950,22 @@ macro_rules! path_methods {
                         total.subsequence(0, range.start@).concat_empty();
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, Seq::empty())
                     };
+                    proof_assert! {
+                        lemma_cut_contains(*l2, prefix_len@, *q2);
+                        forall<k> self.weave@.active.contains(&k)
+                            == (l2.subsequence(0, prefix_len@).contains(k) || l2.subsequence(*q2, l2.len()).contains(k))
+                    };
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *l2);
+                        downward(self.weave@.nodes, *l2) && text(self.weave@.nodes, *l2) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
                 } else if prefix_len != self.scratchpad.len() {
                     proof! {
                         let after = snapshot!(cut(*l2, prefix_len@, l2.len()));
@@ -930,6 +1010,22 @@ macro_rules! path_methods {
                         total.subsequence(0, range.start@).concat_empty();
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, Seq::empty())
                     };
+                    proof_assert! {
+                        lemma_cut_contains(*l2, prefix_len@, l2.len());
+                        forall<k> self.weave@.active.contains(&k)
+                            == (l2.subsequence(0, prefix_len@).contains(k) || l2.subsequence(*q2, l2.len()).contains(k))
+                    };
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, v2.nodes, *l2);
+                        downward(self.weave@.nodes, *l2) && text(self.weave@.nodes, *l2) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
                 } else {
                     proof_assert!(prefix_len@ == line.len());
                     proof_assert!(bounds.3 != None);
@@ -969,6 +1065,11 @@ macro_rules! path_methods {
                         lemma_spliced_range(*total, range.start@, range.end@, Seq::empty());
                         total.subsequence(0, range.start@).concat_empty();
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, Seq::empty())
+                    };
+                    proof_assert!(self.weave@ == *v2 && self.weave@.active == old.active);
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
                     };
                 }
             } else {
@@ -1049,6 +1150,27 @@ macro_rules! path_methods {
                         total.len(),
                     ) || *q2 == l2.len()
                 };
+                proof_assert!(0 < l2.len() && !node.to.contains(l2[0]));
+                proof_assert! {
+                    lemma_insert_between(*v2, self.weave@, *node, *default, *l2, 0, *q2);
+                    downward(self.weave@.nodes, *l2)
+                };
+                proof_assert! {
+                    lemma_insert_keeps_text(*v2, self.weave@, *node, *default, *l2);
+                    text(self.weave@.nodes, *l2) == *total
+                };
+                proof_assert! {
+                    lemma_line_has_text(self.weave@.nodes, *l2);
+                    has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                };
+                proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                    ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                proof_assert! {
+                    lemma_keys_one_more_len(self.weave@.nodes, v2.nodes, id.deep_model());
+                    self.weave@.nodes.len() <= v2.nodes.keys().add(id.deep_model()).len()
+                        && v2.nodes.keys().add(id.deep_model()).len() <= v2.nodes.len() + 1
+                };
+                proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
 
                 if let Some(end) = end {
                     proof_assert! {
@@ -1090,6 +1212,23 @@ macro_rules! path_methods {
                         Seq::<T::Unit>::empty().concat_empty();
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, Seq::empty())
                     };
+                    proof_assert! {
+                        lemma_between_contains(*l2, 0, *q2, id.deep_model());
+                        forall<k> self.weave@.active.contains(&k)
+                            == (l2.subsequence(0, prefix_len@).contains(k)
+                                || l2.subsequence(*q2, l2.len()).contains(k) || k == id.deep_model())
+                    };
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *l2);
+                        downward(self.weave@.nodes, *l2) && text(self.weave@.nodes, *l2) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
                 } else {
                     proof_assert!(start_split == None && bounds.3 == None);
                     proof_assert!(*v2 == *old && *l2 == *line);
@@ -1114,6 +1253,9 @@ macro_rules! path_methods {
                         Seq::<T::Unit>::empty().concat_empty();
                         spliced(*total, range.start@, range.end@, Seq::empty()) == Seq::empty()
                     };
+                    proof_assert!(forall<k> self.weave@.active.contains(&k) == (k == id.deep_model()));
+                    proof_assert!(forall<k> !l2.subsequence(0, prefix_len@).contains(k)
+                        && !l2.subsequence(*q2, l2.len()).contains(k));
                 }
             }
         }
@@ -1135,11 +1277,32 @@ macro_rules! path_methods {
         #[ensures(result ==> exists<i> 0 <= i && i <= active_line((^self).weave@).len()
             && text((^self).weave@.nodes, active_line((^self).weave@).subsequence(0, i)).len()
                 == if at@ < active_text(self.weave@).len() { at@ } else { active_text(self.weave@).len() })]
-        // A failed split changes nothing, and splitting only fails when the contents refuse to
-        // split or the identifier isn't new.
+        // A failed split changes nothing, and splitting only fails when the contents of a node of
+        // the active path refuse to split strictly inside themselves, or the identifier isn't new.
         #[ensures(!result ==> (^self).weave@ == self.weave@)]
+        #[ensures(!result && generates(generate_id, self.weave@.nodes)
+            ==> exists<j, a: usize> 0 <= j && j < active_line(self.weave@).len()
+                && 0 < a@ && a@ < self.weave@.nodes[active_line(self.weave@)[j]].contents.units().len()
+                && self.weave@.nodes[active_line(self.weave@)[j]].contents.splits(
+                    a,
+                    DiscreteContentResult::One(self.weave@.nodes[active_line(self.weave@)[j]].contents),
+                ))]
         #[ensures(total_splits::<T>() && generates(generate_id, self.weave@.nodes) ==> result)]
+        // Splitting at 0 or beyond the end of the text changes nothing, and no active node is
+        // deactivated, including the right side of the split.
+        #[ensures(at@ == 0 || active_text(self.weave@).len() <= at@ ==> (^self).weave@ == self.weave@)]
+        #[ensures(forall<k> self.weave@.active.contains(&k) ==> (^self).weave@.active.contains(&k))]
+        // No other node of the weave becomes active, the active path's former text is the text of
+        // a line of the new weave, the nodes off the former active path keep their contents, and
+        // at most one node is added.
+        #[ensures(forall<k> (^self).weave@.active.contains(&k) && self.weave@.nodes.contains(&k)
+            ==> self.weave@.active.contains(&k))]
+        #[ensures(has_text((^self).weave@.nodes, active_text(self.weave@)))]
+        #[ensures(forall<k> self.weave@.nodes.contains(&k) && !active_line(self.weave@).contains(k)
+            ==> (^self).weave@.nodes[k].contents == self.weave@.nodes[k].contents)]
+        #[ensures((^self).weave@.nodes.len() <= self.weave@.nodes.len() + 1)]
         #[ensures(forall<k> self.weave@.nodes.contains(&k) ==> (^self).weave@.nodes.contains(&k))]
+        #[ensures((^self).weave@.bookmarked == self.weave@.bookmarked)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         pub fn split_at<F>(&mut self, at: usize, mut generate_id: F) -> bool
         where
@@ -1150,6 +1313,10 @@ macro_rules! path_methods {
                 let start = snapshot!(generate_id);
             }
             proof_assert! { lemma_active_line(*old); line_of(old.nodes, old.active, active_line(*old)) };
+            proof_assert! {
+                lemma_line_has_text(old.nodes, active_line(*old));
+                has_text(old.nodes, text(old.nodes, active_line(*old))) && has_text(old.nodes, active_text(*old))
+            };
 
             if at == 0 {
                 proof_assert!(active_line(*old).subsequence(0, 0).len() == 0);
@@ -1223,10 +1390,12 @@ macro_rules! path_methods {
                 if split_at == length {
                     true
                 } else {
+                    proof_assert!(at@ < active_text(*old).len());
+                    proof_assert!(0 < split_at@ && split_at@ < old.nodes[line[*stop]].contents.units().len());
                     let new_id = generate_id();
                     proof_assert! {
                         lemma_callable_call(*start, generate_id, new_id);
-                        total_splits::<T>() && generates(*start, old.nodes) ==> {
+                        generates(*start, old.nodes) ==> {
                             lemma_generates_call(*start, generate_id, new_id, old.nodes);
                             !old.nodes.contains(&new_id.deep_model())
                         }
@@ -1242,6 +1411,12 @@ macro_rules! path_methods {
                             lemma_split_line(*old, *split, *line, *stop, *y);
                             downward(split.nodes, *after) && no_dup(*after)
                         };
+                        proof_assert! {
+                            lemma_keys_one_more_len(split.nodes, old.nodes, *y);
+                            split.nodes.len() <= old.nodes.keys().add(*y).len()
+                                && old.nodes.keys().add(*y).len() <= old.nodes.len() + 1
+                        };
+                        proof_assert!(!old.nodes.contains(&*y));
                         proof_assert!(split.nodes[parent.deep_model()]@.to == Seq::singleton(*y));
                         proof_assert!(old.active.contains(&parent.deep_model())
                             && old.nodes[parent.deep_model()]@.active);
@@ -1293,9 +1468,27 @@ macro_rules! path_methods {
                                 .concat(text(old.nodes, line.subsequence(*stop + 1, line.len())))
                         };
                         proof_assert!(active_text(self.weave@) == active_text(*old));
+                        proof_assert!(text(self.weave@.nodes, *after) == active_text(*old));
+                        proof_assert! {
+                            lemma_line_has_text(self.weave@.nodes, *after);
+                            has_text(self.weave@.nodes, text(self.weave@.nodes, *after)) && has_text(self.weave@.nodes, active_text(*old))
+                        };
+                        proof_assert! {
+                            lemma_keys_subset_len(self.weave@.nodes, split.nodes);
+                            self.weave@.nodes.len() <= split.nodes.len()
+                        };
+                        proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                            ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
 
                         true
                     } else {
+                        proof_assert!(old.nodes.contains(&parent.deep_model()));
+                        proof_assert!(generates(*start, old.nodes)
+                            ==> parent.deep_model() != new_id.deep_model()
+                                && old.nodes[line[*stop]].contents.splits(
+                                    split_at,
+                                    DiscreteContentResult::One(old.nodes[line[*stop]].contents),
+                                ));
                         false
                     }
                 }
@@ -1326,6 +1519,20 @@ macro_rules! path_methods {
         #[ensures(active_text((^self).weave@)
             == spliced(active_text(self.weave@), at@, at@, contents.units()))]
         #[ensures(forall<k> self.weave@.nodes.contains(&k) ==> (^self).weave@.nodes.contains(&k))]
+        // The contents become one new active node, every active node stays active, and no other
+        // node of the weave becomes active.
+        #[ensures(exists<y> !self.weave@.nodes.contains(&y) && (^self).weave@.active.contains(&y)
+            && (^self).weave@.nodes[y].contents == contents)]
+        #[ensures(forall<k> self.weave@.active.contains(&k) ==> (^self).weave@.active.contains(&k))]
+        #[ensures(forall<k> (^self).weave@.active.contains(&k) && self.weave@.nodes.contains(&k)
+            ==> self.weave@.active.contains(&k))]
+        // The active path's former text is the text of a line of the new weave, the nodes off the
+        // former active path keep their contents, and at most two nodes are added.
+        #[ensures(has_text((^self).weave@.nodes, active_text(self.weave@)))]
+        #[ensures(forall<k> self.weave@.nodes.contains(&k) && !active_line(self.weave@).contains(k)
+            ==> (^self).weave@.nodes[k].contents == self.weave@.nodes[k].contents)]
+        #[ensures((^self).weave@.nodes.len() <= self.weave@.nodes.len() + 2)]
+        #[ensures((^self).weave@.bookmarked == self.weave@.bookmarked)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
         pub fn insert_at<F>(&mut self, at: usize, contents: T, prefix_all: bool, mut generate_id: F)
@@ -1435,6 +1642,11 @@ macro_rules! path_methods {
                     proof_assert!(self.weave@.valid());
                     proof_assert!(old.valid());
                     proof_assert!(inserted(*old, self.weave@, *anchor, *default));
+                    proof_assert! {
+                        lemma_keys_one_more_len(self.weave@.nodes, old.nodes, id.deep_model());
+                        self.weave@.nodes.len() <= old.nodes.keys().add(id.deep_model()).len()
+                            && old.nodes.keys().add(id.deep_model()).len() <= old.nodes.len() + 1
+                    };
                     proof_assert!(line.subsequence(0, 0).ext_eq(Seq::empty()));
                     proof_assert! { lemma_full_prefix(*line); line.subsequence(0, line.len()) == *line };
                     proof_assert! {
@@ -1576,6 +1788,19 @@ macro_rules! path_methods {
                                         .concat(text(old.nodes, line.subsequence(*stop + 1, line.len())))
                         };
                         proof_assert!(split_shape(*old, self.weave@, line[*stop], right.deep_model()));
+                        proof_assert! {
+                            lemma_keys_one_more_len(self.weave@.nodes, old.nodes, right.deep_model());
+                            self.weave@.nodes.len() <= old.nodes.keys().add(right.deep_model()).len()
+                                && old.nodes.keys().add(right.deep_model()).len() <= old.nodes.len() + 1
+                        };
+                        proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                            ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                        proof_assert! {
+                            lemma_split_refines(*old, self.weave@, *line, *stop, right.deep_model(), split_at@);
+                            text(self.weave@.nodes, split_line(*line, *stop, right.deep_model())) == *total
+                                && forall<k> split_line(*line, *stop, right.deep_model()).contains(k)
+                                    == (line.contains(k) || k == right.deep_model())
+                        };
                         proof! {
                             mid = snapshot!(self.weave@);
                             cut = snapshot!(split_at@);
@@ -1605,7 +1830,9 @@ macro_rules! path_methods {
                             && text(mid.nodes, Seq::singleton(a.deep_model()).concat(*line)) == *total
                             && mid.nodes[line[0]]@.from.contains(a.deep_model())
                             && mid.nodes[a.deep_model()]@.from.len() == 0
-                            && forall<k> mid.nodes.contains(&k) == (old.nodes.contains(&k) || k == a.deep_model()),
+                            && (forall<k> mid.nodes.contains(&k) == (old.nodes.contains(&k) || k == a.deep_model()))
+                            && mid.nodes.len() <= old.nodes.len() + 1
+                            && forall<k> old.nodes.contains(&k) ==> mid.nodes[k].contents == old.nodes[k].contents,
                         None => false,
                     },
                 Action::SplitNode => 0 < index@ && index@ <= line.len()
@@ -1624,7 +1851,13 @@ macro_rules! path_methods {
                                     .subsequence(*cut, old.nodes[line[index@ - 1]].contents.units().len())
                                     .concat(text(old.nodes, line.subsequence(index@, line.len())))
                             && mid.nodes[r.deep_model()]@.from == Seq::singleton(line[index@ - 1])
-                            && forall<k> mid.nodes.contains(&k) == (old.nodes.contains(&k) || k == r.deep_model()),
+                            && (forall<k> mid.nodes.contains(&k) == (old.nodes.contains(&k) || k == r.deep_model()))
+                            && mid.nodes.len() <= old.nodes.len() + 1
+                            && (forall<k> old.nodes.contains(&k) && !line.contains(k)
+                                ==> mid.nodes[k].contents == old.nodes[k].contents)
+                            && text(mid.nodes, split_line(*line, index@ - 1, r.deep_model())) == *total
+                            && forall<k> split_line(*line, index@ - 1, r.deep_model()).contains(k)
+                                == (line.contains(k) || k == r.deep_model()),
                         None => false,
                     },
                 Action::Boundary => self.weave@ == *old && index@ <= line.len()
@@ -1697,6 +1930,17 @@ macro_rules! path_methods {
                                 == text(before.nodes, anchored.subsequence(0, 1)).concat(*x)
                                     .concat(text(before.nodes, anchored.subsequence(1, anchored.len())))
                     };
+                    proof_assert! {
+                        lemma_insert_line(*before, self.weave@, *node, *c0, *anchored, 0);
+                        downward(self.weave@.nodes, *anchored)
+                            && text(self.weave@.nodes, *anchored) == text(before.nodes, *anchored)
+                            && forall<k> split_line(*anchored, 0, *y).contains(k) == (anchored.contains(k) || k == *y)
+                    };
+                    proof_assert! {
+                        lemma_keys_one_more_len(self.weave@.nodes, before.nodes, *y);
+                        self.weave@.nodes.len() <= before.nodes.keys().add(*y).len()
+                            && before.nodes.keys().add(*y).len() <= before.nodes.len() + 1
+                    };
                     proof! {
                         let after = snapshot!(split_line(*anchored, 0, *y));
                         let linked_view = snapshot!(self.weave@);
@@ -1759,6 +2003,29 @@ macro_rules! path_methods {
                         total.concat_empty();
                         active_text(self.weave@) == spliced(*total, at@, at@, *x)
                     };
+                    proof_assert!(forall<k> {
+                        lemma_concat_contains(Seq::singleton(*a), *line, k);
+                        true
+                    } && anchored.contains(k) == (k == *a || line.contains(k)));
+                    proof_assert!(forall<k> self.weave@.active.contains(&k)
+                        == (k == *a || k == *y || line.contains(k)));
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *anchored);
+                        downward(self.weave@.nodes, *anchored) && text(self.weave@.nodes, *anchored) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *anchored);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *anchored)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(!old.nodes.contains(&*a) && !old.nodes.contains(&*y));
+                    proof_assert!(self.weave@.nodes[*y].contents == *c0);
+                    proof_assert!(forall<k> old.nodes.contains(&k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert! {
+                        lemma_keys_subset_len(self.weave@.nodes, linked_view.nodes);
+                        self.weave@.nodes.len() <= linked_view.nodes.len()
+                    };
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
                 }
                 Action::SplitNode => {
                     proof! {
@@ -1804,6 +2071,17 @@ macro_rules! path_methods {
                         let after = snapshot!(split_line(*split, *t, *y));
                         let linked_view = snapshot!(self.weave@);
                     }
+                    proof_assert! {
+                        lemma_insert_line(*before, self.weave@, *node, *c0, *split, *t);
+                        downward(self.weave@.nodes, *split)
+                            && text(self.weave@.nodes, *split) == text(before.nodes, *split)
+                            && forall<k> after.contains(k) == (split.contains(k) || k == *y)
+                    };
+                    proof_assert! {
+                        lemma_keys_one_more_len(self.weave@.nodes, before.nodes, *y);
+                        self.weave@.nodes.len() <= before.nodes.keys().add(*y).len()
+                            && before.nodes.keys().add(*y).len() <= before.nodes.len() + 1
+                    };
                     proof_assert! {
                         lemma_split_twice(*line, *t, *r, *y);
                         *after == line.subsequence(0, index@).concat(Seq::singleton(*y))
@@ -1879,6 +2157,25 @@ macro_rules! path_methods {
                         a.concat(c.subsequence(0, *cut)).concat(*x).concat_assoc(c.subsequence(*cut, c.len()), *b);
                         active_text(self.weave@) == spliced(*total, at@, at@, *x)
                     };
+                    proof_assert!(forall<k> self.weave@.active.contains(&k)
+                        == (line.contains(k) || k == *r || k == *y));
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *split);
+                        downward(self.weave@.nodes, *split) && text(self.weave@.nodes, *split) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *split);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *split)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(!old.nodes.contains(&*r) && !old.nodes.contains(&*y));
+                    proof_assert!(self.weave@.nodes[*y].contents == *c0);
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert! {
+                        lemma_keys_subset_len(self.weave@.nodes, linked_view.nodes);
+                        self.weave@.nodes.len() <= linked_view.nodes.len()
+                    };
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 2);
                 }
                 Action::Boundary => {
                     proof! {
@@ -1978,7 +2275,9 @@ macro_rules! path_methods {
                         lemma_activated_root(self.weave@, old.active, *line, *y, self.weave@.active);
                         after.ext_eq(Seq::singleton(*y))
                             && line_of(self.weave@.nodes, self.weave@.active, Seq::singleton(*y))
-                    } && line_of(self.weave@.nodes, self.weave@.active, *after));
+                    });
+                    proof_assert!(index@ == 0 ==> *after == Seq::singleton(*y));
+                    proof_assert!(index@ == 0 ==> line_of(self.weave@.nodes, self.weave@.active, *after));
                     proof_assert!(0 < index@ ==> forall<c> to_model.contains(c)
                         ==> old.nodes[c]@.from.contains(line[index@ - 1]) && old.nodes.contains(&c));
                     proof_assert!(0 < index@ ==> forall<c> to_model.contains(c) ==> {
@@ -2024,6 +2323,30 @@ macro_rules! path_methods {
                         );
                         active_text(self.weave@) == spliced(*total, at@, at@, *x)
                     };
+                    proof_assert! {
+                        lemma_insert_line(*before, self.weave@, *node, *c0, *line, index@ - 1);
+                        forall<k> after.contains(k) == (line.contains(k) || k == *y)
+                    };
+                    proof_assert! {
+                        lemma_insert_keeps_text(*before, self.weave@, *node, *c0, *line);
+                        text(self.weave@.nodes, *line) == text(before.nodes, *line)
+                    };
+                    proof_assert! {
+                        lemma_keys_one_more_len(self.weave@.nodes, before.nodes, *y);
+                        self.weave@.nodes.len() <= before.nodes.keys().add(*y).len()
+                            && before.nodes.keys().add(*y).len() <= before.nodes.len() + 1
+                    };
+                    proof_assert!(forall<k> self.weave@.active.contains(&k) == (line.contains(k) || k == *y));
+                    proof_assert!(downward(self.weave@.nodes, *line) && text(self.weave@.nodes, *line) == *total);
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *line);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *line)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(!old.nodes.contains(&*y));
+                    proof_assert!(self.weave@.nodes[*y].contents == *c0);
+                    proof_assert!(forall<k> old.nodes.contains(&k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 1);
                 }
             }
         }
@@ -2050,6 +2373,25 @@ macro_rules! path_methods {
         #[ensures(active_text((^self).weave@)
             == spliced(active_text(self.weave@), range.start@, range.end@, contents.units()))]
         #[ensures(forall<k> self.weave@.nodes.contains(&k) ==> (^self).weave@.nodes.contains(&k))]
+        // The contents become one new active node. The rest of the active path stays active: its
+        // nodes whose text starts before the range, or at or after its end. No other node of the
+        // weave becomes active.
+        #[ensures(exists<y> !self.weave@.nodes.contains(&y) && (^self).weave@.active.contains(&y)
+            && (^self).weave@.nodes[y].contents == contents)]
+        #[ensures(forall<i> 0 <= i && i < active_line(self.weave@).len()
+            && (offset(self.weave@.nodes, active_line(self.weave@), i) < range.start@
+                || range.end@ <= offset(self.weave@.nodes, active_line(self.weave@), i))
+            ==> (^self).weave@.active.contains(&active_line(self.weave@)[i]))]
+        #[ensures(forall<k> (^self).weave@.active.contains(&k) && self.weave@.nodes.contains(&k)
+            ==> self.weave@.active.contains(&k))]
+        // The replaced units stay in the weave: the active path's former text is the text of a line
+        // of the new weave, and the nodes off the former active path keep their contents. At most
+        // three nodes are added.
+        #[ensures(has_text((^self).weave@.nodes, active_text(self.weave@)))]
+        #[ensures(forall<k> self.weave@.nodes.contains(&k) && !active_line(self.weave@).contains(k)
+            ==> (^self).weave@.nodes[k].contents == self.weave@.nodes[k].contents)]
+        #[ensures((^self).weave@.nodes.len() <= self.weave@.nodes.len() + 3)]
+        #[ensures((^self).weave@.bookmarked == self.weave@.bookmarked)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
         pub fn replace<F>(
@@ -2109,6 +2451,10 @@ macro_rules! path_methods {
                     &mut generate_id,
                 );
                 proof_assert! {
+                    lemma_line_has_text(self.weave@.nodes, active_line(*old));
+                    has_text(self.weave@.nodes, text(self.weave@.nodes, active_line(*old))) && has_text(self.weave@.nodes, active_text(*old))
+                };
+                proof_assert! {
                     lemma_spliced_end(*total, range.start@, range.end@, *x);
                     spliced(*total, range.start@, range.end@, *x) == total.concat(*x)
                 };
@@ -2145,6 +2491,17 @@ macro_rules! path_methods {
             proof_assert!(prefix_len@ <= replaced_end@ && replaced_end@ <= line.len());
             proof_assert!(prefix_len@ < replaced_end@
                 ==> self.scratchpad@[replaced_end@ - 1].deep_model() == line[replaced_end@ - 1]);
+            proof_assert!(forall<i> 0 <= i && i < line.len()
+                && (offset(old.nodes, *line, i) < range.start@ || range.end@ <= offset(old.nodes, *line, i))
+                ==> l2.subsequence(0, prefix_len@).contains(line[i])
+                    || l2.subsequence(*q2, l2.len()).contains(line[i]));
+            proof_assert!(forall<k> (l2.subsequence(0, prefix_len@).contains(k)
+                || l2.subsequence(*q2, l2.len()).contains(k))
+                && old.nodes.contains(&k)
+                ==> old.active.contains(&k));
+            proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                ==> v2.nodes[k].contents == old.nodes[k].contents);
+            proof_assert!(v2.nodes.len() <= old.nodes.len() + 2);
 
             let replaced = if replaced_end > prefix_len {
                 #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
@@ -2330,6 +2687,27 @@ macro_rules! path_methods {
                     "Inserting node failed"
                 );
                 proof_assert!(inserted(*v2, self.weave@, *node, *c0));
+                proof_assert! {
+                    lemma_insert_between(*v2, self.weave@, *node, *c0, *l2, prefix_len@, *q2);
+                    downward(self.weave@.nodes, *l2)
+                };
+                proof_assert! {
+                    lemma_insert_keeps_text(*v2, self.weave@, *node, *c0, *l2);
+                    text(self.weave@.nodes, *l2) == *total
+                };
+                proof_assert! {
+                    lemma_line_has_text(self.weave@.nodes, *l2);
+                    has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                };
+                proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                    ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                proof_assert! {
+                    lemma_keys_one_more_len(self.weave@.nodes, v2.nodes, *y);
+                    self.weave@.nodes.len() <= v2.nodes.keys().add(*y).len()
+                        && v2.nodes.keys().add(*y).len() <= v2.nodes.len() + 1
+                };
+                proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 3);
+                proof_assert!(!old.nodes.contains(&*y) && self.weave@.nodes[*y].contents == *c0);
 
                 if let Some(end) = end {
                     proof! {
@@ -2407,6 +2785,24 @@ macro_rules! path_methods {
                         lemma_spliced_range(*total, range.start@, range.end@, *x);
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, *x)
                     };
+                    proof_assert! {
+                        lemma_between_contains(*l2, prefix_len@, *q2, *y);
+                        forall<k> self.weave@.active.contains(&k)
+                            == (l2.subsequence(0, prefix_len@).contains(k)
+                                || l2.subsequence(*q2, l2.len()).contains(k) || k == *y)
+                    };
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *l2);
+                        downward(self.weave@.nodes, *l2) && text(self.weave@.nodes, *l2) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes[*y].contents == *c0);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 3);
                 } else {
                     proof! {
                         let la = snapshot!(kept_line(*l2, *line, prefix_len@));
@@ -2460,6 +2856,17 @@ macro_rules! path_methods {
                         lemma_spliced_range(*total, range.start@, range.end@, *x);
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, *x)
                     };
+                    proof_assert! {
+                        lemma_active_line(self.weave@);
+                        forall<k> self.weave@.active.contains(&k)
+                            == la.subsequence(0, prefix_len@).snoc(*y).contains(k)
+                    };
+                    proof_assert!(forall<k> {
+                        lemma_snoc_contains(la.subsequence(0, prefix_len@), *y, k);
+                        true
+                    } && self.weave@.active.contains(&k)
+                        == (l2.subsequence(0, prefix_len@).contains(k)
+                            || l2.subsequence(*q2, l2.len()).contains(k) || k == *y));
                 }
             } else {
                 proof_assert!(prefix@.len() == 0 && prefix_len@ == 0);
@@ -2478,6 +2885,15 @@ macro_rules! path_methods {
                     "Inserting node failed"
                 );
                 proof_assert!(inserted(*v2, self.weave@, *node, *c0));
+                proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                    ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                proof_assert! {
+                    lemma_keys_one_more_len(self.weave@.nodes, v2.nodes, *y);
+                    self.weave@.nodes.len() <= v2.nodes.keys().add(*y).len()
+                        && v2.nodes.keys().add(*y).len() <= v2.nodes.len() + 1
+                };
+                proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 3);
+                proof_assert!(!old.nodes.contains(&*y) && self.weave@.nodes[*y].contents == *c0);
 
                 if let Some(end) = end {
                     proof! {
@@ -2490,6 +2906,17 @@ macro_rules! path_methods {
                             && text(self.weave@.nodes, *after)
                                 == text(v2.nodes, l2.subsequence(0, 0)).concat(c0.units())
                                     .concat(text(v2.nodes, l2.subsequence(*q2, l2.len())))
+                    };
+                    proof_assert!(v2.nodes[l2[0]]@.from.len() == 0 && l2[0] != l2[*q2]);
+                    proof_assert!(forall<c> to_model.contains(c) ==> c == l2[*q2] || v2.nodes[c]@.from.len() != 0);
+                    proof_assert!(!node.to.contains(l2[0]));
+                    proof_assert! {
+                        lemma_insert_between(*v2, self.weave@, *node, *c0, *l2, 0, *q2);
+                        downward(self.weave@.nodes, *l2)
+                    };
+                    proof_assert! {
+                        lemma_insert_keeps_text(*v2, self.weave@, *node, *c0, *l2);
+                        text(self.weave@.nodes, *l2) == *total
                     };
                     proof_assert!(l2.subsequence(0, 0).ext_eq(Seq::empty()));
                     proof_assert! {
@@ -2549,6 +2976,24 @@ macro_rules! path_methods {
                         lemma_spliced_range(*total, range.start@, range.end@, *x);
                         active_text(self.weave@) == spliced(*total, range.start@, range.end@, *x)
                     };
+                    proof_assert! {
+                        lemma_between_contains(*l2, 0, *q2, *y);
+                        forall<k> self.weave@.active.contains(&k)
+                            == (l2.subsequence(0, prefix_len@).contains(k)
+                                || l2.subsequence(*q2, l2.len()).contains(k) || k == *y)
+                    };
+                    proof_assert! {
+                        lemma_same_graph_line(self.weave@.nodes, linked_view.nodes, *l2);
+                        downward(self.weave@.nodes, *l2) && text(self.weave@.nodes, *l2) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *l2);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *l2)) && has_text(self.weave@.nodes, *total)
+                    };
+                    proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                        ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
+                    proof_assert!(self.weave@.nodes[*y].contents == *c0);
+                    proof_assert!(self.weave@.nodes.len() <= old.nodes.len() + 3);
                 } else {
                     proof_assert!(start_split == None && start_right == None);
                     proof_assert!(*v2 == *old && *l2 == *line);
@@ -2595,6 +3040,21 @@ macro_rules! path_methods {
                         x.concat_empty();
                         spliced(*total, range.start@, range.end@, *x) == *x
                     };
+                    proof_assert!(forall<k> self.weave@.active.contains(&k) == (k == *y));
+                    proof_assert!(forall<k> !l2.subsequence(0, prefix_len@).contains(k)
+                        && !l2.subsequence(*q2, l2.len()).contains(k));
+                    proof_assert!(forall<i> 0 <= i && i < line.len() ==> offset(old.nodes, *line, i) < range.end@);
+                    proof_assert!(forall<i> 0 <= i && i < line.len()
+                        ==> !(offset(old.nodes, *line, i) < range.start@
+                            || range.end@ <= offset(old.nodes, *line, i)));
+                    proof_assert! {
+                        lemma_insert_keeps_text(*v2, self.weave@, *node, *c0, *line);
+                        downward(self.weave@.nodes, *line) && text(self.weave@.nodes, *line) == *total
+                    };
+                    proof_assert! {
+                        lemma_line_has_text(self.weave@.nodes, *line);
+                        has_text(self.weave@.nodes, text(self.weave@.nodes, *line)) && has_text(self.weave@.nodes, *total)
+                    };
                 }
             }
         }
@@ -2619,6 +3079,7 @@ macro_rules! path_methods {
         #[requires(generates(*generate_id, self.weave@.nodes))]
         #[requires(exact_splits::<T>() && total_splits::<T>())]
         #[ensures((^self).scratchpad@ == self.scratchpad@)]
+        #[ensures((^self).weave@.bookmarked == self.weave@.bookmarked)]
         #[ensures((^self).weave.metadata == self.weave.metadata)]
         #[ensures(generates(^generate_id, (^self).weave@.nodes))]
         #[ensures(forall<k> self.weave@.nodes.contains(&k) ==> (^self).weave@.nodes.contains(&k))]
@@ -2633,6 +3094,8 @@ macro_rules! path_methods {
             let l = bounded(ids(self.scratchpad@), start_split, end, result.2, result.3);
             downward((^self).weave@.nodes, l) && no_dup(l)
                 && text((^self).weave@.nodes, l) == active_text(self.weave@)
+                && downward((^self).weave@.nodes, cut(l, prefix_len@, l.len()))
+                && no_dup(cut(l, prefix_len@, l.len()))
         })]
         #[ensures({
             let l = bounded(ids(self.scratchpad@), start_split, end, result.2, result.3);
@@ -2687,6 +3150,34 @@ macro_rules! path_methods {
                     None => q == prefix_len@,
                 })
         })]
+        // The nodes of the active line whose text starts before the range, or at or after its end,
+        // are in the parts of the split line before and after the range, which hold no other node
+        // of the weave.
+        #[ensures({
+            let l = bounded(ids(self.scratchpad@), start_split, end, result.2, result.3);
+            let q = bounded_end(ids(self.scratchpad@).len(), start_split, end);
+            forall<i> 0 <= i && i < self.scratchpad@.len()
+                && (offset(self.weave@.nodes, ids(self.scratchpad@), i) < range.start@
+                    || range.end@ <= offset(self.weave@.nodes, ids(self.scratchpad@), i))
+                ==> l.subsequence(0, prefix_len@).contains(ids(self.scratchpad@)[i])
+                    || l.subsequence(q, l.len()).contains(ids(self.scratchpad@)[i])
+        })]
+        #[ensures({
+            let l = bounded(ids(self.scratchpad@), start_split, end, result.2, result.3);
+            let q = bounded_end(ids(self.scratchpad@).len(), start_split, end);
+            forall<k> (l.subsequence(0, prefix_len@).contains(k) || l.subsequence(q, l.len()).contains(k))
+                && self.weave@.nodes.contains(&k)
+                ==> ids(self.scratchpad@).contains(k)
+        })]
+        // When the range reaches the end of the active line, the text of every node of the line
+        // starts before the range ends.
+        #[ensures(result.2 == None ==> forall<i> 0 <= i && i < self.scratchpad@.len()
+            ==> offset(self.weave@.nodes, ids(self.scratchpad@), i) < range.end@)]
+        // Only the nodes it splits change contents, and each split adds one node.
+        #[ensures(forall<k> self.weave@.nodes.contains(&k) && !ids(self.scratchpad@).contains(k)
+            ==> (^self).weave@.nodes[k].contents == self.weave@.nodes[k].contents)]
+        #[ensures((^self).weave@.nodes.len() <= self.weave@.nodes.len() + 2)]
+        #[ensures(start_split == None ==> (^self).weave@.nodes.len() <= self.weave@.nodes.len() + 1)]
         #[allow(clippy::type_complexity, reason = "Each part is documented")]
         #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
         #[cfg_attr(not(creusot), allow(unused_variables, reason = "Only its contract and proof use them"))]
@@ -2741,10 +3232,12 @@ macro_rules! path_methods {
                         && at@ + offset(old.nodes, *line, e@) == range.end@
                         && (at@ == 0 || range.end@ < offset(old.nodes, *line, e@ + 1))
                         && (range.start@ == 0 ==> prefix_len@ <= e@)
-                        && (range.start@ > 0 ==> prefix_len@ - 1 <= e@),
+                        && (range.start@ > 0 ==> prefix_len@ - 1 <= e@)
+                        && (forall<j> 0 <= j && j < e@ ==> offset(old.nodes, *line, j) < range.end@),
                     None => total.len() <= range.end@
                         && range.start@ <= total.len()
-                        && (range.start@ == total.len() ==> prefix_len@ < line.len()),
+                        && (range.start@ == total.len() ==> prefix_len@ < line.len())
+                        && (forall<j> 0 <= j && j < line.len() ==> offset(old.nodes, *line, j) < range.end@),
                 }
             };
             proof_assert!(forall<j> 0 <= j && j < line.len() ==> {
@@ -2782,6 +3275,11 @@ macro_rules! path_methods {
                     proof_assert!(0 < at@ && at@ < old.nodes[line[index@]].contents.units().len());
 
                     assert!(self.weave.split(&left, at, right), "Splitting node failed");
+                    proof_assert! {
+                        lemma_keys_one_more_len(self.weave@.nodes, old.nodes, right.deep_model());
+                        self.weave@.nodes.len() <= old.nodes.keys().add(right.deep_model()).len()
+                            && old.nodes.keys().add(right.deep_model()).len() <= old.nodes.len() + 1
+                    };
                     proof_assert!(old.nodes[line[index@]].contents.splits(
                         at,
                         DiscreteContentResult::Two(
@@ -2850,6 +3348,17 @@ macro_rules! path_methods {
                             ==> v1.nodes[k].contents == old.nodes[k].contents)),
                 None => suffix_index@ == line.len() && *l1 == *line && *v1 == *old && *q1 == line.len(),
             });
+            proof_assert!(v1.nodes.len() <= old.nodes.len() + 1);
+            proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                ==> v1.nodes[k].contents == old.nodes[k].contents);
+            proof_assert!(match end {
+                Some((index, at, _)) => suffix_index@ == index@ + 1 && match end_id {
+                    Some(e) => (at@ == 0 ==> e.deep_model() == line[index@])
+                        && (at@ != 0 ==> !old.nodes.contains(&e.deep_model())),
+                    None => false,
+                },
+                None => end_id == None,
+            });
 
             proof_assert!(range.start@ > 0 && match end_id {
                 Some(_) => *q1 + 1 == suffix_index@ + if *cut_end == 0 { 0 } else { 1 },
@@ -2905,6 +3414,13 @@ macro_rules! path_methods {
                 proof_assert!(split_shape(*v1, self.weave@, l1[*sp], right.deep_model()));
                 proof_assert!(forall<k> v1.nodes.contains(&k) && k != l1[*sp]
                     ==> self.weave@.nodes[k].contents == v1.nodes[k].contents);
+                proof_assert! {
+                    lemma_keys_one_more_len(self.weave@.nodes, v1.nodes, right.deep_model());
+                    self.weave@.nodes.len() <= v1.nodes.keys().add(right.deep_model()).len()
+                        && v1.nodes.keys().add(right.deep_model()).len() <= v1.nodes.len() + 1
+                };
+                proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                    ==> self.weave@.nodes[k].contents == old.nodes[k].contents);
                 proof_assert!(v1.nodes[line[*sp]].contents.splits(
                     at,
                     DiscreteContentResult::Two(
@@ -3104,6 +3620,49 @@ macro_rules! path_methods {
                 Some(r) => prefix_len@ < *q2 && r.deep_model() == l2[*q2 - 1],
                 None => *q2 == prefix_len@,
             });
+            proof_assert!(v2.nodes.len() <= old.nodes.len() + 2);
+            proof_assert!(start_split == None ==> v2.nodes.len() <= old.nodes.len() + 1);
+            proof_assert!(forall<k> old.nodes.contains(&k) && !line.contains(k)
+                ==> v2.nodes[k].contents == old.nodes[k].contents);
+
+            // The nodes before the range are the first `prefix_len`, and those whose text starts at
+            // or after its end are the node it ends at, unless it ends inside of it, and those after.
+            proof_assert!(forall<i> prefix_len@ <= i && i <= line.len() ==> {
+                lemma_offset_mono(old.nodes, *line, prefix_len@, i);
+                offset(old.nodes, *line, prefix_len@) <= offset(old.nodes, *line, i)
+            });
+            proof_assert!(forall<i> 0 <= i && i < line.len() && offset(old.nodes, *line, i) < range.start@
+                ==> i < prefix_len@);
+            proof_assert!(match end {
+                Some((index, at, _)) => forall<i> 0 <= i && i < line.len()
+                    && range.end@ <= offset(old.nodes, *line, i)
+                    ==> index@ <= i && (at@ != 0 ==> index@ < i),
+                None => forall<i> 0 <= i && i < line.len() ==> offset(old.nodes, *line, i) < range.end@,
+            });
+            proof_assert! {
+                lemma_prefix_part(*l2, *line, prefix_len@);
+                (forall<i> 0 <= i && i < prefix_len@ ==> l2.subsequence(0, prefix_len@).contains(line[i]))
+                    && forall<k> l2.subsequence(0, prefix_len@).contains(k) ==> line.contains(k)
+            };
+            proof_assert!(match end_id {
+                Some(e) => {
+                    lemma_suffix_part(*l2, *line, *q2, suffix_index@, e.deep_model());
+                    l2.subsequence(*q2, l2.len()).contains(e.deep_model())
+                        && (forall<i> suffix_index@ <= i && i < line.len()
+                            ==> l2.subsequence(*q2, l2.len()).contains(line[i]))
+                        && forall<k> l2.subsequence(*q2, l2.len()).contains(k)
+                            ==> line.contains(k) || k == e.deep_model()
+                },
+                None => *q2 == l2.len() && forall<k> !l2.subsequence(*q2, l2.len()).contains(k),
+            });
+            proof_assert!(forall<i> 0 <= i && i < line.len()
+                && (offset(old.nodes, *line, i) < range.start@ || range.end@ <= offset(old.nodes, *line, i))
+                ==> l2.subsequence(0, prefix_len@).contains(line[i])
+                    || l2.subsequence(*q2, l2.len()).contains(line[i]));
+            proof_assert!(forall<k> (l2.subsequence(0, prefix_len@).contains(k)
+                || l2.subsequence(*q2, l2.len()).contains(k))
+                && old.nodes.contains(&k)
+                ==> line.contains(k));
 
             (replaced_end, suffix_index, end_id, start_right)
         }
@@ -3115,6 +3674,7 @@ macro_rules! path_methods {
         #[requires(ids(self.scratchpad@) == active_line(self.weave@))]
         #[requires(active_text(self.weave@).len() <= usize::MAX@)]
         #[requires(range.start@ < range.end@)]
+        #[ensures(active_text(self.weave@).len() < range.start@ ==> result == None)]
         #[ensures(match result {
             None => active_text(self.weave@).len() <= range.start@,
             Some((prefix_len, start_split, end)) => located(
@@ -3158,6 +3718,7 @@ macro_rules! path_methods {
                 #[invariant(ids(self.scratchpad@) == *line)]
                 #[invariant(cursor@ == offset(old.nodes, *line, produced.len()))]
                 #[invariant(cursor@ <= range.end@)]
+                #[invariant(forall<j> 0 <= j && j < produced.len() ==> offset(old.nodes, *line, j) < range.end@)]
                 #[invariant(end == None)]
                 #[invariant(prefix_len@ <= produced.len())]
                 #[invariant(offset(old.nodes, *line, prefix_len@) == 0)]
@@ -3199,8 +3760,10 @@ macro_rules! path_methods {
                         && (cursor@ == range.end@ || range.end@ < offset(old.nodes, *line, e@ + 1))
                         && prefix_len@ <= e@
                         && offset(old.nodes, *line, prefix_len@) == 0
-                        && 0 < offset(old.nodes, *line, prefix_len@ + 1),
+                        && 0 < offset(old.nodes, *line, prefix_len@ + 1)
+                        && forall<j> 0 <= j && j < e@ ==> offset(old.nodes, *line, j) < range.end@,
                     None => cursor@ == total.len()
+                        && (forall<j> 0 <= j && j < line.len() ==> offset(old.nodes, *line, j) < range.end@)
                         && offset(old.nodes, *line, prefix_len@) == 0
                         && (0 < cursor@ ==> prefix_len@ < line.len()
                             && 0 < offset(old.nodes, *line, prefix_len@ + 1)),
@@ -3225,6 +3788,7 @@ macro_rules! path_methods {
                 #[invariant(ids(self.scratchpad@) == *line)]
                 #[invariant(cursor@ == offset(old.nodes, *line, produced.len()))]
                 #[invariant(cursor@ <= range.end@)]
+                #[invariant(forall<j> 0 <= j && j < produced.len() ==> offset(old.nodes, *line, j) < range.end@)]
                 #[invariant(end == None)]
                 #[invariant(prefix_len@ <= produced.len())]
                 #[invariant(prefix_len@ == 0 ==> cursor@ < range.start@ && start_split == None)]
@@ -3277,8 +3841,17 @@ macro_rules! path_methods {
                         && cursor@ == offset(old.nodes, *line, e@)
                         && at@ + cursor@ == range.end@
                         && (cursor@ == range.end@ || range.end@ < offset(old.nodes, *line, e@ + 1))
-                        && prefix_len@ != 0 && prefix_len@ - 1 <= e@,
-                    None => cursor@ == total.len(),
+                        && prefix_len@ != 0 && prefix_len@ - 1 <= e@
+                        && forall<j> 0 <= j && j < e@ ==> offset(old.nodes, *line, j) < range.end@,
+                    None => cursor@ == total.len()
+                        && forall<j> 0 <= j && j < line.len() ==> offset(old.nodes, *line, j) < range.end@,
+                });
+                proof_assert!(total.len() < range.start@ ==> match end {
+                    Some((e, _, _)) => {
+                        lemma_text_split(old.nodes, *line, e@ + 1);
+                        false
+                    },
+                    None => cursor@ < range.start@,
                 });
 
                 if end.is_none()
@@ -3299,8 +3872,11 @@ macro_rules! path_methods {
         #[requires(forall<items: Seq<K>> iterates(active, items)
             ==> downward(weave@.nodes, ids(items)) && no_dup(ids(items)))]
         #[ensures(exists<items: Seq<K>> iterates(active, items) && active_line((^weave)@) == ids(items))]
+        #[ensures(forall<k> (^weave)@.active.contains(&k) == active_line((^weave)@).contains(k))]
         #[ensures(same_graph((^weave)@.nodes, weave@.nodes))]
         #[ensures(forall<k> weave@.nodes.contains(&k) ==> (^weave)@.nodes.contains(&k))]
+        #[ensures((^weave)@.nodes.len() <= weave@.nodes.len())]
+        #[ensures((^weave)@.bookmarked == weave@.bookmarked)]
         #[ensures((^weave).metadata == weave.metadata)]
         fn set_active_line<I>(weave: &mut $W, active: I)
         where
@@ -3311,6 +3887,14 @@ macro_rules! path_methods {
                 let path = snapshot!(active);
             }
             weave.set_active_path(active);
+            proof_assert! {
+                lemma_active_line(weave@);
+                forall<k> weave@.active.contains(&k) == active_line(weave@).contains(k)
+            };
+            proof_assert! {
+                lemma_keys_subset_len(weave@.nodes, old.nodes);
+                weave@.nodes.len() <= old.nodes.len()
+            };
             proof_assert!(exists<listed: Seq<K>, requested: FSet<Id<K>>> iterates(*path, listed)
                 && (forall<k> requested.contains(&k) == (ids(listed).contains(k) && old.nodes.contains(&k)))
                 && longest_path_within(old.nodes, requested, weave@.active));
@@ -3344,6 +3928,21 @@ macro_rules! path_methods {
         // The contents are appended to the active path's text, and no node is removed.
         #[ensures(active_text((^weave)@) == active_text(weave@).concat(contents.units()))]
         #[ensures(forall<k> weave@.nodes.contains(&k) ==> (^weave)@.nodes.contains(&k))]
+        // The contents become a new active node, every active node stays active, and no other
+        // node becomes active.
+        #[ensures(exists<y> !weave@.nodes.contains(&y) && (^weave)@.active.contains(&y)
+            && (^weave)@.nodes[y].contents == contents)]
+        #[ensures(forall<k> weave@.active.contains(&k) ==> (^weave)@.active.contains(&k))]
+        #[ensures(forall<k> (^weave)@.active.contains(&k) && weave@.nodes.contains(&k)
+            ==> weave@.active.contains(&k))]
+        // The active line stays a line, with its text, no node's contents change, and one node
+        // is added.
+        #[ensures(downward((^weave)@.nodes, active_line(weave@))
+            && text((^weave)@.nodes, active_line(weave@)) == active_text(weave@))]
+        #[ensures(forall<k> weave@.nodes.contains(&k)
+            ==> (^weave)@.nodes[k].contents == weave@.nodes[k].contents)]
+        #[ensures((^weave)@.nodes.len() <= weave@.nodes.len() + 1)]
+        #[ensures((^weave)@.bookmarked == weave@.bookmarked)]
         #[ensures((^weave).metadata == weave.metadata)]
         fn insert_tail_node<F>(
             weave: &mut $W,
@@ -3461,6 +4060,14 @@ macro_rules! path_methods {
             proof_assert! {
                 lemma_active_line(weave@);
                 active_line(weave@) == *after
+            };
+            proof_assert!(forall<k> weave@.active.contains(&k) == after.contains(k));
+            proof_assert!(after.contains(id.deep_model()) && weave@.nodes[id.deep_model()].contents == *c0);
+            proof_assert!(downward(weave@.nodes, *line) && text(weave@.nodes, *line) == text(old.nodes, *line));
+            proof_assert! {
+                lemma_keys_one_more_len(weave@.nodes, old.nodes, id.deep_model());
+                weave@.nodes.len() <= old.nodes.keys().add(id.deep_model()).len()
+                    && old.nodes.keys().add(id.deep_model()).len() <= old.nodes.len() + 1
             };
         }
         /// Returns `T::default()`, which the wrapper's requirements say is empty.
