@@ -7,10 +7,14 @@ use core::{
     mem,
 };
 
-use creusot_std::macros::*;
+use creusot_std::{
+    logic::{FMap, FSet, Int, Mapping, Seq},
+    macros::*,
+    snapshot::Snapshot,
+};
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
-use scratchpads::{Scratchpad, ScratchpadMap};
+use scratchpads::{Scratchpad, ScratchpadGuard, ScratchpadMap, ScratchpadSet, ScratchpadVec};
 
 #[cfg(feature = "rkyv")]
 use rkyv::{
@@ -46,7 +50,7 @@ use support::{
     best_scored, dependent_nodes, independent_nodes,
     contains_all, contains_other, deactivate_all, extend_difference, extend_from_hash_set,
     extend_from_scratch, extend_keys, extend_surviving_keys, extends_active_end, first_root_index,
-    index_set_from_slice, retain_unlisted, same_ids, sort_by_nodes, validate,
+    index_set_from_slice, retain_unlisted, same_ids, sort_by_nodes, validate, Scores,
 };
 
 mod graph;
@@ -67,7 +71,7 @@ use crate::contract::ValidationError;
 #[cfg(creusot)]
 use creusot_std::{
     invariant::inv,
-    logic::{FSet, such_that},
+    logic::such_that,
     prelude::*,
 };
 
@@ -81,10 +85,16 @@ use crate::verification::{
     total_preorder, value_of,
 };
 #[cfg(creusot)]
-use creusot_std::logic::Mapping;
-
-#[cfg(creusot)]
 use verification::*;
+
+/// Outside of Creusot, the ghost arguments of the removal's helpers are zero-sized snapshots, and
+/// identifiers stand in for their models in their types.
+#[cfg(not(creusot))]
+type Id<K> = K;
+
+/// The nodes of a weave, by identifier, in the types of the removal helpers' ghost arguments.
+#[cfg(not(creusot))]
+type Nodes<K, T, S> = FMap<Id<K>, IndependentNode<K, T, S>>;
 
 #[cfg(creusot)]
 pub mod verification;
@@ -699,152 +709,17 @@ where
             let mut scratchpad_map_2: ScratchpadMap<'_, K, ((usize, usize), Option<K>), S> =
                 guard.map_with_capacity(closure.len(), default_hasher());
             let mut scratchpad_set = guard.set(default_hasher());
-            let admitted = snapshot!(member_of(closure.model()));
-            proof_assert! {
-                lemma_ids_empty(topological.model());
-                lemma_kahn_empty(*n1, *admitted);
-                kahn_state(*n1, *admitted, ids(topological.model()), scratchpad_map.model())
-            };
-
-            let mut i = 0;
-            #[invariant(i@ <= closure_roots.model().len())]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(stack.model().len() == 0)]
-            #[invariant(kahn_state(*n1, *admitted, ids(topological.model()), scratchpad_map.model()))]
-            #[invariant(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
-                ==> exists<j> 0 <= j && j < i@ && ids(closure_roots.model())[j] == k)]
-            #[invariant(forall<j> 0 <= j && j < i@
-                ==> ids(topological.model()).contains(ids(closure_roots.model())[j]))]
-            #[variant(closure_roots.model().len() - i@)]
-            while i < closure_roots.len() {
-                proof_assert!(ids(closure_roots.model())[i@] == closure_roots.model()[i@].deep_model());
-                proof_assert!(n1[ids(closure_roots.model())[i@]]@.from.len() == 0);
-                proof_assert! {
-                    lemma_root_unsorted(*n1, ids(closure_roots.model()), i@, ids(topological.model()));
-                    !ids(topological.model()).contains(ids(closure_roots.model())[i@])
-                };
-                proof! {
-                    let before = snapshot!(ids(topological.model()));
-                    let before_len = snapshot!(topological.model().len());
-                }
-                proof_assert!(before.len() == *before_len);
-                topological_sort_subgraph(
-                    nodes,
-                    &closure,
-                    None,
-                    admitted,
-                    closure_roots[i],
-                    &mut stack,
-                    &mut topological,
-                    &mut scratchpad_map,
-                );
-                proof_assert!(forall<m> 0 <= m && m < before.len() ==> ids(topological.model())[m] == before[m]);
-                proof_assert!(ids(topological.model())[before.len()] == ids(closure_roots.model())[i@]);
-                proof_assert!(ids(topological.model()).len() == topological.model().len());
-                proof_assert! {
-                    lemma_admitted_have_parents(nodes.model(), *admitted, topological.model(), *before_len);
-                    forall<m> *before_len < m && m < topological.model().len()
-                        ==> nodes.model()[topological.model()[m].deep_model()]@.from.len() > 0
-                };
-                proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
-                    ==> ids(topological.model())[m] == topological.model()[m].deep_model());
-                proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
-                    ==> n1[ids(topological.model())[m]]@.from.len() > 0);
-                proof_assert!(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
-                    ==> before.contains(k) || k == ids(closure_roots.model())[i@]);
-                proof_assert!(forall<k> before.contains(k) ==> ids(topological.model()).contains(k));
-                proof_assert!(ids(topological.model()).contains(ids(closure_roots.model())[i@]));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
-            proof! {
-                let topo = snapshot!(ids(topological.model()));
-            }
-            proof_assert! {
-                lemma_ancestors_sorted(*n1, closure.model(), ids(closure_roots.model()), *admitted, *topo, scratchpad_map.model());
-                forall<k> closure.model().contains(&k) ==> topo.contains(k)
-            };
-
-            proof_assert!(kahn_order(*n1, *admitted, *topo, Seq::empty()) && no_dup(*topo));
-
-            let mut i = 0;
-            #[invariant(i@ <= topological.model().len())]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(forall<j> 0 <= j && j < i@
-                ==> scratchpad_map_2.model().contains(&topo[j]))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> parent_scored(*n1, scratchpad_map_2.model(), k, i@))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> exists<j> 0 <= j && j < i@ && topo[j] == k)]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> up_scored(*n1, *a1, scratchpad_map_2.model(), k))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> forall<c> n1[k]@.from.contains(c) ==> scratchpad_map_2.model().contains(&c))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> up_first(*n1, scratchpad_map_2.model(), k))]
-            #[variant(topological.model().len() - i@)]
-            while i < topological.len() {
-                let id = topological[i];
-                proof_assert!(id.deep_model() == topo[i@] && admitted[topo[i@]]);
-                let node = &nodes[&id];
-                proof_assert!(forall<p> node@.from.contains(p) ==> {
-                    lemma_parent_before(*n1, *admitted, *topo, i@, p);
-                    true
-                } && scratchpad_map_2.model().contains(&p));
-
-                proof_assert!(node@ == n1[id.deep_model()]@);
-                let best_parent = best_scored(&node.from, &scratchpad_map_2);
-
-                let (parent, score) = if let Some((parent, mut score)) = best_parent {
-                    proof_assert!(parent_scored(*n1, scratchpad_map_2.model(), parent.deep_model(), i@));
-                    proof! {
-                        let best = snapshot!(score);
-                    }
-                    proof_assert!(*best == scratchpad_map_2.model()[parent.deep_model()].0
-                        && forall<c> node@.from.contains(c)
-                            ==> score_le(scratchpad_map_2.model()[c].0, *best));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    if node.active {
-                        score.1 += 1;
-                    } else {
-                        score.0 += 1;
-                    }
-                    proof_assert!(score.0@ == best.0@ + if node.active { 0 } else { 1 });
-                    proof_assert!(score.1@ == best.1@ + if node.active { 1 } else { 0 });
-
-                    (Some(parent), score)
-                } else {
-                    proof_assert!(node@.from.len() == 0);
-                    (None, if node.active { (0, 1) } else { (1, 0) })
-                };
-                proof_assert!(node.active == a1.contains(&id.deep_model()));
-                proof_assert!(score.0@ + score.1@ <= i@ + 1);
-                proof_assert!(match parent {
-                    None => n1[id.deep_model()]@.from.len() == 0,
-                    Some(p) => n1[id.deep_model()]@.from.contains(p.deep_model())
-                        && scratchpad_map_2.model().contains(&p.deep_model()),
-                });
-                proof_assert!(parent_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent), i@));
-                proof_assert!(!scratchpad_map_2.model().contains(&topo[i@]));
-                proof_assert!(n1[topo[i@]]@.active == a1.contains(&topo[i@]));
-                proof_assert!(forall<j> scratchpad_map_2.model().contains(&j)
-                    ==> parent_linked(*n1, scratchpad_map_2.model(), j)
-                        && up_scored(*n1, *a1, scratchpad_map_2.model(), j));
-                proof_assert!(forall<p> n1[id.deep_model()]@.from.contains(p)
-                    ==> scratchpad_map_2.model().contains(&p));
-                proof_assert!(up_entry(*n1, *a1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-                proof_assert!(up_insert_ok(*n1, *a1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-                proof_assert!(parent_first(*n1, scratchpad_map_2.model(), id.deep_model(), parent));
-                proof_assert!(up_first_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-
-                scratchpad_map_2.insert(id, (score, parent));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
+            proof_assert!(forall<k> n1.contains(&k) ==> n1[k]@.active == a1.contains(&k));
+            Self::score_ancestors(
+                nodes,
+                &closure,
+                &closure_roots,
+                &mut stack,
+                &mut topological,
+                &mut scratchpad_map,
+                &mut scratchpad_map_2,
+                snapshot!(*a1),
+            );
             proof_assert!(forall<k> closure.model().contains(&k) ==> scratchpad_map_2.model().contains(&k));
             proof! {
                 let scores = snapshot!(scratchpad_map_2.model());
@@ -1404,6 +1279,670 @@ where
             *path
         ));
     }
+    /// Unlinks the node `id`, which has been taken out of `nodes`, from the rest of the weave: from
+    /// the children of its parents, or from the roots if it has none, and from the active nodes.
+    #[requires(old.lookup(id.deep_model()) == Some(*node))]
+    #[requires(nodes.model() == old.remove(id.deep_model()))]
+    #[requires(cascade_linked(*old))]
+    #[requires((node@.from.len() == 0) == roots.model().contains(id.deep_model()))]
+    #[requires(node@.active == active.model().contains(&id.deep_model()))]
+    #[ensures(detached(*old, (^nodes).model(), id.deep_model()))]
+    #[ensures(kept_in_order((^nodes).model(), *old))]
+    #[ensures(filtered((^roots).model(), roots.model(), Seq::singleton(id.deep_model())))]
+    #[ensures(forall<k> (^roots).model().contains(k)
+        == (roots.model().contains(k) && k != id.deep_model()))]
+    #[ensures(forall<k> (^active).model().contains(&k)
+        == (active.model().contains(&k) && k != id.deep_model()))]
+    #[cfg_attr(
+        not(creusot),
+        allow(unused_variables, reason = "Only its contract and proof use them")
+    )]
+    #[check(terminates)]
+    fn unlink_removed(
+        nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
+        roots: &mut IndexSet<K, S>,
+        active: &mut HashSet<K, S>,
+        id: &K,
+        node: &IndependentNode<K, T, S>,
+        old: Snapshot<Nodes<K, T, S>>,
+    ) {
+        proof! {
+            let t = snapshot!(id.deep_model());
+            let n = snapshot!(node@);
+            let r0 = snapshot!(roots.model());
+        }
+        proof_assert!(in_order_refl_ok(*r0));
+
+        if node.from.is_empty() {
+            roots.shift_remove(id);
+            proof_assert!(shift_removed_ok(roots.model(), *r0, *t));
+            proof_assert!(kept_sub_ok(nodes.model(), *old));
+            proof_assert!(detaching_start_ok(*old, *t, n.from));
+            proof_assert!(detaching(*old, nodes.model(), *t, n.from));
+        } else {
+            proof_assert!(!r0.contains(*t));
+            proof_assert!(detaching_start_ok(*old, *t, n.from.subsequence(0, 0)));
+            proof_assert!(detaching(*old, nodes.model(), *t, n.from.subsequence(0, 0)));
+            proof_assert!(kept_sub_ok(nodes.model(), *old));
+            let mut i = 0;
+            #[invariant(i@ <= node.from.model().len())]
+            #[invariant(detaching(*old, nodes.model(), *t, n.from.subsequence(0, i@)))]
+            #[invariant(kept_in_order(nodes.model(), *old))]
+            #[invariant(roots.model() == *r0)]
+            #[variant(node.from.model().len() - i@)]
+            while i < node.from.len() {
+                proof! {
+                    let before = snapshot!(nodes.model());
+                    let key = snapshot!(n.from[i@]);
+                }
+                proof_assert!(prefix_step_ok(n.from, i@));
+                proof_assert!((forall<x> n.from.subsequence(0, i@ + 1).contains(x)
+                    == (n.from.subsequence(0, i@).contains(x) || x == *key))
+                    && !n.from.subsequence(0, i@).contains(*key));
+                if let Some(parent) = nodes.get_mut(&node.from[i]) {
+                    proof! {
+                        let pto = snapshot!(parent@.to);
+                        let pv = snapshot!(*parent);
+                    }
+                    parent.to.shift_remove(id);
+                    proof_assert!(shift_removed_ok(parent@.to, *pto, *t));
+                    proof_assert!(parent@.id == pv@.id && parent@.from == pv@.from
+                        && parent@.active == pv@.active && parent@.bookmarked == pv@.bookmarked);
+                }
+                proof_assert!(forall<k> k != *key ==> nodes.model().lookup(k) == before.lookup(k));
+                proof_assert!(nodes.model().contains(&*key) == before.contains(&*key));
+                proof_assert!(before.contains(&*key) ==> nodes.model()[*key]@.id == before[*key]@.id
+                    && nodes.model()[*key]@.from == before[*key]@.from
+                    && nodes.model()[*key]@.active == before[*key]@.active
+                    && nodes.model()[*key]@.bookmarked == before[*key]@.bookmarked
+                    && forall<c> nodes.model()[*key]@.to.contains(c)
+                        == (before[*key]@.to.contains(c) && c != *t));
+                proof_assert!(detaching_step_ok(*old, *before, nodes.model(), *t,
+                    n.from.subsequence(0, i@), n.from.subsequence(0, i@ + 1), *key));
+                proof_assert!(kept_children_step_ok(*old, *before, nodes.model(), *key));
+                proof_assert!(detaching(*old, nodes.model(), *t, n.from.subsequence(0, i@ + 1)));
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                {
+                    i += 1;
+                }
+            }
+            proof_assert! { lemma_full_prefix(n.from); n.from.subsequence(0, n.from.len()) == n.from };
+        }
+        proof_assert!(detaching_done_ok(*old, nodes.model(), *t, n.from));
+        proof_assert!(forall<k> roots.model().contains(k) == (r0.contains(k) && k != *t));
+        proof_assert!(filtered(roots.model(), *r0, Seq::singleton(*t)));
+
+        if node.active {
+            active.remove(id);
+        }
+    }
+    /// Visits the children of `node`, the node `cur` which the removal of `t` has just deleted after
+    /// the nodes `prev`, from the last one: counts down the parents of each one which aren't deleted
+    /// yet, and pushes it onto `stack` once none are left.
+    #[requires(cascade_linked(*old) && cascade_ranked(*old, *rank))]
+    #[requires(node@.to == old[*cur]@.to)]
+    #[requires(cascade_inner(*old, *rank, *t, *prev, *cur, old[*cur]@.to, ids(stack.model()),
+        remaining_parents.model()))]
+    #[requires(forall<k> old.contains(&k) && !prev.snoc(*cur).contains(k)
+        ==> nodes.model().contains(&k) && nodes.model()[k]@.from == old[k]@.from)]
+    #[ensures(cascade_outer(*old, *rank, *t, prev.snoc(*cur), ids((^stack).model()),
+        (^remaining_parents).model()))]
+    #[ensures(cascade_stack(*old, prev.snoc(*cur), old[*cur]@.to, ids(stack.model()), 0,
+        ids((^stack).model())))]
+    #[cfg_attr(
+        not(creusot),
+        allow(unused_variables, reason = "Only its contract and proof use them")
+    )]
+    #[allow(clippy::too_many_arguments, reason = "The removal's state")]
+    #[check(terminates)]
+    fn visit_children(
+        nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
+        remaining_parents: &mut ScratchpadMap<'_, K, usize, S>,
+        stack: &mut ScratchpadVec<'_, K>,
+        node: &IndependentNode<K, T, S>,
+        old: Snapshot<Nodes<K, T, S>>,
+        rank: Snapshot<Mapping<Id<K>, Int>>,
+        t: Snapshot<Id<K>>,
+        prev: Snapshot<Seq<Id<K>>>,
+        cur: Snapshot<Id<K>>,
+    ) {
+        snapshot! { lemma_ids_snoc::<K> };
+        proof! {
+            let rest = snapshot!(ids(stack.model()));
+        }
+
+        let mut i = node.to.len();
+        proof_assert! {
+            lemma_full_prefix(node.to.model());
+            old[*cur]@.to.subsequence(0, i@) == old[*cur]@.to
+        };
+        proof_assert!(cascade_ready_ok(*old, prev.snoc(*cur), old[*cur]@.to, *rest, i@));
+        #[invariant(i@ <= node.to.model().len())]
+        #[invariant(cascade_inner(*old, *rank, *t, *prev, *cur,
+            old[*cur]@.to.subsequence(0, i@), ids(stack.model()), remaining_parents.model()))]
+        #[invariant(cascade_stack(*old, prev.snoc(*cur), old[*cur]@.to, *rest, i@,
+            ids(stack.model())))]
+        #[variant(i@)]
+        while i > 0 {
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                i -= 1;
+            }
+            let child = node.to[i];
+            proof! {
+                let counts = snapshot!(remaining_parents.model());
+                let st = snapshot!(ids(stack.model()));
+            }
+            proof_assert!(cascade_count_ok(*old, *rank, *t, *prev, *cur, i@, *st, *counts));
+            proof_assert!(old.contains(&child.deep_model())
+                && child.deep_model() != *t
+                && !prev.snoc(*cur).contains(child.deep_model())
+                && 0 <= left_parents(*old, prev.snoc(*cur), child.deep_model())
+                && (counts.contains(&child.deep_model()) ==> counts[child.deep_model()]@
+                    == left_parents(*old, prev.snoc(*cur), child.deep_model()) + 1)
+                && (!counts.contains(&child.deep_model()) ==> old[child.deep_model()]@.from.len()
+                    == left_parents(*old, prev.snoc(*cur), child.deep_model()) + 1));
+            proof_assert!(nodes.model().contains(&child.deep_model())
+                && nodes.model()[child.deep_model()]@.from == old[child.deep_model()]@.from);
+            proof_assert!(
+                nodes.model().lookup(child.deep_model()) == Some(nodes.model()[child.deep_model()])
+            );
+            let remaining = match remaining_parents.entry(child) {
+                Entry::Occupied(entry) => entry.into_mut(),
+                Entry::Vacant(entry) => entry.insert(nodes[&child].from.len()),
+            };
+            proof_assert!(counts.contains(&child.deep_model())
+                ==> (*remaining)@ == counts[child.deep_model()]@);
+            proof_assert!(!counts.contains(&child.deep_model())
+                ==> (*remaining)@ == nodes.model()[child.deep_model()]@.from.len());
+            proof_assert!((*remaining)@
+                == left_parents(*old, prev.snoc(*cur), child.deep_model()) + 1);
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
+            {
+                *remaining -= 1;
+            }
+            proof! {
+                let nv = snapshot!(*remaining);
+            }
+            proof_assert!(nv@ == left_parents(*old, prev.snoc(*cur), child.deep_model()));
+
+            if *remaining == 0 {
+                stack.push(child);
+            }
+            proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
+            proof_assert!(cascade_ready_ok(*old, prev.snoc(*cur), old[*cur]@.to, *rest, i@));
+            proof_assert!(cascade_stack(*old, prev.snoc(*cur), old[*cur]@.to, *rest, i@,
+                ids(stack.model())));
+            proof_assert!(cascade_visit_ok(*old, *rank, *t, *prev, *cur, i@, *st, *counts, *nv));
+            proof_assert!(cascade_inner(*old, *rank, *t, *prev, *cur,
+                old[*cur]@.to.subsequence(0, i@), ids(stack.model()), remaining_parents.model()));
+        }
+        proof_assert!(cascade_next_ok(
+            *old,
+            *rank,
+            *t,
+            *prev,
+            *cur,
+            ids(stack.model()),
+            remaining_parents.model()
+        ));
+    }
+    /// Removes the deleted nodes `removed`, the first of which is `id`, from the parents of the
+    /// nodes which remain, and from the bookmarks if `removed_bookmark` says one of them was
+    /// bookmarked. `remaining_parents` counts, for each child of a deleted node, its parents which
+    /// aren't deleted.
+    #[requires(no_dup(ids(removed.model())) && ids(removed.model()).contains(id.deep_model()))]
+    #[requires(removed.model().len() == 1
+        ==> forall<k> ids(removed.model()).contains(k) == (k == id.deep_model()))]
+    #[requires(forall<k> nodes.model().contains(&k)
+        == (n1.contains(&k) && !ids(removed.model()).contains(k)))]
+    #[requires(forall<k> nodes.model().contains(&k) ==> nodes.model()[k] == n1[k] && old.contains(&k)
+        && nodes.model()[k]@.from == old[k]@.from)]
+    #[requires(kept_in_order(nodes.model(), *old))]
+    #[requires(forall<k> remaining_parents.model().contains(&k) && remaining_parents.model()[k]@ == 0
+        ==> ids(removed.model()).contains(k))]
+    #[requires(forall<k, p> old.contains(&k) && old[k]@.from.contains(p)
+        && ids(removed.model()).contains(p) ==> remaining_parents.model().contains(&k))]
+    #[requires(!removed_bookmark
+        ==> forall<k> ids(removed.model()).contains(k) ==> !bookmarked.model().contains(k))]
+    #[ensures(pruned(*n1, (^nodes).model(), ids(removed.model())))]
+    #[ensures(kept_in_order((^nodes).model(), *old))]
+    #[ensures(filtered((^bookmarked).model(), bookmarked.model(), ids(removed.model())))]
+    #[cfg_attr(
+        not(creusot),
+        allow(unused_variables, reason = "Only its contract and proof use them")
+    )]
+    #[allow(clippy::too_many_arguments, reason = "The removal's state")]
+    #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
+    #[check(terminates)]
+    fn unparent_survivors(
+        nodes: &mut HashMap<K, IndependentNode<K, T, S>, S>,
+        bookmarked: &mut IndexSet<K, S>,
+        guard: &ScratchpadGuard<'_>,
+        id: &K,
+        removed: &ScratchpadVec<'_, K>,
+        remaining_parents: &ScratchpadMap<'_, K, usize, S>,
+        removed_bookmark: bool,
+        old: Snapshot<Nodes<K, T, S>>,
+        n1: Snapshot<Nodes<K, T, S>>,
+    ) {
+        proof! {
+            let t = snapshot!(id.deep_model());
+            let done = snapshot!(ids(removed.model()));
+            let n2 = snapshot!(nodes.model());
+            let b0 = snapshot!(bookmarked.model());
+        }
+        proof_assert!(in_order_refl_ok(*b0));
+        proof_assert!(!removed_bookmark ==> filtered(*b0, *b0, *done));
+
+        let mut children = guard.vec();
+
+        if removed.len() == 1 {
+            proof_assert!(forall<k> done.contains(k) == (k == *t));
+            extend_keys(&mut children, remaining_parents);
+            proof_assert!(unparenting_start_ok(
+                *n2,
+                *done,
+                ids(children.model()).subsequence(0, 0)
+            ));
+            proof_assert!(unparenting(
+                *n2,
+                nodes.model(),
+                *done,
+                ids(children.model()).subsequence(0, 0)
+            ));
+            let mut i = 0;
+            #[invariant(i@ <= children.model().len())]
+            #[invariant(unparenting(*n2, nodes.model(), *done,
+                ids(children.model()).subsequence(0, i@)))]
+            #[invariant(kept_in_order(nodes.model(), *old))]
+            #[invariant(bookmarked.model() == *b0)]
+            #[variant(children.model().len() - i@)]
+            while i < children.len() {
+                proof! {
+                    let before = snapshot!(nodes.model());
+                    let key = snapshot!(children.model()[i@].deep_model());
+                }
+                proof_assert!(prefix_step_ok(ids(children.model()), i@));
+                proof_assert!(ids(children.model())[i@] == *key
+                    && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
+                        == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
+                proof! {
+                    let mut cv = snapshot!(before[*key]);
+                }
+                if let Some(child) = nodes.get_mut(&children[i]) {
+                    proof_assert!(before.contains(&*key) && *child == before[*key]);
+                    proof! {
+                        let cfrom = snapshot!(child@.from);
+                    }
+                    child.from.shift_remove(id);
+                    proof_assert!(shift_removed_ok(child@.from, *cfrom, *t));
+                    proof_assert!(child@.id == before[*key]@.id
+                        && child@.to == before[*key]@.to
+                        && child@.active == before[*key]@.active
+                        && child@.bookmarked == before[*key]@.bookmarked);
+                    proof_assert!(forall<p> child@.from.contains(p)
+                        == (before[*key]@.from.contains(p) && !done.contains(p)));
+                    proof! {
+                        cv = snapshot!(*child);
+                    }
+                }
+                proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
+                proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
+                proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
+                    && cv@.to == before[*key]@.to
+                    && cv@.active == before[*key]@.active
+                    && cv@.bookmarked == before[*key]@.bookmarked
+                    && forall<p> cv@.from.contains(p)
+                        == (before[*key]@.from.contains(p) && !done.contains(p)));
+                proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
+                    ids(children.model()).subsequence(0, i@),
+                    ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
+                proof_assert!(kept_parents_set_ok(*old, *before, nodes.model(), *key, *cv));
+                proof_assert!(unparenting(*n2, nodes.model(), *done,
+                    ids(children.model()).subsequence(0, i@ + 1)));
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                {
+                    i += 1;
+                }
+            }
+            proof_assert! {
+                lemma_full_prefix(ids(children.model()));
+                unparenting(*n2, nodes.model(), *done, ids(children.model()))
+            };
+            proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
+                ==> remaining_parents.model().contains(&k) && ids(children.model()).contains(k));
+            proof_assert!(unparenting_done_ok(
+                *n1,
+                *n2,
+                nodes.model(),
+                *done,
+                ids(children.model())
+            ));
+            if removed_bookmark {
+                bookmarked.shift_remove(id);
+                proof_assert!(shift_removed_ok(bookmarked.model(), *b0, *t));
+                proof_assert!(filtered(bookmarked.model(), *b0, *done));
+            }
+        } else {
+            let mut removed_set = guard.set_with_capacity(removed.len(), default_hasher());
+            let mut i = 0;
+            #[invariant(i@ <= removed.model().len())]
+            #[invariant(forall<k> removed_set.model().contains(&k)
+                == ids(removed.model()).subsequence(0, i@).contains(k))]
+            #[invariant(nodes.model() == *n2)]
+            #[invariant(bookmarked.model() == *b0)]
+            #[variant(removed.model().len() - i@)]
+            while i < removed.len() {
+                proof_assert!(prefix_step_ok(ids(removed.model()), i@));
+                proof_assert!(forall<x> ids(removed.model()).subsequence(0, i@ + 1).contains(x)
+                    == (ids(removed.model()).subsequence(0, i@).contains(x)
+                        || x == ids(removed.model())[i@]));
+                proof_assert!(ids(removed.model())[i@] == removed.model()[i@].deep_model());
+                removed_set.insert(removed[i]);
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                {
+                    i += 1;
+                }
+            }
+            proof_assert! {
+                lemma_full_prefix(ids(removed.model()));
+                forall<k> removed_set.model().contains(&k) == done.contains(k)
+            };
+
+            extend_surviving_keys(&mut children, remaining_parents);
+            proof_assert!(unparenting_start_ok(
+                *n2,
+                *done,
+                ids(children.model()).subsequence(0, 0)
+            ));
+            proof_assert!(unparenting(
+                *n2,
+                nodes.model(),
+                *done,
+                ids(children.model()).subsequence(0, 0)
+            ));
+            let mut i = 0;
+            #[invariant(i@ <= children.model().len())]
+            #[invariant(unparenting(*n2, nodes.model(), *done,
+                ids(children.model()).subsequence(0, i@)))]
+            #[invariant(kept_in_order(nodes.model(), *old))]
+            #[invariant(forall<k> removed_set.model().contains(&k) == done.contains(k))]
+            #[invariant(bookmarked.model() == *b0)]
+            #[variant(children.model().len() - i@)]
+            while i < children.len() {
+                proof! {
+                    let before = snapshot!(nodes.model());
+                    let key = snapshot!(children.model()[i@].deep_model());
+                }
+                proof_assert!(prefix_step_ok(ids(children.model()), i@));
+                proof_assert!(ids(children.model())[i@] == *key
+                    && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
+                        == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
+                proof! {
+                    let mut cv = snapshot!(before[*key]);
+                }
+                if let Some(child) = nodes.get_mut(&children[i]) {
+                    proof_assert!(before.contains(&*key) && *child == before[*key]);
+                    retain_absent(&mut child.from, &removed_set);
+                    proof_assert!(child@.id == before[*key]@.id
+                        && child@.to == before[*key]@.to
+                        && child@.active == before[*key]@.active
+                        && child@.bookmarked == before[*key]@.bookmarked);
+                    proof_assert!(forall<p> child@.from.contains(p)
+                        == (before[*key]@.from.contains(p) && !removed_set.model().contains(&p)));
+                    proof_assert!(forall<p> child@.from.contains(p)
+                        == (before[*key]@.from.contains(p) && !done.contains(p)));
+                    proof! {
+                        cv = snapshot!(*child);
+                    }
+                }
+                proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
+                proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
+                proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
+                    && cv@.to == before[*key]@.to
+                    && cv@.active == before[*key]@.active
+                    && cv@.bookmarked == before[*key]@.bookmarked
+                    && forall<p> cv@.from.contains(p)
+                        == (before[*key]@.from.contains(p) && !done.contains(p)));
+                proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
+                    ids(children.model()).subsequence(0, i@),
+                    ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
+                proof_assert!(kept_parents_set_ok(*old, *before, nodes.model(), *key, *cv));
+                proof_assert!(unparenting(*n2, nodes.model(), *done,
+                    ids(children.model()).subsequence(0, i@ + 1)));
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                {
+                    i += 1;
+                }
+            }
+            proof_assert! {
+                lemma_full_prefix(ids(children.model()));
+                unparenting(*n2, nodes.model(), *done, ids(children.model()))
+            };
+            proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
+                ==> remaining_parents.model().contains(&k) && remaining_parents.model()[k]@ > 0
+                    && ids(children.model()).contains(k));
+            proof_assert!(unparenting_done_ok(
+                *n1,
+                *n2,
+                nodes.model(),
+                *done,
+                ids(children.model())
+            ));
+
+            if removed_bookmark {
+                retain_absent(bookmarked, &removed_set);
+                proof_assert!(filtered(bookmarked.model(), *b0, *done));
+            }
+        }
+    }
+    /// Scores the ancestors of a node, which `closure` holds and `closure_roots` lists the roots
+    /// of: sorts them topologically into `topological`, and records in `scores`, for each one, the
+    /// score of a best path from it up to a root, in which `active`'s nodes count as active, and the
+    /// parent that path continues to.
+    #[requires(all_linked(nodes.model()) && acyclic(nodes.model()))]
+    #[requires(forall<k> nodes.model().contains(&k)
+        ==> nodes.model()[k]@.active == active.contains(&k))]
+    #[requires(forall<k> closure.model().contains(&k) ==> nodes.model().contains(&k))]
+    #[requires(parent_closed(nodes.model(), closure.model()))]
+    #[requires(roots_of(nodes.model(), closure.model(), ids(closure_roots.model())))]
+    #[requires(stack.model().len() == 0)]
+    #[requires(topological.model().len() == 0)]
+    #[requires(counts.model() == FMap::empty())]
+    #[requires(scores.model() == FMap::empty())]
+    #[ensures((^stack).model().len() == 0)]
+    #[ensures(forall<k> closure.model().contains(&k) ==> (^scores).model().contains(&k))]
+    #[ensures(forall<k> (^scores).model().contains(&k)
+        ==> parent_linked(nodes.model(), (^scores).model(), k))]
+    #[ensures(forall<k> (^scores).model().contains(&k)
+        ==> up_scored(nodes.model(), *active, (^scores).model(), k))]
+    #[ensures(forall<k> (^scores).model().contains(&k) ==> up_first(nodes.model(), (^scores).model(), k))]
+    #[ensures(forall<k> (^scores).model().contains(&k)
+        ==> forall<c> nodes.model()[k]@.from.contains(c) ==> (^scores).model().contains(&c))]
+    #[cfg_attr(
+        not(creusot),
+        allow(unused_variables, reason = "Only its contract and proof use them")
+    )]
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "The scratch collections the scoring uses"
+    )]
+    #[allow(clippy::too_many_lines, reason = "Most of its length is proof code")]
+    #[check(terminates)]
+    fn score_ancestors(
+        nodes: &HashMap<K, IndependentNode<K, T, S>, S>,
+        closure: &ScratchpadSet<'_, K, S>,
+        closure_roots: &ScratchpadVec<'_, K>,
+        stack: &mut ScratchpadVec<'_, K>,
+        topological: &mut ScratchpadVec<'_, K>,
+        counts: &mut ScratchpadMap<'_, K, usize, S>,
+        scores: &mut Scores<'_, K, S>,
+        active: Snapshot<FSet<Id<K>>>,
+    ) {
+        proof! {
+            let n1 = snapshot!(nodes.model());
+        }
+        let admitted = snapshot!(member_of(closure.model()));
+        proof_assert!(forall<k> admitted[k] == closure.model().contains(&k));
+        proof_assert!(forall<k, p> admitted[k] && n1[k]@.from.contains(p) ==> admitted[p]);
+        proof_assert! {
+            lemma_ids_empty(topological.model());
+            lemma_kahn_empty(*n1, *admitted);
+            kahn_state(*n1, *admitted, ids(topological.model()), counts.model())
+        };
+
+        let mut i = 0;
+        #[invariant(i@ <= closure_roots.model().len())]
+        #[invariant(stack.model().len() == 0)]
+        #[invariant(kahn_state(*n1, *admitted, ids(topological.model()), counts.model()))]
+        #[invariant(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
+            ==> exists<j> 0 <= j && j < i@ && ids(closure_roots.model())[j] == k)]
+        #[invariant(forall<j> 0 <= j && j < i@
+            ==> ids(topological.model()).contains(ids(closure_roots.model())[j]))]
+        #[variant(closure_roots.model().len() - i@)]
+        while i < closure_roots.len() {
+            proof_assert!(ids(closure_roots.model())[i@] == closure_roots.model()[i@].deep_model());
+            proof_assert!(n1[ids(closure_roots.model())[i@]]@.from.len() == 0);
+            proof_assert! {
+                lemma_root_unsorted(*n1, ids(closure_roots.model()), i@, ids(topological.model()));
+                !ids(topological.model()).contains(ids(closure_roots.model())[i@])
+            };
+            proof! {
+                let before = snapshot!(ids(topological.model()));
+                let before_len = snapshot!(topological.model().len());
+            }
+            proof_assert!(before.len() == *before_len);
+            topological_sort_subgraph(
+                nodes,
+                closure,
+                None,
+                admitted,
+                closure_roots[i],
+                stack,
+                topological,
+                counts,
+            );
+            proof_assert!(forall<m> 0 <= m && m < before.len() ==> ids(topological.model())[m] == before[m]);
+            proof_assert!(ids(topological.model())[before.len()] == ids(closure_roots.model())[i@]);
+            proof_assert!(ids(topological.model()).len() == topological.model().len());
+            proof_assert! {
+                lemma_admitted_have_parents(nodes.model(), *admitted, topological.model(), *before_len);
+                forall<m> *before_len < m && m < topological.model().len()
+                    ==> nodes.model()[topological.model()[m].deep_model()]@.from.len() > 0
+            };
+            proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
+                ==> ids(topological.model())[m] == topological.model()[m].deep_model());
+            proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
+                ==> n1[ids(topological.model())[m]]@.from.len() > 0);
+            proof_assert!(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
+                ==> before.contains(k) || k == ids(closure_roots.model())[i@]);
+            proof_assert!(forall<k> before.contains(k) ==> ids(topological.model()).contains(k));
+            proof_assert!(ids(topological.model()).contains(ids(closure_roots.model())[i@]));
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+            {
+                i += 1;
+            }
+        }
+        proof! {
+            let topo = snapshot!(ids(topological.model()));
+        }
+        proof_assert! {
+            lemma_ancestors_sorted(*n1, closure.model(), ids(closure_roots.model()), *admitted, *topo, counts.model());
+            forall<k> closure.model().contains(&k) ==> topo.contains(k)
+        };
+
+        proof_assert!(kahn_order(*n1, *admitted, *topo, Seq::empty()) && no_dup(*topo));
+
+        let mut i = 0;
+        #[invariant(i@ <= topological.model().len())]
+        #[invariant(forall<j> 0 <= j && j < i@ ==> scores.model().contains(&topo[j]))]
+        #[invariant(forall<k> scores.model().contains(&k) ==> parent_scored(*n1, scores.model(), k, i@))]
+        #[invariant(forall<k> scores.model().contains(&k) ==> exists<j> 0 <= j && j < i@ && topo[j] == k)]
+        #[invariant(forall<k> scores.model().contains(&k) ==> up_scored(*n1, *active, scores.model(), k))]
+        #[invariant(forall<k> scores.model().contains(&k)
+            ==> forall<c> n1[k]@.from.contains(c) ==> scores.model().contains(&c))]
+        #[invariant(forall<k> scores.model().contains(&k) ==> up_first(*n1, scores.model(), k))]
+        #[variant(topological.model().len() - i@)]
+        while i < topological.len() {
+            let id = topological[i];
+            proof_assert!(id.deep_model() == topo[i@] && admitted[topo[i@]]);
+            let node = &nodes[&id];
+            proof_assert!(node@ == n1[topo[i@]]@);
+            proof_assert!(forall<p> node@.from.contains(p) ==> admitted_parent(*n1, *admitted, topo[i@], p));
+            proof_assert!(kahn_order(*n1, *admitted, *topo, Seq::empty()));
+            proof_assert!(forall<p> node@.from.contains(p) ==> {
+                lemma_parent_before(*n1, *admitted, *topo, i@, p);
+                true
+            } && scores.model().contains(&p));
+
+            let best_parent = best_scored(&node.from, scores);
+
+            let (parent, score) = if let Some((parent, mut score)) = best_parent {
+                proof_assert!(parent_scored(*n1, scores.model(), parent.deep_model(), i@));
+                proof! {
+                    let best = snapshot!(score);
+                }
+                proof_assert!(*best == scores.model()[parent.deep_model()].0
+                    && forall<c> node@.from.contains(c) ==> score_le(scores.model()[c].0, *best));
+                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+                if node.active {
+                    score.1 += 1;
+                } else {
+                    score.0 += 1;
+                }
+                proof_assert!(score.0@ == best.0@ + if node.active { 0 } else { 1 });
+                proof_assert!(score.1@ == best.1@ + if node.active { 1 } else { 0 });
+
+                (Some(parent), score)
+            } else {
+                proof_assert!(node@.from.len() == 0);
+                (None, if node.active { (0, 1) } else { (1, 0) })
+            };
+            proof_assert!(node.active == active.contains(&id.deep_model()));
+            proof_assert!(score.0@ + score.1@ <= i@ + 1);
+            proof_assert!(match parent {
+                None => n1[id.deep_model()]@.from.len() == 0,
+                Some(p) => n1[id.deep_model()]@.from.contains(p.deep_model())
+                    && scores.model().contains(&p.deep_model()),
+            });
+            proof_assert!(parent_insert_ok(*n1, scores.model(), id.deep_model(), (score, parent), i@));
+            proof_assert!(!scores.model().contains(&topo[i@]));
+            proof_assert!(n1[topo[i@]]@.active == active.contains(&topo[i@]));
+            proof_assert!(forall<j> scores.model().contains(&j)
+                ==> parent_linked(*n1, scores.model(), j) && up_scored(*n1, *active, scores.model(), j));
+            proof_assert!(forall<p> n1[id.deep_model()]@.from.contains(p) ==> scores.model().contains(&p));
+            proof_assert!(up_entry(
+                *n1,
+                *active,
+                scores.model(),
+                id.deep_model(),
+                (score, parent)
+            ));
+            proof_assert!(up_insert_ok(
+                *n1,
+                *active,
+                scores.model(),
+                id.deep_model(),
+                (score, parent)
+            ));
+            proof_assert!(parent_first(*n1, scores.model(), id.deep_model(), parent));
+            proof_assert!(up_first_insert_ok(
+                *n1,
+                scores.model(),
+                id.deep_model(),
+                (score, parent)
+            ));
+
+            scores.insert(id, (score, parent));
+            #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
+            {
+                i += 1;
+            }
+        }
+        proof_assert!(forall<k> closure.model().contains(&k) ==> scores.model().contains(&k));
+        proof_assert!(forall<k> scores.model().contains(&k) ==> parent_linked(*n1, scores.model(), k));
+    }
     #[allow(clippy::missing_panics_doc, reason = "Should never panic")]
     /// Sets the active status of a node with the specified identifier, using identical activation behavior to [`DependentWeave`].
     #[ensures(result ==> value || !(^self)@.active.contains(&id.deep_model())
@@ -1527,157 +2066,18 @@ where
             proof! {
                 let n1 = snapshot!(old.nodes);
             }
-            let admitted = snapshot!(member_of(closure.model()));
-            proof_assert!(parent_closed(*n1, closure.model()));
-            proof_assert!(forall<k> admitted[k] == closure.model().contains(&k));
-            proof_assert!(forall<k, p> admitted[k] && n1[k]@.from.contains(p) ==> admitted[p]);
-            proof_assert! {
-                lemma_ids_empty(topological.model());
-                lemma_kahn_empty(*n1, *admitted);
-                kahn_state(*n1, *admitted, ids(topological.model()), scratchpad_map.model())
-            };
-
-            let mut i = 0;
-            #[invariant(i@ <= closure_roots.model().len())]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(stack.model().len() == 0)]
-            #[invariant(kahn_state(*n1, *admitted, ids(topological.model()), scratchpad_map.model()))]
-            #[invariant(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
-                ==> exists<j> 0 <= j && j < i@ && ids(closure_roots.model())[j] == k)]
-            #[invariant(forall<j> 0 <= j && j < i@
-                ==> ids(topological.model()).contains(ids(closure_roots.model())[j]))]
-            #[variant(closure_roots.model().len() - i@)]
-            while i < closure_roots.len() {
-                proof_assert!(ids(closure_roots.model())[i@] == closure_roots.model()[i@].deep_model());
-                proof_assert!(n1[ids(closure_roots.model())[i@]]@.from.len() == 0);
-                proof_assert! {
-                    lemma_root_unsorted(*n1, ids(closure_roots.model()), i@, ids(topological.model()));
-                    !ids(topological.model()).contains(ids(closure_roots.model())[i@])
-                };
-                proof! {
-                    let before = snapshot!(ids(topological.model()));
-                    let before_len = snapshot!(topological.model().len());
-                }
-                proof_assert!(before.len() == *before_len);
-                topological_sort_subgraph(
-                    nodes,
-                    &closure,
-                    None,
-                    admitted,
-                    closure_roots[i],
-                    &mut stack,
-                    &mut topological, // topological order
-                    &mut scratchpad_map,
-                );
-                proof_assert!(forall<m> 0 <= m && m < before.len() ==> ids(topological.model())[m] == before[m]);
-                proof_assert!(ids(topological.model())[before.len()] == ids(closure_roots.model())[i@]);
-                proof_assert!(ids(topological.model()).len() == topological.model().len());
-                proof_assert! {
-                    lemma_admitted_have_parents(nodes.model(), *admitted, topological.model(), *before_len);
-                    forall<m> *before_len < m && m < topological.model().len()
-                        ==> nodes.model()[topological.model()[m].deep_model()]@.from.len() > 0
-                };
-                proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
-                    ==> ids(topological.model())[m] == topological.model()[m].deep_model());
-                proof_assert!(forall<m> before.len() < m && m < ids(topological.model()).len()
-                    ==> n1[ids(topological.model())[m]]@.from.len() > 0);
-                proof_assert!(forall<k> ids(topological.model()).contains(k) && n1[k]@.from.len() == 0
-                    ==> before.contains(k) || k == ids(closure_roots.model())[i@]);
-                proof_assert!(forall<k> before.contains(k) ==> ids(topological.model()).contains(k));
-                proof_assert!(ids(topological.model()).contains(ids(closure_roots.model())[i@]));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
-            proof! {
-                let topo = snapshot!(ids(topological.model()));
-            }
-            proof_assert! {
-                lemma_ancestors_sorted(*n1, closure.model(), ids(closure_roots.model()), *admitted, *topo, scratchpad_map.model());
-                forall<k> closure.model().contains(&k) ==> topo.contains(k)
-            };
-
-            proof_assert!(kahn_order(*n1, *admitted, *topo, Seq::empty()) && no_dup(*topo));
             proof_assert!(forall<k> n1.contains(&k) ==> n1[k]@.active == old.active.contains(&k));
-
-            let mut i = 0;
-            #[invariant(i@ <= topological.model().len())]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(forall<j> 0 <= j && j < i@
-                ==> scratchpad_map_2.model().contains(&topo[j]))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> parent_scored(*n1, scratchpad_map_2.model(), k, i@))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> exists<j> 0 <= j && j < i@ && topo[j] == k)]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> up_scored(*n1, old.active, scratchpad_map_2.model(), k))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> forall<c> n1[k]@.from.contains(c) ==> scratchpad_map_2.model().contains(&c))]
-            #[invariant(forall<k> scratchpad_map_2.model().contains(&k)
-                ==> up_first(*n1, scratchpad_map_2.model(), k))]
-            #[variant(topological.model().len() - i@)]
-            while i < topological.len() {
-                let id = topological[i];
-                proof_assert!(id.deep_model() == topo[i@] && admitted[topo[i@]]);
-                let node = &nodes[&id];
-                proof_assert!(node@ == n1[topo[i@]]@);
-                proof_assert!(forall<p> node@.from.contains(p) ==> admitted_parent(*n1, *admitted, topo[i@], p));
-                proof_assert!(kahn_order(*n1, *admitted, *topo, Seq::empty()));
-                proof_assert!(forall<p> node@.from.contains(p) ==> {
-                    lemma_parent_before(*n1, *admitted, *topo, i@, p);
-                    true
-                } && scratchpad_map_2.model().contains(&p));
-
-                let best_parent = best_scored(&node.from, &scratchpad_map_2);
-
-                let (parent, score) = if let Some((parent, mut score)) = best_parent {
-                    proof_assert!(parent_scored(*n1, scratchpad_map_2.model(), parent.deep_model(), i@));
-                    proof! {
-                        let best = snapshot!(score);
-                    }
-                    proof_assert!(*best == scratchpad_map_2.model()[parent.deep_model()].0
-                        && forall<c> node@.from.contains(c)
-                            ==> score_le(scratchpad_map_2.model()[c].0, *best));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    if node.active {
-                        score.1 += 1;
-                    } else {
-                        score.0 += 1;
-                    }
-                    proof_assert!(score.0@ == best.0@ + if node.active { 0 } else { 1 });
-                    proof_assert!(score.1@ == best.1@ + if node.active { 1 } else { 0 });
-
-                    (Some(parent), score)
-                } else {
-                    proof_assert!(node@.from.len() == 0);
-                    (None, if node.active { (0, 1) } else { (1, 0) })
-                };
-                proof_assert!(node.active == old.active.contains(&id.deep_model()));
-                proof_assert!(score.0@ + score.1@ <= i@ + 1);
-                proof_assert!(match parent {
-                    None => n1[id.deep_model()]@.from.len() == 0,
-                    Some(p) => n1[id.deep_model()]@.from.contains(p.deep_model())
-                        && scratchpad_map_2.model().contains(&p.deep_model()),
-                });
-                proof_assert!(parent_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent), i@));
-                proof_assert!(!scratchpad_map_2.model().contains(&topo[i@]));
-                proof_assert!(forall<j> scratchpad_map_2.model().contains(&j)
-                    ==> parent_linked(*n1, scratchpad_map_2.model(), j)
-                        && up_scored(*n1, old.active, scratchpad_map_2.model(), j));
-                proof_assert!(forall<p> n1[id.deep_model()]@.from.contains(p)
-                    ==> scratchpad_map_2.model().contains(&p));
-                proof_assert!(up_entry(*n1, old.active, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-                proof_assert!(up_insert_ok(*n1, old.active, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-                proof_assert!(parent_first(*n1, scratchpad_map_2.model(), id.deep_model(), parent));
-                proof_assert!(up_first_insert_ok(*n1, scratchpad_map_2.model(), id.deep_model(), (score, parent)));
-
-                scratchpad_map_2.insert(id, (score, parent));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
+            Self::score_ancestors(
+                nodes,
+                &closure,
+                &closure_roots,
+                &mut stack,
+                &mut topological,
+                &mut scratchpad_map,
+                &mut scratchpad_map_2,
+                snapshot!(old.active),
+            );
+            proof_assert!(scratchpad_map_2.model().contains(&*id0));
             topological.clear();
 
             closure.clear();
@@ -1685,8 +2085,6 @@ where
 
             let mut disjoint = topological;
 
-            proof_assert!(forall<k> admitted[k] ==> scratchpad_map_2.model().contains(&k));
-            proof_assert!(admitted[*id0]);
             proof! {
                 let scores = snapshot!(scratchpad_map_2.model());
                 let mut chain = snapshot!(Seq::<Id<K>>::empty());
@@ -3079,86 +3477,26 @@ where
                 && old.nodes[k]@.bookmarked == old.bookmarked.contains(k));
         proof_assert!(node@ == *n);
 
-        if node.from.is_empty() {
-            self.roots.shift_remove(id);
-            proof_assert!(shift_removed_ok(self.roots.model(), old.roots, *t));
-            proof_assert!(kept_sub_ok(self.nodes.model(), old.nodes));
-            proof_assert!(detaching_start_ok(old.nodes, *t, n.from));
-            proof_assert!(detaching(old.nodes, self.nodes.model(), *t, n.from));
-        } else {
-            proof_assert!(!old.roots.contains(*t));
-            proof_assert!(detaching_start_ok(old.nodes, *t, n.from.subsequence(0, 0)));
-            proof_assert!(detaching(
-                old.nodes,
-                self.nodes.model(),
-                *t,
-                n.from.subsequence(0, 0)
-            ));
-            proof_assert!(kept_sub_ok(self.nodes.model(), old.nodes));
-            let mut i = 0;
-            #[invariant(i@ <= node.from.model().len())]
-            #[invariant(detaching(old.nodes, self.nodes.model(), *t, n.from.subsequence(0, i@)))]
-            #[invariant(kept_in_order(self.nodes.model(), old.nodes))]
-            #[invariant(self.roots.model() == old.roots)]
-            #[invariant(self.active.model() == old.active)]
-            #[invariant(self.bookmarked.model() == old.bookmarked)]
-            #[variant(node.from.model().len() - i@)]
-            while i < node.from.len() {
-                proof! {
-                    let before = snapshot!(self.nodes.model());
-                    let key = snapshot!(n.from[i@]);
-                }
-                proof_assert!(prefix_step_ok(n.from, i@));
-                proof_assert!((forall<x> n.from.subsequence(0, i@ + 1).contains(x)
-                    == (n.from.subsequence(0, i@).contains(x) || x == *key))
-                    && !n.from.subsequence(0, i@).contains(*key));
-                if let Some(parent) = self.nodes.get_mut(&node.from[i]) {
-                    proof! {
-                        let pto = snapshot!(parent@.to);
-                    }
-                    parent.to.shift_remove(id);
-                    proof_assert!(shift_removed_ok(parent@.to, *pto, *t));
-                }
-                proof_assert!(forall<k> k != *key ==> self.nodes.model().lookup(k) == before.lookup(k));
-                proof_assert!(self.nodes.model().contains(&*key) == before.contains(&*key));
-                proof_assert!(before.contains(&*key) ==> self.nodes.model()[*key]@.id == before[*key]@.id
-                    && self.nodes.model()[*key]@.from == before[*key]@.from
-                    && self.nodes.model()[*key]@.active == before[*key]@.active
-                    && self.nodes.model()[*key]@.bookmarked == before[*key]@.bookmarked
-                    && forall<c> self.nodes.model()[*key]@.to.contains(c)
-                        == (before[*key]@.to.contains(c) && c != *t));
-                proof_assert!(detaching_step_ok(old.nodes, *before, self.nodes.model(), *t,
-                    n.from.subsequence(0, i@), n.from.subsequence(0, i@ + 1), *key));
-                proof_assert!(kept_children_step_ok(
-                    old.nodes,
-                    *before,
-                    self.nodes.model(),
-                    *key
-                ));
-                proof_assert!(detaching(old.nodes, self.nodes.model(), *t, n.from.subsequence(0, i@ + 1)));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
-            proof_assert! { lemma_full_prefix(n.from); n.from.subsequence(0, n.from.len()) == n.from };
-        }
-        proof_assert!(detaching_done_ok(old.nodes, self.nodes.model(), *t, n.from));
-        proof_assert!(detached(old.nodes, self.nodes.model(), *t));
+        proof_assert!(self.nodes.model() == old.nodes.remove(*t));
+        Self::unlink_removed(
+            &mut self.nodes,
+            &mut self.roots,
+            &mut self.active,
+            id,
+            &node,
+            snapshot!(old.nodes),
+        );
 
         proof! {
             let n1 = snapshot!(self.nodes.model());
         }
+        proof_assert!(detached(old.nodes, *n1, *t));
         proof_assert!(forall<k> self.roots.model().contains(k) == (old.roots.contains(k) && k != *t));
         proof_assert!(kept_in_order(*n1, old.nodes));
         proof_assert!(filtered(self.roots.model(), old.roots, Seq::singleton(*t)));
 
         let mut removed_active = node.active;
         let mut removed_bookmark = node.bookmarked;
-
-        if removed_active {
-            self.active.remove(id);
-        }
 
         proof_assert!(forall<k> self.active.model().contains(&k) == (old.active.contains(&k) && k != *t));
         proof_assert!(removed_bookmark == old.bookmarked.contains(*t));
@@ -3268,77 +3606,19 @@ where
                     remaining_parents.model())
             };
 
-            let mut i = node.to.len();
-            proof_assert! { lemma_full_prefix(n.to); n.to.subsequence(0, i@) == n.to };
-            #[invariant(i@ <= n.to.len())]
-            #[invariant(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
-                ids(stack.model()), remaining_parents.model()))]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(roots.model() == *r1)]
-            #[invariant(forall<k> active.model().contains(&k) == (old.active.contains(&k) && k != *t))]
-            #[invariant(bookmarked.model() == old.bookmarked)]
-            #[invariant(ids(removed.model()) == Seq::<Id<K>>::empty().snoc(*t))]
-            #[variant(i@)]
-            while i > 0 {
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                {
-                    i -= 1;
-                }
-                let child = node.to[i];
-                proof! {
-                    let counts = snapshot!(remaining_parents.model());
-                    let st = snapshot!(ids(stack.model()));
-                }
-                proof_assert!(cascade_count_ok(old.nodes, *rank, *t, Seq::empty(), *t, i@, *st, *counts));
-                proof_assert!(old.nodes.contains(&child.deep_model())
-                    && child.deep_model() != *t
-                    && 0 <= left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model())
-                    && (counts.contains(&child.deep_model()) ==> counts[child.deep_model()]@
-                        == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1)
-                    && (!counts.contains(&child.deep_model()) ==> old.nodes[child.deep_model()]@.from.len()
-                        == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1));
-                proof_assert!(nodes.model().contains(&child.deep_model())
-                    && nodes.model()[child.deep_model()]@.from == old.nodes[child.deep_model()]@.from);
-                proof_assert!(
-                    nodes.model().lookup(child.deep_model())
-                        == Some(nodes.model()[child.deep_model()])
-                );
-                let remaining = match remaining_parents.entry(child) {
-                    Entry::Occupied(entry) => entry.into_mut(),
-                    Entry::Vacant(entry) => entry.insert(nodes[&child].from.len()),
-                };
-                proof_assert!(counts.contains(&child.deep_model())
-                    ==> (*remaining)@ == counts[child.deep_model()]@);
-                proof_assert!(!counts.contains(&child.deep_model())
-                    ==> (*remaining)@ == nodes.model()[child.deep_model()]@.from.len());
-                proof_assert!((*remaining)@
-                    == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1);
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                {
-                    *remaining -= 1;
-                }
-                proof! {
-                    let nv = snapshot!(*remaining);
-                }
-                proof_assert!(nv@ == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()));
-
-                if *remaining == 0 {
-                    stack.push(child);
-                }
-                proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
-                proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, Seq::empty(), *t, i@, *st, *counts, *nv));
-                proof_assert!(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
-                    ids(stack.model()), remaining_parents.model()));
-            }
-            proof_assert!(cascade_next_ok(
-                old.nodes,
-                *rank,
-                *t,
-                Seq::empty(),
-                *t,
-                ids(stack.model()),
-                remaining_parents.model()
-            ));
+            proof_assert!(forall<k> old.nodes.contains(&k) && !Seq::<Id<K>>::empty().snoc(*t).contains(k)
+                ==> nodes.model().contains(&k) && nodes.model()[k]@.from == old.nodes[k]@.from);
+            Self::visit_children(
+                nodes,
+                &mut remaining_parents,
+                &mut stack,
+                &node,
+                snapshot!(old.nodes),
+                snapshot!(*rank),
+                snapshot!(*t),
+                snapshot!(Seq::empty()),
+                snapshot!(*t),
+            );
             proof_assert!(cascade_outer(
                 old.nodes,
                 *rank,
@@ -3413,85 +3693,19 @@ where
                 proof_assert!(forall<k> ns.contains(&k) ==> ns[k] == n1[k]);
                 proof_assert!(forall<k> n1.contains(&k) ==> n1[k]@.from == old.nodes[k]@.from);
 
-                let mut i = node.to.len();
-                proof_assert! {
-                    lemma_full_prefix(node.to.model());
-                    old.nodes[*cur]@.to.subsequence(0, i@) == old.nodes[*cur]@.to
-                };
-                #[invariant(i@ <= node.to.model().len())]
-                #[invariant(node.to.model() == old.nodes[*cur]@.to)]
-                #[invariant(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
-                    old.nodes[*cur]@.to.subsequence(0, i@), ids(stack.model()),
-                    remaining_parents.model()))]
-                #[invariant(nodes.model() == *ns)]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !ids(removed.model()).contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[invariant(ids(removed.model()) == prev.snoc(*cur))]
-                #[variant(i@)]
-                while i > 0 {
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                    {
-                        i -= 1;
-                    }
-                    let child = node.to[i];
-                    proof! {
-                        let counts = snapshot!(remaining_parents.model());
-                        let st = snapshot!(ids(stack.model()));
-                    }
-                    proof_assert!(cascade_count_ok(old.nodes, *rank, *t, *prev, *cur, i@, *st, *counts));
-                    proof_assert!(old.nodes.contains(&child.deep_model())
-                        && child.deep_model() != *t
-                        && !prev.snoc(*cur).contains(child.deep_model())
-                        && 0 <= left_parents(old.nodes, prev.snoc(*cur), child.deep_model())
-                        && (counts.contains(&child.deep_model()) ==> counts[child.deep_model()]@
-                            == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1)
-                        && (!counts.contains(&child.deep_model()) ==> old.nodes[child.deep_model()]@.from.len()
-                            == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1));
-                    proof_assert!(nodes.model().contains(&child.deep_model())
-                        && nodes.model()[child.deep_model()]@.from == old.nodes[child.deep_model()]@.from);
-                    proof_assert!(
-                        nodes.model().lookup(child.deep_model())
-                            == Some(nodes.model()[child.deep_model()])
-                    );
-                    let remaining = match remaining_parents.entry(child) {
-                        Entry::Occupied(entry) => entry.into_mut(),
-                        Entry::Vacant(entry) => entry.insert(nodes[&child].from.len()),
-                    };
-                    proof_assert!(counts.contains(&child.deep_model())
-                        ==> (*remaining)@ == counts[child.deep_model()]@);
-                    proof_assert!(!counts.contains(&child.deep_model())
-                        ==> (*remaining)@ == nodes.model()[child.deep_model()]@.from.len());
-                    proof_assert!((*remaining)@
-                        == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1);
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                    {
-                        *remaining -= 1;
-                    }
-                    proof! {
-                        let nv = snapshot!(*remaining);
-                    }
-                    proof_assert!(nv@ == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()));
-
-                    if *remaining == 0 {
-                        stack.push(child);
-                    }
-                    proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
-                    proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, *prev, *cur, i@, *st, *counts, *nv));
-                    proof_assert!(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
-                        old.nodes[*cur]@.to.subsequence(0, i@), ids(stack.model()),
-                        remaining_parents.model()));
-                }
-                proof_assert!(cascade_next_ok(
-                    old.nodes,
-                    *rank,
-                    *t,
-                    *prev,
-                    *cur,
-                    ids(stack.model()),
-                    remaining_parents.model()
-                ));
+                proof_assert!(forall<k> old.nodes.contains(&k) && !prev.snoc(*cur).contains(k)
+                    ==> nodes.model().contains(&k) && nodes.model()[k]@.from == old.nodes[k]@.from);
+                Self::visit_children(
+                    nodes,
+                    &mut remaining_parents,
+                    &mut stack,
+                    &node,
+                    snapshot!(old.nodes),
+                    snapshot!(*rank),
+                    snapshot!(*t),
+                    snapshot!(*prev),
+                    snapshot!(*cur),
+                );
                 proof_assert!(cascade_outer(
                     old.nodes,
                     *rank,
@@ -3531,8 +3745,6 @@ where
             proof_assert!(!removed_active
                 ==> active_kept_ok(old.nodes, old.active, *done, remaining_parents.model()));
 
-            let mut children = guard.vec();
-
             proof! {
                 let n2 = snapshot!(nodes.model());
             }
@@ -3541,217 +3753,19 @@ where
 
             proof_assert!(forall<k> n2.contains(&k) ==> n2[k]@.from == old.nodes[k]@.from);
             proof_assert!(kept_in_order(*n2, old.nodes));
+            proof_assert!(done.len() == removed.model().len());
 
-            if removed.len() == 1 {
-                proof_assert!(forall<k> done.contains(k) == (k == *t));
-                extend_keys(&mut children, &remaining_parents);
-                proof_assert!(unparenting_start_ok(
-                    *n2,
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                proof_assert!(unparenting(
-                    *n2,
-                    nodes.model(),
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                let mut i = 0;
-                #[invariant(i@ <= children.model().len())]
-                #[invariant(unparenting(*n2, nodes.model(), *done,
-                    ids(children.model()).subsequence(0, i@)))]
-                #[invariant(kept_in_order(nodes.model(), old.nodes))]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(children.model().len() - i@)]
-                while i < children.len() {
-                    proof! {
-                        let before = snapshot!(nodes.model());
-                        let key = snapshot!(children.model()[i@].deep_model());
-                    }
-                    proof_assert!(prefix_step_ok(ids(children.model()), i@));
-                    proof_assert!(ids(children.model())[i@] == *key
-                        && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
-                            == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
-                    proof! {
-                        let mut cv = snapshot!(before[*key]);
-                    }
-                    if let Some(child) = nodes.get_mut(&children[i]) {
-                        proof_assert!(before.contains(&*key) && *child == before[*key]);
-                        proof! {
-                            let cfrom = snapshot!(child@.from);
-                        }
-                        child.from.shift_remove(id);
-                        proof_assert!(shift_removed_ok(child@.from, *cfrom, *t));
-                        proof_assert!(child@.id == before[*key]@.id
-                            && child@.to == before[*key]@.to
-                            && child@.active == before[*key]@.active
-                            && child@.bookmarked == before[*key]@.bookmarked);
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                        proof! {
-                            cv = snapshot!(*child);
-                        }
-                    }
-                    proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
-                    proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
-                    proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
-                        && cv@.to == before[*key]@.to
-                        && cv@.active == before[*key]@.active
-                        && cv@.bookmarked == before[*key]@.bookmarked
-                        && forall<p> cv@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                    proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
-                        ids(children.model()).subsequence(0, i@),
-                        ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
-                    proof_assert!(kept_parents_set_ok(
-                        old.nodes,
-                        *before,
-                        nodes.model(),
-                        *key,
-                        *cv
-                    ));
-                    proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model()).subsequence(0, i@ + 1)));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(children.model()));
-                    unparenting(*n2, nodes.model(), *done, ids(children.model()))
-                };
-                proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
-                    ==> remaining_parents.model().contains(&k) && ids(children.model()).contains(k));
-                if removed_bookmark {
-                    bookmarked.shift_remove(id);
-                    proof_assert!(shift_removed_ok(bookmarked.model(), old.bookmarked, *t));
-                }
-            } else {
-                let mut removed_set = guard.set_with_capacity(removed.len(), default_hasher());
-                let mut i = 0;
-                #[invariant(i@ <= removed.model().len())]
-                #[invariant(forall<k> removed_set.model().contains(&k)
-                    == ids(removed.model()).subsequence(0, i@).contains(k))]
-                #[invariant(nodes.model() == *n2)]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(removed.model().len() - i@)]
-                while i < removed.len() {
-                    proof_assert!(prefix_step_ok(ids(removed.model()), i@));
-                    proof_assert!(forall<x> ids(removed.model()).subsequence(0, i@ + 1).contains(x)
-                        == (ids(removed.model()).subsequence(0, i@).contains(x)
-                            || x == ids(removed.model())[i@]));
-                    proof_assert!(ids(removed.model())[i@] == removed.model()[i@].deep_model());
-                    removed_set.insert(removed[i]);
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(removed.model()));
-                    forall<k> removed_set.model().contains(&k) == done.contains(k)
-                };
-
-                extend_surviving_keys(&mut children, &remaining_parents);
-                proof_assert!(unparenting_start_ok(
-                    *n2,
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                proof_assert!(unparenting(
-                    *n2,
-                    nodes.model(),
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                let mut i = 0;
-                #[invariant(i@ <= children.model().len())]
-                #[invariant(unparenting(*n2, nodes.model(), *done,
-                    ids(children.model()).subsequence(0, i@)))]
-                #[invariant(kept_in_order(nodes.model(), old.nodes))]
-                #[invariant(forall<k> removed_set.model().contains(&k) == done.contains(k))]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(children.model().len() - i@)]
-                while i < children.len() {
-                    proof! {
-                        let before = snapshot!(nodes.model());
-                        let key = snapshot!(children.model()[i@].deep_model());
-                    }
-                    proof_assert!(prefix_step_ok(ids(children.model()), i@));
-                    proof_assert!(ids(children.model())[i@] == *key
-                        && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
-                            == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
-                    proof! {
-                        let mut cv = snapshot!(before[*key]);
-                    }
-                    if let Some(child) = nodes.get_mut(&children[i]) {
-                        proof_assert!(before.contains(&*key) && *child == before[*key]);
-                        retain_absent(&mut child.from, &removed_set);
-                        proof_assert!(child@.id == before[*key]@.id
-                            && child@.to == before[*key]@.to
-                            && child@.active == before[*key]@.active
-                            && child@.bookmarked == before[*key]@.bookmarked);
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !removed_set.model().contains(&p)));
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                        proof! {
-                            cv = snapshot!(*child);
-                        }
-                    }
-                    proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
-                    proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
-                    proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
-                        && cv@.to == before[*key]@.to
-                        && cv@.active == before[*key]@.active
-                        && cv@.bookmarked == before[*key]@.bookmarked
-                        && forall<p> cv@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                    proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
-                        ids(children.model()).subsequence(0, i@),
-                        ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
-                    proof_assert!(kept_parents_set_ok(
-                        old.nodes,
-                        *before,
-                        nodes.model(),
-                        *key,
-                        *cv
-                    ));
-                    proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model()).subsequence(0, i@ + 1)));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(children.model()));
-                    unparenting(*n2, nodes.model(), *done, ids(children.model()))
-                };
-                proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
-                    ==> remaining_parents.model().contains(&k) && remaining_parents.model()[k]@ > 0
-                        && ids(children.model()).contains(k));
-
-                if removed_bookmark {
-                    retain_absent(bookmarked, &removed_set);
-                }
-            }
-
-            proof_assert!(unparenting_done_ok(
-                *n1,
-                *n2,
-                nodes.model(),
-                *done,
-                ids(children.model())
-            ));
+            Self::unparent_survivors(
+                nodes,
+                bookmarked,
+                &guard,
+                id,
+                &removed,
+                &remaining_parents,
+                removed_bookmark,
+                snapshot!(old.nodes),
+                snapshot!(*n1),
+            );
             proof_assert!(pruned(*n1, nodes.model(), *done));
             proof_assert!(forall<k> bookmarked.model().contains(k)
                 == (old.bookmarked.contains(k) && !done.contains(k)));
@@ -3955,89 +3969,26 @@ where
                 && old.nodes[k]@.bookmarked == old.bookmarked.contains(k));
         proof_assert!(node@ == *n);
 
-        if node.from.is_empty() {
-            self.roots.shift_remove(id);
-            proof_assert!(shift_removed_ok(self.roots.model(), old.roots, *t));
-            proof_assert!(kept_sub_ok(self.nodes.model(), old.nodes));
-            proof_assert!(detaching_start_ok(old.nodes, *t, n.from));
-            proof_assert!(detaching(old.nodes, self.nodes.model(), *t, n.from));
-        } else {
-            proof_assert!(!old.roots.contains(*t));
-            proof_assert!(detaching_start_ok(old.nodes, *t, n.from.subsequence(0, 0)));
-            proof_assert!(detaching(
-                old.nodes,
-                self.nodes.model(),
-                *t,
-                n.from.subsequence(0, 0)
-            ));
-            proof_assert!(kept_sub_ok(self.nodes.model(), old.nodes));
-            let mut i = 0;
-            #[invariant(i@ <= node.from.model().len())]
-            #[invariant(detaching(old.nodes, self.nodes.model(), *t, n.from.subsequence(0, i@)))]
-            #[invariant(kept_in_order(self.nodes.model(), old.nodes))]
-            #[invariant(self.roots.model() == old.roots)]
-            #[invariant(self.active.model() == old.active)]
-            #[invariant(self.bookmarked.model() == old.bookmarked)]
-            #[variant(node.from.model().len() - i@)]
-            while i < node.from.len() {
-                proof! {
-                    let before = snapshot!(self.nodes.model());
-                    let key = snapshot!(n.from[i@]);
-                }
-                proof_assert!(prefix_step_ok(n.from, i@));
-                proof_assert!((forall<x> n.from.subsequence(0, i@ + 1).contains(x)
-                    == (n.from.subsequence(0, i@).contains(x) || x == *key))
-                    && !n.from.subsequence(0, i@).contains(*key));
-                if let Some(parent) = self.nodes.get_mut(&node.from[i]) {
-                    proof! {
-                        let pto = snapshot!(parent@.to);
-                        let pv = snapshot!(*parent);
-                    }
-                    parent.to.shift_remove(id);
-                    proof_assert!(shift_removed_ok(parent@.to, *pto, *t));
-                    proof_assert!(parent@.id == pv@.id && parent@.from == pv@.from
-                        && parent@.active == pv@.active && parent@.bookmarked == pv@.bookmarked);
-                }
-                proof_assert!(forall<k> k != *key ==> self.nodes.model().lookup(k) == before.lookup(k));
-                proof_assert!(self.nodes.model().contains(&*key) == before.contains(&*key));
-                proof_assert!(before.contains(&*key) ==> self.nodes.model()[*key]@.id == before[*key]@.id
-                    && self.nodes.model()[*key]@.from == before[*key]@.from
-                    && self.nodes.model()[*key]@.active == before[*key]@.active
-                    && self.nodes.model()[*key]@.bookmarked == before[*key]@.bookmarked
-                    && forall<c> self.nodes.model()[*key]@.to.contains(c)
-                        == (before[*key]@.to.contains(c) && c != *t));
-                proof_assert!(detaching_step_ok(old.nodes, *before, self.nodes.model(), *t,
-                    n.from.subsequence(0, i@), n.from.subsequence(0, i@ + 1), *key));
-                proof_assert!(kept_children_step_ok(
-                    old.nodes,
-                    *before,
-                    self.nodes.model(),
-                    *key
-                ));
-                proof_assert!(detaching(old.nodes, self.nodes.model(), *t, n.from.subsequence(0, i@ + 1)));
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                {
-                    i += 1;
-                }
-            }
-            proof_assert! { lemma_full_prefix(n.from); n.from.subsequence(0, n.from.len()) == n.from };
-        }
-        proof_assert!(detaching_done_ok(old.nodes, self.nodes.model(), *t, n.from));
-        proof_assert!(detached(old.nodes, self.nodes.model(), *t));
+        proof_assert!(self.nodes.model() == old.nodes.remove(*t));
+        Self::unlink_removed(
+            &mut self.nodes,
+            &mut self.roots,
+            &mut self.active,
+            id,
+            &node,
+            snapshot!(old.nodes),
+        );
 
         proof! {
             let n1 = snapshot!(self.nodes.model());
         }
+        proof_assert!(detached(old.nodes, *n1, *t));
         proof_assert!(forall<k> self.roots.model().contains(k) == (old.roots.contains(k) && k != *t));
         proof_assert!(kept_in_order(*n1, old.nodes));
         proof_assert!(filtered(self.roots.model(), old.roots, Seq::singleton(*t)));
 
         let mut removed_active = node.active;
         let mut removed_bookmark = node.bookmarked;
-
-        if removed_active {
-            self.active.remove(id);
-        }
 
         proof_assert!(forall<k> self.active.model().contains(&k) == (old.active.contains(&k) && k != *t));
         proof_assert!(removed_bookmark == old.bookmarked.contains(*t));
@@ -4172,94 +4123,19 @@ where
                     remaining_parents.model())
             };
 
-            let mut i = node.to.len();
-            proof_assert! { lemma_full_prefix(n.to); n.to.subsequence(0, i@) == n.to };
-            proof_assert!(cascade_ready_ok(old.nodes, Seq::<Id<K>>::empty().snoc(*t), n.to, Seq::<Id<K>>::empty(), i@));
-            #[invariant(i@ <= n.to.len())]
-            #[invariant(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
-                ids(stack.model()), remaining_parents.model()))]
-            #[invariant(nodes.model() == *n1)]
-            #[invariant(roots.model() == *r1)]
-            #[invariant(forall<k> active.model().contains(&k) == (old.active.contains(&k) && k != *t))]
-            #[invariant(bookmarked.model() == old.bookmarked)]
-            #[invariant(ids(removed.model()) == Seq::<Id<K>>::empty().snoc(*t))]
-            #[invariant(cascade_stack(
-                old.nodes,
-                Seq::<Id<K>>::empty().snoc(*t),
-                n.to,
-                Seq::<Id<K>>::empty(),
-                i@,
-                ids(stack.model()),
-            ))]
-            while i > 0 {
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                {
-                    i -= 1;
-                }
-                let child = node.to[i];
-                proof! {
-                    let counts = snapshot!(remaining_parents.model());
-                    let st = snapshot!(ids(stack.model()));
-                }
-                proof_assert!(cascade_count_ok(old.nodes, *rank, *t, Seq::empty(), *t, i@, *st, *counts));
-                proof_assert!(old.nodes.contains(&child.deep_model())
-                    && child.deep_model() != *t
-                    && 0 <= left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model())
-                    && (counts.contains(&child.deep_model()) ==> counts[child.deep_model()]@
-                        == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1)
-                    && (!counts.contains(&child.deep_model()) ==> old.nodes[child.deep_model()]@.from.len()
-                        == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1));
-                proof_assert!(nodes.model().contains(&child.deep_model())
-                    && nodes.model()[child.deep_model()]@.from == old.nodes[child.deep_model()]@.from);
-                proof_assert!(
-                    nodes.model().lookup(child.deep_model())
-                        == Some(nodes.model()[child.deep_model()])
-                );
-                let remaining = match remaining_parents.entry(child) {
-                    Entry::Occupied(entry) => entry.into_mut(),
-                    Entry::Vacant(entry) => entry.insert(nodes[&child].from.len()),
-                };
-                proof_assert!(counts.contains(&child.deep_model())
-                    ==> (*remaining)@ == counts[child.deep_model()]@);
-                proof_assert!(!counts.contains(&child.deep_model())
-                    ==> (*remaining)@ == nodes.model()[child.deep_model()]@.from.len());
-                proof_assert!((*remaining)@
-                    == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()) + 1);
-                #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                {
-                    *remaining -= 1;
-                }
-                proof! {
-                    let nv = snapshot!(*remaining);
-                }
-                proof_assert!(nv@ == left_parents(old.nodes, Seq::empty().snoc(*t), child.deep_model()));
-
-                if *remaining == 0 {
-                    stack.push(child);
-                }
-                proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
-                proof_assert!(cascade_ready_ok(old.nodes, Seq::<Id<K>>::empty().snoc(*t), n.to, Seq::<Id<K>>::empty(), i@));
-                proof_assert!(cascade_stack(
-                    old.nodes,
-                    Seq::<Id<K>>::empty().snoc(*t),
-                    n.to,
-                    Seq::<Id<K>>::empty(),
-                    i@,
-                    ids(stack.model()),
-                ));
-                proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, Seq::empty(), *t, i@, *st, *counts, *nv));
-                proof_assert!(cascade_inner(old.nodes, *rank, *t, Seq::empty(), *t, n.to.subsequence(0, i@),
-                    ids(stack.model()), remaining_parents.model()));
-            }
-            proof_assert!(cascade_next_ok(
-                old.nodes,
-                *rank,
-                *t,
-                Seq::empty(),
-                *t,
-                ids(stack.model()),
-                remaining_parents.model()
-            ));
+            proof_assert!(forall<k> old.nodes.contains(&k) && !Seq::<Id<K>>::empty().snoc(*t).contains(k)
+                ==> nodes.model().contains(&k) && nodes.model()[k]@.from == old.nodes[k]@.from);
+            Self::visit_children(
+                nodes,
+                &mut remaining_parents,
+                &mut stack,
+                &node,
+                snapshot!(old.nodes),
+                snapshot!(*rank),
+                snapshot!(*t),
+                snapshot!(Seq::empty()),
+                snapshot!(*t),
+            );
             proof_assert!(cascade_outer(
                 old.nodes,
                 *rank,
@@ -4380,102 +4256,19 @@ where
                 proof_assert!(forall<k> ns.contains(&k) ==> ns[k] == n1[k]);
                 proof_assert!(forall<k> n1.contains(&k) ==> n1[k]@.from == old.nodes[k]@.from);
 
-                let mut i = node.to.len();
-                proof_assert! {
-                    lemma_full_prefix(node.to.model());
-                    old.nodes[*cur]@.to.subsequence(0, i@) == old.nodes[*cur]@.to
-                };
-                proof_assert!(cascade_ready_ok(old.nodes, prev.snoc(*cur), old.nodes[*cur]@.to, *rest, i@));
-                #[invariant(i@ <= node.to.model().len())]
-                #[invariant(node.to.model() == old.nodes[*cur]@.to)]
-                #[invariant(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
-                    old.nodes[*cur]@.to.subsequence(0, i@), ids(stack.model()),
-                    remaining_parents.model()))]
-                #[invariant(nodes.model() == *ns)]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !ids(removed.model()).contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[invariant(ids(removed.model()) == prev.snoc(*cur))]
-                #[invariant(cascade_stack(
-                    old.nodes,
-                    prev.snoc(*cur),
-                    old.nodes[*cur]@.to,
-                    *rest,
-                    i@,
-                    ids(stack.model()),
-                ))]
-                while i > 0 {
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                    {
-                        i -= 1;
-                    }
-                    let child = node.to[i];
-                    proof! {
-                        let counts = snapshot!(remaining_parents.model());
-                        let st = snapshot!(ids(stack.model()));
-                    }
-                    proof_assert!(cascade_count_ok(old.nodes, *rank, *t, *prev, *cur, i@, *st, *counts));
-                    proof_assert!(old.nodes.contains(&child.deep_model())
-                        && child.deep_model() != *t
-                        && !prev.snoc(*cur).contains(child.deep_model())
-                        && 0 <= left_parents(old.nodes, prev.snoc(*cur), child.deep_model())
-                        && (counts.contains(&child.deep_model()) ==> counts[child.deep_model()]@
-                            == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1)
-                        && (!counts.contains(&child.deep_model()) ==> old.nodes[child.deep_model()]@.from.len()
-                            == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1));
-                    proof_assert!(nodes.model().contains(&child.deep_model())
-                        && nodes.model()[child.deep_model()]@.from == old.nodes[child.deep_model()]@.from);
-                    proof_assert!(
-                        nodes.model().lookup(child.deep_model())
-                            == Some(nodes.model()[child.deep_model()])
-                    );
-                    let remaining = match remaining_parents.entry(child) {
-                        Entry::Occupied(entry) => entry.into_mut(),
-                        Entry::Vacant(entry) => entry.insert(nodes[&child].from.len()),
-                    };
-                    proof_assert!(counts.contains(&child.deep_model())
-                        ==> (*remaining)@ == counts[child.deep_model()]@);
-                    proof_assert!(!counts.contains(&child.deep_model())
-                        ==> (*remaining)@ == nodes.model()[child.deep_model()]@.from.len());
-                    proof_assert!((*remaining)@
-                        == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()) + 1);
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never underflow")]
-                    {
-                        *remaining -= 1;
-                    }
-                    proof! {
-                        let nv = snapshot!(*remaining);
-                    }
-                    proof_assert!(nv@ == left_parents(old.nodes, prev.snoc(*cur), child.deep_model()));
-
-                    if *remaining == 0 {
-                        stack.push(child);
-                    }
-                    proof_assert!(remaining_parents.model() == counts.add(child.deep_model(), *nv));
-                    proof_assert!(cascade_ready_ok(old.nodes, prev.snoc(*cur), old.nodes[*cur]@.to, *rest, i@));
-                    proof_assert!(cascade_stack(
-                        old.nodes,
-                        prev.snoc(*cur),
-                        old.nodes[*cur]@.to,
-                        *rest,
-                        i@,
-                        ids(stack.model()),
-                    ));
-                    proof_assert!(cascade_visit_ok(old.nodes, *rank, *t, *prev, *cur, i@, *st, *counts, *nv));
-                    proof_assert!(cascade_inner(old.nodes, *rank, *t, *prev, *cur,
-                        old.nodes[*cur]@.to.subsequence(0, i@), ids(stack.model()),
-                        remaining_parents.model()));
-                }
-                proof_assert!(cascade_next_ok(
-                    old.nodes,
-                    *rank,
-                    *t,
-                    *prev,
-                    *cur,
-                    ids(stack.model()),
-                    remaining_parents.model()
-                ));
+                proof_assert!(forall<k> old.nodes.contains(&k) && !prev.snoc(*cur).contains(k)
+                    ==> nodes.model().contains(&k) && nodes.model()[k]@.from == old.nodes[k]@.from);
+                Self::visit_children(
+                    nodes,
+                    &mut remaining_parents,
+                    &mut stack,
+                    &node,
+                    snapshot!(old.nodes),
+                    snapshot!(*rank),
+                    snapshot!(*t),
+                    snapshot!(*prev),
+                    snapshot!(*cur),
+                );
                 proof_assert!(cascade_outer(
                     old.nodes,
                     *rank,
@@ -4558,8 +4351,6 @@ where
             proof_assert!(!removed_active
                 ==> active_kept_ok(old.nodes, old.active, *done, remaining_parents.model()));
 
-            let mut children = guard.vec();
-
             proof! {
                 let n2 = snapshot!(nodes.model());
             }
@@ -4568,222 +4359,19 @@ where
 
             proof_assert!(forall<k> n2.contains(&k) ==> n2[k]@.from == old.nodes[k]@.from);
             proof_assert!(kept_in_order(*n2, old.nodes));
+            proof_assert!(done.len() == removed.model().len());
 
-            if removed.len() == 1 {
-                proof_assert!(forall<k> done.contains(k) == (k == *t));
-                extend_keys(&mut children, &remaining_parents);
-                proof_assert!(unparenting_start_ok(
-                    *n2,
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                proof_assert!(unparenting(
-                    *n2,
-                    nodes.model(),
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                let mut i = 0;
-                #[invariant(i@ <= children.model().len())]
-                #[invariant(unparenting(*n2, nodes.model(), *done,
-                    ids(children.model()).subsequence(0, i@)))]
-                #[invariant(kept_in_order(nodes.model(), old.nodes))]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(children.model().len() - i@)]
-                while i < children.len() {
-                    proof! {
-                        let before = snapshot!(nodes.model());
-                        let key = snapshot!(children.model()[i@].deep_model());
-                    }
-                    proof_assert!(prefix_step_ok(ids(children.model()), i@));
-                    proof_assert!(ids(children.model())[i@] == *key
-                        && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
-                            == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
-                    proof! {
-                        let mut cv = snapshot!(before[*key]);
-                    }
-                    if let Some(child) = nodes.get_mut(&children[i]) {
-                        proof_assert!(before.contains(&*key) && *child == before[*key]);
-                        proof! {
-                            let cfrom = snapshot!(child@.from);
-                        }
-                        child.from.shift_remove(id);
-                        proof_assert!(shift_removed_ok(child@.from, *cfrom, *t));
-                        proof_assert!(child@.id == before[*key]@.id
-                            && child@.to == before[*key]@.to
-                            && child@.active == before[*key]@.active
-                            && child@.bookmarked == before[*key]@.bookmarked);
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                        proof! {
-                            cv = snapshot!(*child);
-                        }
-                    }
-                    proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
-                    proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
-                    proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
-                        && cv@.to == before[*key]@.to
-                        && cv@.active == before[*key]@.active
-                        && cv@.bookmarked == before[*key]@.bookmarked
-                        && forall<p> cv@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                    proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
-                        ids(children.model()).subsequence(0, i@),
-                        ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
-                    proof_assert!(kept_parents_set_ok(
-                        old.nodes,
-                        *before,
-                        nodes.model(),
-                        *key,
-                        *cv
-                    ));
-                    proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model()).subsequence(0, i@ + 1)));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(children.model()));
-                    unparenting(*n2, nodes.model(), *done, ids(children.model()))
-                };
-                proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
-                    ==> remaining_parents.model().contains(&k) && ids(children.model()).contains(k));
-                if removed_bookmark {
-                    bookmarked.shift_remove(id);
-                    proof_assert!(shift_removed_ok(bookmarked.model(), old.bookmarked, *t));
-                }
-            } else {
-                let mut removed_set = guard.set_with_capacity(removed.len(), default_hasher());
-                let mut i = 0;
-                #[invariant(i@ <= removed.model().len())]
-                #[invariant(forall<k> removed_set.model().contains(&k)
-                    == ids(removed.model()).subsequence(0, i@).contains(k))]
-                #[invariant(nodes.model() == *n2)]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(removed.model().len() - i@)]
-                while i < removed.len() {
-                    proof_assert!(prefix_step_ok(ids(removed.model()), i@));
-                    proof_assert!(forall<x> ids(removed.model()).subsequence(0, i@ + 1).contains(x)
-                        == (ids(removed.model()).subsequence(0, i@).contains(x)
-                            || x == ids(removed.model())[i@]));
-                    proof_assert!(ids(removed.model())[i@] == removed.model()[i@].deep_model());
-                    removed_set.insert(removed[i]);
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(removed.model()));
-                    forall<k> removed_set.model().contains(&k) == done.contains(k)
-                };
-
-                extend_surviving_keys(&mut children, &remaining_parents);
-                proof_assert!(unparenting_start_ok(
-                    *n2,
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                proof_assert!(unparenting(
-                    *n2,
-                    nodes.model(),
-                    *done,
-                    ids(children.model()).subsequence(0, 0)
-                ));
-                let mut i = 0;
-                #[invariant(i@ <= children.model().len())]
-                #[invariant(unparenting(*n2, nodes.model(), *done,
-                    ids(children.model()).subsequence(0, i@)))]
-                #[invariant(kept_in_order(nodes.model(), old.nodes))]
-                #[invariant(forall<k> removed_set.model().contains(&k) == done.contains(k))]
-                #[invariant(forall<k> active.model().contains(&k)
-                    == (old.active.contains(&k) && !done.contains(k)))]
-                #[invariant(roots.model() == *r1)]
-                #[invariant(bookmarked.model() == old.bookmarked)]
-                #[variant(children.model().len() - i@)]
-                while i < children.len() {
-                    proof! {
-                        let before = snapshot!(nodes.model());
-                        let key = snapshot!(children.model()[i@].deep_model());
-                    }
-                    proof_assert!(prefix_step_ok(ids(children.model()), i@));
-                    proof_assert!(ids(children.model())[i@] == *key
-                        && forall<x> ids(children.model()).subsequence(0, i@ + 1).contains(x)
-                            == (ids(children.model()).subsequence(0, i@).contains(x) || x == *key));
-                    proof! {
-                        let mut cv = snapshot!(before[*key]);
-                    }
-                    if let Some(child) = nodes.get_mut(&children[i]) {
-                        proof_assert!(before.contains(&*key) && *child == before[*key]);
-                        retain_absent(&mut child.from, &removed_set);
-                        proof_assert!(child@.id == before[*key]@.id
-                            && child@.to == before[*key]@.to
-                            && child@.active == before[*key]@.active
-                            && child@.bookmarked == before[*key]@.bookmarked);
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !removed_set.model().contains(&p)));
-                        proof_assert!(forall<p> child@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                        proof! {
-                            cv = snapshot!(*child);
-                        }
-                    }
-                    proof_assert!(before.contains(&*key) ==> nodes.model() == before.add(*key, *cv));
-                    proof_assert!(!before.contains(&*key) ==> nodes.model() == *before);
-                    proof_assert!(before.contains(&*key) ==> cv@.id == before[*key]@.id
-                        && cv@.to == before[*key]@.to
-                        && cv@.active == before[*key]@.active
-                        && cv@.bookmarked == before[*key]@.bookmarked
-                        && forall<p> cv@.from.contains(p)
-                            == (before[*key]@.from.contains(p) && !done.contains(p)));
-                    proof_assert!(unparenting_set_ok(*n2, *before, nodes.model(), *done,
-                        ids(children.model()).subsequence(0, i@),
-                        ids(children.model()).subsequence(0, i@ + 1), *key, *cv));
-                    proof_assert!(kept_parents_set_ok(
-                        old.nodes,
-                        *before,
-                        nodes.model(),
-                        *key,
-                        *cv
-                    ));
-                    proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model()).subsequence(0, i@ + 1)));
-                    #[allow(clippy::arithmetic_side_effects, reason = "Can never overflow")]
-                    {
-                        i += 1;
-                    }
-                }
-                proof_assert! {
-                    lemma_full_prefix(ids(children.model()));
-                    unparenting(*n2, nodes.model(), *done, ids(children.model()))
-                };
-                proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
-                    ==> remaining_parents.model().contains(&k) && remaining_parents.model()[k]@ > 0
-                        && ids(children.model()).contains(k));
-
-                if removed_bookmark {
-                    retain_absent(bookmarked, &removed_set);
-                }
-            }
-
-            proof_assert!(forall<k> n2.contains(&k) == (n1.contains(&k) && !done.contains(k)));
-            proof_assert!(forall<k> n2.contains(&k) ==> n2[k] == n1[k]);
-            proof_assert!(unparenting(*n2, nodes.model(), *done, ids(children.model())));
-            proof_assert!(forall<k, p> n2.contains(&k) && n2[k]@.from.contains(p) && done.contains(p)
-                ==> ids(children.model()).contains(k));
-            proof_assert!(unparenting_done_ok(
-                *n1,
-                *n2,
-                nodes.model(),
-                *done,
-                ids(children.model())
-            ));
+            Self::unparent_survivors(
+                nodes,
+                bookmarked,
+                &guard,
+                id,
+                &removed,
+                &remaining_parents,
+                removed_bookmark,
+                snapshot!(old.nodes),
+                snapshot!(*n1),
+            );
             proof_assert!(pruned(*n1, nodes.model(), *done));
             proof_assert!(forall<k> bookmarked.model().contains(k)
                 == (old.bookmarked.contains(k) && !done.contains(k)));
@@ -5116,7 +4704,7 @@ where
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
     fn sort_children_by_id(&mut self, id: &K, cmp: impl FnMut(&K, &K) -> Ordering) -> bool {
-        snapshot! { lemma_reflagged((*self)@) };
+        snapshot! { lemma_children_reordered((*self)@, id.deep_model()) };
 
         if let Some(node) = self.nodes.get_mut(id) {
             node.to.sort_by(cmp);

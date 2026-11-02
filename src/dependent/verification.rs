@@ -265,16 +265,6 @@ where
     }
 }
 
-/// `s` lists each node of `nodes` exactly once.
-#[logic(open)]
-pub fn lists_nodes<K, T, S>(nodes: Nodes<K, T, S>, s: Seq<Id<K>>) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    S: BuildHasher + Default + Clone,
-{
-    pearlite! { no_dup(s) && forall<k> s.contains(k) == nodes.contains(&k) }
-}
-
 /// The empty forest is acyclic.
 #[logic]
 #[ensures(acyclic(FMap::<Id<K>, DependentNode<K, T, S>>::empty()))]
@@ -331,6 +321,75 @@ where
         proof_assert!(forall<new: DependentWeaveView<K, T, S>> reflagged(old, new)
             ==> forall<k> new.nodes.contains(&k) ==> linked(new.nodes, k))
     }
+}
+
+/// `new` is `old` with node `id`'s bookmark set to `value`.
+#[logic(open)]
+pub fn rebookmarked<K, T, S>(
+    old: DependentWeaveView<K, T, S>,
+    new: DependentWeaveView<K, T, S>,
+    id: Id<K>,
+    value: bool,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let n = old.nodes[id]@;
+        old.nodes.contains(&id)
+            && (forall<k> new.nodes.contains(&k) == old.nodes.contains(&k))
+            && (forall<k> k != id ==> new.nodes[k]@ == old.nodes[k]@)
+            && new.nodes[id]@ == NodeView {
+                id: n.id,
+                from: n.from,
+                to: n.to,
+                active: n.active,
+                bookmarked: value,
+            }
+            && new.roots == old.roots
+            && new.active == old.active
+            && no_dup(new.bookmarked)
+            && forall<k> new.bookmarked.contains(k)
+                == if k == id { value } else { old.bookmarked.contains(k) }
+    }
+}
+
+/// Changing one node's bookmark preserves validity.
+#[logic]
+#[requires(old.valid())]
+#[requires(rebookmarked(old, new, id, value))]
+#[ensures(new.valid())]
+pub fn lemma_rebookmarked_valid<K, T, S>(
+    old: DependentWeaveView<K, T, S>,
+    new: DependentWeaveView<K, T, S>,
+    id: Id<K>,
+    value: bool,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        proof_assert!(forall<k> new.nodes.contains(&k) ==> new.nodes[k]@.from == old.nodes[k]@.from
+            && new.nodes[k]@.to == old.nodes[k]@.to && new.nodes[k]@.id == old.nodes[k]@.id
+            && new.nodes[k]@.active == old.nodes[k]@.active);
+        proof_assert!(ranked(new.nodes, rank_of(old.nodes)));
+        proof_assert!(forall<k> new.nodes.contains(&k) ==> linked(old.nodes, k) && linked(new.nodes, k));
+        proof_assert!(forall<k> new.nodes.contains(&k) ==> new.flagged(k))
+    }
+}
+
+/// Changing one node's bookmark preserves validity.
+#[logic]
+#[requires(old.valid())]
+#[ensures(forall<new: DependentWeaveView<K, T, S>> #[trigger(new.valid())]
+    rebookmarked(old, new, id, value) ==> new.valid())]
+pub fn lemma_rebookmarked<K, T, S>(old: DependentWeaveView<K, T, S>, id: Id<K>, value: bool)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    S: BuildHasher + Default + Clone,
+{
+    let _ = lemma_rebookmarked_valid::<K, T, S>;
 }
 
 /// Every node of `nodes` is linked to the rest of it.
@@ -1071,19 +1130,6 @@ pub fn lemma_split_valid<K, T, S>(
     }
 }
 
-/// Splitting a node of `old` keeps it valid.
-#[logic]
-#[requires(old.valid())]
-#[ensures(forall<new: DependentWeaveView<K, T, S>> #[trigger(new.valid())]
-    split_shape(old, new, id, new_id) ==> new.valid())]
-pub fn lemma_split<K, T, S>(old: DependentWeaveView<K, T, S>, id: Id<K>, new_id: Id<K>)
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    S: BuildHasher + Default + Clone,
-{
-    let _ = lemma_split_valid::<K, T, S>;
-}
-
 /// `new` is `old` once node `id` is merged into its parent `p`, which was `id`'s only parent and
 /// takes its children, active status and bookmark: if only `id` was bookmarked, `p` takes its place
 /// among the bookmarks.
@@ -1175,19 +1221,6 @@ pub fn lemma_merge_valid<K, T, S>(
             ==> linked(new.nodes, k));
         proof_assert!(forall<k> new.nodes.contains(&k) ==> new.flagged(k))
     }
-}
-
-/// Merging a node of `old` into its parent keeps it valid.
-#[logic]
-#[requires(old.valid())]
-#[ensures(forall<new: DependentWeaveView<K, T, S>> #[trigger(new.valid())]
-    merge_shape(old, new, id, p) ==> new.valid())]
-pub fn lemma_merge<K, T, S>(old: DependentWeaveView<K, T, S>, id: Id<K>, p: Id<K>)
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    S: BuildHasher + Default + Clone,
-{
-    let _ = lemma_merge_valid::<K, T, S>;
 }
 
 /// A proper descendant has a parent, from which it descends.

@@ -263,23 +263,6 @@ where
     }
 }
 
-/// A set which [`covers`] `within` contains all of its [`ancestry`].
-#[logic]
-#[ensures(result == covers(nodes, within, set))]
-#[ensures(result ==> forall<k> ancestry(nodes, within)[k] ==> set.contains(&k))]
-pub fn ancestry_closed_ok<K, T, S>(
-    nodes: Nodes<K, T, S>,
-    within: FSet<Id<K>>,
-    set: FSet<Id<K>>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    covers(nodes, within, set)
-}
-
 /// The active path is unchanged when it is already a path to a root through the nodes of
 /// `within`.
 #[logic]
@@ -304,43 +287,6 @@ where
             && forall<k> nodes.contains(&k) && within.contains(&k) ==> after.contains(&k);
         proof_assert!(pre ==> present(nodes, within).ext_eq(after));
         pre
-    }
-}
-
-/// Otherwise, it is the path which `longest_candidate_path_to_root` finds.
-#[logic]
-#[ensures(result == (!forms_path(nodes, present(nodes, within))
-    && order == roots_kahn(nodes, ancestry(nodes, within), roots)
-    && candidate == member_within(nodes, within)
-    && no_dup(order)
-    && path_of(nodes, after, path)
-    && first_longest(nodes, order, candidate, path)))]
-#[ensures(result ==> reactivated_within(nodes, roots, within, after))]
-#[allow(
-    clippy::too_many_arguments,
-    reason = "The path and what it is found from"
-)]
-pub fn reactivated_route_ok<K, T, S>(
-    nodes: Nodes<K, T, S>,
-    roots: Seq<Id<K>>,
-    within: FSet<Id<K>>,
-    after: FSet<Id<K>>,
-    order: Seq<Id<K>>,
-    candidate: Mapping<Id<K>, bool>,
-    path: Seq<Id<K>>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    pearlite! {
-        !forms_path(nodes, present(nodes, within))
-            && order == roots_kahn(nodes, ancestry(nodes, within), roots)
-            && candidate == member_within(nodes, within)
-            && no_dup(order)
-            && path_of(nodes, after, path)
-            && first_longest(nodes, order, candidate, path)
     }
 }
 

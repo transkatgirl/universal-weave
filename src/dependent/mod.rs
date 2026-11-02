@@ -7,10 +7,10 @@ use core::{
     mem,
 };
 
-use creusot_std::macros::*;
+use creusot_std::{macros::*, snapshot::Snapshot};
 use hashbrown::{HashMap, HashSet, hash_map::Entry};
 use indexmap::IndexSet;
-use scratchpads::{Scratchpad, ScratchpadVec, allocator_api2::alloc::Allocator};
+use scratchpads::{Scratchpad, ScratchpadSet, ScratchpadVec, allocator_api2::alloc::Allocator};
 
 #[cfg(creusot)]
 use creusot_std::prelude::*;
@@ -52,14 +52,22 @@ use crate::verification::{
     lemma_calls_snoc, lemma_concat_contains, lemma_concat_snoc, lemma_empty_snoc,
     lemma_full_prefix, lemma_ids_empty, lemma_ids_singleton, lemma_ids_snoc, lemma_in_order_refl,
     lemma_in_order_shift_remove, lemma_prefix_contains, lemma_replaced_in_place, lemma_reverse,
-    lemma_snoc_contains, lemma_sorted_agree, lemma_subset_len, no_dup, order_by, same_elements,
-    sorted_stably, total_preorder, value_of,
+    lemma_snoc_contains, lemma_sorted_agree, lemma_subset_len, no_dup, order_by,
+    reverse_prefix_step_ok, same_elements, sorted_stably, total_preorder, value_of,
 };
 #[cfg(creusot)]
 use creusot_std::logic::Mapping;
 
 #[cfg(creusot)]
 use verification::*;
+
+#[cfg(not(creusot))]
+use core::marker::PhantomData;
+
+/// Outside of Creusot, the ghost argument of [`unlink_subtree`] is a zero-sized snapshot, and this
+/// stands in for the type of what it holds.
+#[cfg(not(creusot))]
+type DependentWeaveView<K, T, S> = PhantomData<(K, T, S)>;
 
 #[cfg(feature = "loro")]
 pub mod loro;
@@ -936,15 +944,6 @@ where
                 lemma_dfs_done(old.nodes, *sources, *added);
                 forall<d> added.contains(d) == in_subtree(old.nodes, *target, d)
             };
-            proof_assert! {
-                lemma_parent_outside(old.nodes, *target);
-                match old.nodes[*target]@.from {
-                    Some(p) => nodes.model().contains(&p) && old.nodes[p]@.to.contains(*target),
-                    None => old.roots.contains(*target),
-                }
-            };
-            proof_assert!(forall<k> old.bookmarked.contains(k) && in_subtree(old.nodes, *target, k)
-                ==> removed_bookmarks.model().contains(&k));
             proof_assert!(
                 removed_active
                     == match old.active {
@@ -952,64 +951,17 @@ where
                         None => false,
                     }
             );
-            let parent_node = match &removed.from {
-                Some(parent_id) => nodes.get_mut(parent_id),
-                None => None,
-            };
-            if let Some(parent_node) = parent_node {
-                proof! {
-                    let children = snapshot!(parent_node.to.model());
-                }
-                parent_node.to.shift_remove(id);
-                proof_assert! {
-                    lemma_in_order_shift_remove(parent_node.to.model(), *children, id.deep_model());
-                    in_order(parent_node.to.model(), *children)
-                };
-            }
-            if !removed_bookmarks.is_empty() {
-                retain_absent(bookmarked, &removed_bookmarks);
-            }
-            if removed_active {
-                *active = removed.from;
-
-                if let Some(parent_id) = *active
-                    && let Some(node) = nodes.get_mut(&parent_id)
-                {
-                    node.active = true;
-                }
-            }
-            proof! {
-                let new = snapshot!(DependentWeaveView {
-                    nodes: nodes.model(),
-                    roots: roots.model(),
-                    active: active.deep_model(),
-                    bookmarked: bookmarked.model(),
-                });
-            }
-            proof_assert!(forall<k> new.nodes.contains(&k)
-                == (old.nodes.contains(&k) && !in_subtree(old.nodes, *target, k)));
-            proof_assert!(forall<k> new.roots.contains(k) == (old.roots.contains(k) && k != *target));
-            proof_assert!(new.active == old.active_after_removal(*target));
-            proof_assert!(forall<k> new.bookmarked.contains(k)
-                == (old.bookmarked.contains(k) && !in_subtree(old.nodes, *target, k)));
-            proof_assert!(forall<k> new.nodes.contains(&k) ==> new.nodes[k]@.id == old.nodes[k]@.id
-                && new.nodes[k]@.from == old.nodes[k]@.from
-                && new.nodes[k]@.bookmarked == old.nodes[k]@.bookmarked
-                && new.nodes[k].contents == old.nodes[k].contents
-                && new.nodes[k]@.active == (new.active == Some(k))
-                && forall<c> new.nodes[k]@.to.contains(c) == (old.nodes[k]@.to.contains(c) && c != *target));
-            proof_assert!(removal_shape(*old, *new, *target));
-            proof_assert! {
-                let _ = lemma_in_order_refl::<Id<K>>;
-                in_order(new.roots, old.roots)
-                    && in_order(new.bookmarked, old.bookmarked)
-                    && forall<k> new.nodes.contains(&k) ==> in_order(new.nodes[k]@.to, old.nodes[k]@.to)
-            };
-            proof_assert! {
-                lemma_subset_len(new.bookmarked, old.bookmarked);
-                new.bookmarked.len() <= old.bookmarked.len()
-            };
-            proof_assert! { lemma_remove_valid(*old, *new, *target); new.valid() };
+            unlink_subtree(
+                nodes,
+                roots,
+                active,
+                bookmarked,
+                id,
+                removed.from,
+                &removed_bookmarks,
+                removed_active,
+                snapshot!(*old),
+            );
             Some(removed)
         } else {
             proof_assert! {
@@ -1229,15 +1181,6 @@ where
                 added.concat_empty();
                 *added == preorder(old.nodes, *sources)
             };
-            proof_assert! {
-                lemma_parent_outside(old.nodes, *target);
-                match old.nodes[*target]@.from {
-                    Some(p) => nodes.model().contains(&p) && old.nodes[p]@.to.contains(*target),
-                    None => old.roots.contains(*target),
-                }
-            };
-            proof_assert!(forall<k> old.bookmarked.contains(k) && in_subtree(old.nodes, *target, k)
-                ==> removed_bookmarks.model().contains(&k));
             proof_assert!(
                 removed_active
                     == match old.active {
@@ -1245,64 +1188,17 @@ where
                         None => false,
                     }
             );
-            let parent_node = match &parent {
-                Some(parent_id) => nodes.get_mut(parent_id),
-                None => None,
-            };
-            if let Some(parent_node) = parent_node {
-                proof! {
-                    let children = snapshot!(parent_node.to.model());
-                }
-                parent_node.to.shift_remove(id);
-                proof_assert! {
-                    lemma_in_order_shift_remove(parent_node.to.model(), *children, id.deep_model());
-                    in_order(parent_node.to.model(), *children)
-                };
-            }
-            if !removed_bookmarks.is_empty() {
-                retain_absent(bookmarked, &removed_bookmarks);
-            }
-            if removed_active {
-                *active = parent;
-
-                if let Some(parent_id) = *active
-                    && let Some(node) = nodes.get_mut(&parent_id)
-                {
-                    node.active = true;
-                }
-            }
-            proof! {
-                let new = snapshot!(DependentWeaveView {
-                    nodes: nodes.model(),
-                    roots: roots.model(),
-                    active: active.deep_model(),
-                    bookmarked: bookmarked.model(),
-                });
-            }
-            proof_assert!(forall<k> new.nodes.contains(&k)
-                == (old.nodes.contains(&k) && !in_subtree(old.nodes, *target, k)));
-            proof_assert!(forall<k> new.roots.contains(k) == (old.roots.contains(k) && k != *target));
-            proof_assert!(new.active == old.active_after_removal(*target));
-            proof_assert!(forall<k> new.bookmarked.contains(k)
-                == (old.bookmarked.contains(k) && !in_subtree(old.nodes, *target, k)));
-            proof_assert!(forall<k> new.nodes.contains(&k) ==> new.nodes[k]@.id == old.nodes[k]@.id
-                && new.nodes[k]@.from == old.nodes[k]@.from
-                && new.nodes[k]@.bookmarked == old.nodes[k]@.bookmarked
-                && new.nodes[k].contents == old.nodes[k].contents
-                && new.nodes[k]@.active == (new.active == Some(k))
-                && forall<c> new.nodes[k]@.to.contains(c) == (old.nodes[k]@.to.contains(c) && c != *target));
-            proof_assert!(removal_shape(*old, *new, *target));
-            proof_assert! {
-                let _ = lemma_in_order_refl::<Id<K>>;
-                in_order(new.roots, old.roots)
-                    && in_order(new.bookmarked, old.bookmarked)
-                    && forall<k> new.nodes.contains(&k) ==> in_order(new.nodes[k]@.to, old.nodes[k]@.to)
-            };
-            proof_assert! {
-                lemma_subset_len(new.bookmarked, old.bookmarked);
-                new.bookmarked.len() <= old.bookmarked.len()
-            };
-            proof_assert! { lemma_remove_valid(*old, *new, *target); new.valid() };
+            unlink_subtree(
+                nodes,
+                roots,
+                active,
+                bookmarked,
+                id,
+                parent,
+                &removed_bookmarks,
+                removed_active,
+                snapshot!(*old),
+            );
             true
         } else {
             proof_assert! {
@@ -1320,6 +1216,8 @@ where
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
     fn clear(&mut self) {
+        snapshot! { lemma_empty_acyclic::<K, T, S> };
+
         self.nodes.clear();
         self.roots.clear();
         self.active = None;
@@ -1404,7 +1302,7 @@ where
     #[ensures((^self).metadata == self.metadata)]
     #[check(terminates)]
     fn set_bookmarked(&mut self, id: &K, value: bool) -> bool {
-        snapshot! { lemma_reflagged((*self)@) };
+        snapshot! { lemma_rebookmarked((*self)@, id.deep_model(), value) };
 
         match self.nodes.get_mut(id) {
             Some(node) => {
@@ -1836,13 +1734,14 @@ where
     // Beyond the contract: the metadata is unchanged.
     #[ensures((^self).metadata == self.metadata)]
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
-        snapshot! { lemma_reflagged((*self)@) };
         snapshot! { lemma_prefix_contains::<Id<K>> };
         snapshot! { lemma_full_prefix::<Id<K>> };
         proof! {
             let old = snapshot!((*self)@);
         }
 
+        proof_assert!(!old.nodes.contains(&id.deep_model())
+            ==> old.nodes.remove(id.deep_model()).ext_eq(old.nodes));
         if let Some(mut node) = self.nodes.remove(id) {
             proof! {
                 let p = snapshot!(match old.nodes[id.deep_model()]@.from {
@@ -1850,7 +1749,6 @@ where
                     None => id.deep_model(),
                 });
             }
-            snapshot! { lemma_merge(*old, id.deep_model(), *p) };
             let parent = match &node.from {
                 Some(parent_id) => self.nodes.remove(parent_id),
                 None => None,
@@ -1858,8 +1756,14 @@ where
             if let Some(mut parent) = parent {
                 if parent.to.len() > 1 {
                     self.nodes.insert(parent.id, parent);
+                    proof_assert!(node.id.deep_model() == id.deep_model());
+                    proof_assert!(
+                        self.nodes
+                            .model()
+                            .add(id.deep_model(), node)
+                            .ext_eq(old.nodes)
+                    );
                     self.nodes.insert(node.id, node);
-                    proof_assert!(self.nodes.model().ext_eq(old.nodes));
                     return None;
                 }
 
@@ -1868,8 +1772,14 @@ where
                         parent.contents = left;
                         node.contents = right;
                         self.nodes.insert(parent.id, parent);
+                        proof_assert!(node.id.deep_model() == id.deep_model());
+                        proof_assert!(
+                            self.nodes
+                                .model()
+                                .add(id.deep_model(), node)
+                                .ext_eq(old.nodes)
+                        );
                         self.nodes.insert(node.id, node);
-                        proof_assert!(self.nodes.model().ext_eq(old.nodes));
                         None
                     }
                     DiscreteContentResult::One(content) => {
@@ -1937,14 +1847,34 @@ where
                             self.bookmarked.shift_remove(&node.id);
                         }
 
+                        proof! {
+                            let view = snapshot!(DependentWeaveView {
+                                nodes: self.nodes.model().add(*p, parent),
+                                roots: self.roots.model(),
+                                active: self.active.deep_model(),
+                                bookmarked: self.bookmarked.model(),
+                            });
+                        }
+                        proof_assert!(parent.id.deep_model() == *p);
+                        proof_assert!(merge_shape(*old, *view, id.deep_model(), *p));
+                        proof_assert! {
+                            lemma_merge_valid(*old, *view, id.deep_model(), *p);
+                            view.valid()
+                        };
                         self.nodes.insert(parent.id, parent);
 
                         Some(parent_id)
                     }
                 }
             } else {
+                proof_assert!(node.id.deep_model() == id.deep_model());
+                proof_assert!(
+                    self.nodes
+                        .model()
+                        .add(id.deep_model(), node)
+                        .ext_eq(old.nodes)
+                );
                 self.nodes.insert(node.id, node);
-                proof_assert!(self.nodes.model().ext_eq(old.nodes));
                 None
             }
         } else {
@@ -2692,6 +2622,136 @@ where
     scratchpad_set.len() != nodes.len()
 }
 
+/// Unlinks the subtree rooted at `id`, whose nodes have been taken out of `nodes`, from the rest of
+/// the weave: from the children of its parent `parent` and from the bookmarks. If `removed_active`
+/// says that the active node was in the subtree, `parent` becomes active instead.
+#[check(terminates)]
+#[requires(old.valid())]
+#[requires(old.nodes.contains(&id.deep_model()))]
+#[requires(parent.deep_model() == old.nodes[id.deep_model()]@.from)]
+#[requires(forall<k> nodes.model().lookup(k)
+    == if in_subtree(old.nodes, id.deep_model(), k) { None } else { old.nodes.lookup(k) })]
+#[requires(forall<k> removed_bookmarks.model().contains(&k)
+    == (in_subtree(old.nodes, id.deep_model(), k) && old.nodes[k]@.bookmarked))]
+#[requires(removed_active == match old.active {
+    Some(a) => in_subtree(old.nodes, id.deep_model(), a),
+    None => false,
+})]
+#[requires(active.deep_model() == if removed_active { None } else { old.active })]
+#[requires(forall<k> roots.model().contains(k) == (old.roots.contains(k) && k != id.deep_model()))]
+#[requires(in_order(roots.model(), old.roots))]
+#[requires(bookmarked.model() == old.bookmarked)]
+#[ensures(forall<k> (^nodes).model().contains(&k) == nodes.model().contains(&k))]
+#[ensures((^nodes).model().len() == nodes.model().len())]
+#[ensures({
+    let new = DependentWeaveView {
+        nodes: (^nodes).model(),
+        roots: roots.model(),
+        active: (^active).deep_model(),
+        bookmarked: (^bookmarked).model(),
+    };
+    removal_shape(*old, new, id.deep_model()) && new.valid()
+})]
+#[ensures(forall<k> (^nodes).model().contains(&k)
+    ==> survives_removal((^nodes).model()[k], old.nodes[k], id.deep_model()))]
+#[ensures(forall<k> (^nodes).model().contains(&k)
+    ==> in_order((^nodes).model()[k]@.to, old.nodes[k]@.to))]
+#[ensures(in_order((^bookmarked).model(), old.bookmarked))]
+#[ensures((^bookmarked).model().len() <= old.bookmarked.len())]
+#[cfg_attr(
+    not(creusot),
+    allow(unused_variables, reason = "Only its contract and proof use them")
+)]
+#[allow(
+    clippy::too_many_arguments,
+    reason = "The parts of the weave and the removal's state"
+)]
+#[allow(clippy::option_if_let_else, reason = "Closures can't be proven to end")]
+fn unlink_subtree<K, T, S>(
+    nodes: &mut HashMap<K, DependentNode<K, T, S>, S>,
+    roots: &IndexSet<K, S>,
+    active: &mut Option<K>,
+    bookmarked: &mut IndexSet<K, S>,
+    id: &K,
+    parent: Option<K>,
+    removed_bookmarks: &ScratchpadSet<'_, K, S>,
+    removed_active: bool,
+    old: Snapshot<DependentWeaveView<K, T, S>>,
+) where
+    K: Hash + Copy + Eq + Ord + Verifiable,
+    S: BuildHasher + Default + Clone,
+{
+    proof! {
+        let target = snapshot!(id.deep_model());
+    }
+    proof_assert! {
+        lemma_parent_outside(old.nodes, *target);
+        match old.nodes[*target]@.from {
+            Some(p) => nodes.model().contains(&p) && old.nodes[p]@.to.contains(*target),
+            None => old.roots.contains(*target),
+        }
+    };
+    proof_assert!(forall<k> old.bookmarked.contains(k) && in_subtree(old.nodes, *target, k)
+        ==> removed_bookmarks.model().contains(&k));
+    let parent_node = match &parent {
+        Some(parent_id) => nodes.get_mut(parent_id),
+        None => None,
+    };
+    if let Some(parent_node) = parent_node {
+        proof! {
+            let children = snapshot!(parent_node.to.model());
+        }
+        parent_node.to.shift_remove(id);
+        proof_assert! {
+            lemma_in_order_shift_remove(parent_node.to.model(), *children, id.deep_model());
+            in_order(parent_node.to.model(), *children)
+        };
+    }
+    if !removed_bookmarks.is_empty() {
+        retain_absent(bookmarked, removed_bookmarks);
+    }
+    if removed_active {
+        *active = parent;
+
+        if let Some(parent_id) = *active
+            && let Some(node) = nodes.get_mut(&parent_id)
+        {
+            node.active = true;
+        }
+    }
+    proof! {
+        let new = snapshot!(DependentWeaveView {
+            nodes: nodes.model(),
+            roots: roots.model(),
+            active: active.deep_model(),
+            bookmarked: bookmarked.model(),
+        });
+    }
+    proof_assert!(forall<k> new.nodes.contains(&k)
+        == (old.nodes.contains(&k) && !in_subtree(old.nodes, *target, k)));
+    proof_assert!(forall<k> new.roots.contains(k) == (old.roots.contains(k) && k != *target));
+    proof_assert!(new.active == old.active_after_removal(*target));
+    proof_assert!(forall<k> new.bookmarked.contains(k)
+        == (old.bookmarked.contains(k) && !in_subtree(old.nodes, *target, k)));
+    proof_assert!(forall<k> new.nodes.contains(&k) ==> new.nodes[k]@.id == old.nodes[k]@.id
+        && new.nodes[k]@.from == old.nodes[k]@.from
+        && new.nodes[k]@.bookmarked == old.nodes[k]@.bookmarked
+        && new.nodes[k].contents == old.nodes[k].contents
+        && new.nodes[k]@.active == (new.active == Some(k))
+        && forall<c> new.nodes[k]@.to.contains(c) == (old.nodes[k]@.to.contains(c) && c != *target));
+    proof_assert!(removal_shape(*old, *new, *target));
+    proof_assert! {
+        let _ = lemma_in_order_refl::<Id<K>>;
+        in_order(new.bookmarked, old.bookmarked)
+            && forall<k> new.nodes.contains(&k) ==> in_order(new.nodes[k]@.to, old.nodes[k]@.to)
+    };
+    proof_assert! {
+        lemma_subset_len(new.bookmarked, old.bookmarked);
+        new.bookmarked.len() <= old.bookmarked.len()
+    };
+    proof_assert! { lemma_remove_valid(*old, *new, *target); new.valid() };
+}
+
 /// Pushes the identifiers in `set` onto `stack`, in reverse order.
 #[check(terminates)]
 #[ensures(ids((^stack).model()) == ids(stack.model()).concat(set.model().reverse()))]
@@ -2716,10 +2776,7 @@ where
         {
             i -= 1;
         }
-        proof_assert!(reversed[set.model().len() - 1 - i@] == set.model()[i@]);
-        proof_assert!(reversed
-            .subsequence(0, set.model().len() - i@)
-            .ext_eq(reversed.subsequence(0, set.model().len() - 1 - i@).snoc(set.model()[i@])));
+        proof_assert!(reverse_prefix_step_ok(set.model(), i@));
         stack.push(set[i]);
     }
     proof_assert! { lemma_full_prefix(*reversed); reversed.subsequence(0, set.model().len()) == *reversed };

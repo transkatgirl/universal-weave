@@ -2248,62 +2248,6 @@ where
     }
 }
 
-/// [`lemma_precedes_trans`] as a fact, which applies wherever it is asserted.
-#[logic]
-#[ensures(result == (all_linked(nodes)
-    && (forall<j> 0 <= j && j < d.len() ==> nodes.contains(&d[j]))
-    && precedes(nodes, d, e)
-    && precedes(nodes, e, f)))]
-#[ensures(result ==> precedes(nodes, d, f))]
-pub fn precedes_trans_ok<K, T, S>(
-    nodes: Nodes<K, T, S>,
-    d: Seq<Id<K>>,
-    e: Seq<Id<K>>,
-    f: Seq<Id<K>>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    pearlite! {
-        let pre = all_linked(nodes)
-            && (forall<j> 0 <= j && j < d.len() ==> nodes.contains(&d[j]))
-            && precedes(nodes, d, e)
-            && precedes(nodes, e, f);
-        proof_assert!(pre ==> {
-            lemma_precedes_trans(nodes, d, e, f);
-            precedes(nodes, d, f)
-        });
-        pre
-    }
-}
-
-/// [`lemma_precedes_cons`] as a fact, which applies wherever it is asserted.
-#[logic]
-#[ensures(result == precedes(nodes, d, e))]
-#[ensures(result ==> precedes(nodes, Seq::singleton(a).concat(d), Seq::singleton(b).concat(e)))]
-pub fn precedes_cons_ok<K, T, S>(
-    nodes: Nodes<K, T, S>,
-    d: Seq<Id<K>>,
-    e: Seq<Id<K>>,
-    a: Id<K>,
-    b: Id<K>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    pearlite! {
-        proof_assert!(precedes(nodes, d, e) ==> {
-            lemma_precedes_cons(nodes, d, e, a, b);
-            true
-        });
-        precedes(nodes, d, e)
-    }
-}
-
 /// Without its first node, a descent of more than one node is a descent from that node's child.
 #[logic]
 #[ensures(result == (descending_to(nodes, d, id) && 1 < d.len()))]

@@ -132,6 +132,22 @@ pub fn lemma_reverse<T>(s: Seq<T>) {
     proof_assert!(forall<i> 0 <= i && i < s.len() ==> s.reverse()[i] == s[s.len() - 1 - i]);
 }
 
+/// The prefixes of the reverse of `s` grow by the elements of `s` from its end: taking one more
+/// element of it takes `s[i]`, if the ones taken so far are those after `i`.
+#[logic]
+#[ensures(result == (0 <= i && i < s.len()))]
+#[ensures(result ==> s.reverse().subsequence(0, s.len() - i)
+    == s.reverse().subsequence(0, s.len() - 1 - i).snoc(s[i]))]
+pub fn reverse_prefix_step_ok<T>(s: Seq<T>, i: Int) -> bool {
+    pearlite! {
+        let pre = 0 <= i && i < s.len();
+        proof_assert!(pre ==> s.reverse()[s.len() - 1 - i] == s[i]);
+        proof_assert!(pre ==> s.reverse().subsequence(0, s.len() - i)
+            .ext_eq(s.reverse().subsequence(0, s.len() - 1 - i).snoc(s[i])));
+        pre
+    }
+}
+
 /// Pushing an identifier onto an empty sequence gives the singleton of its model.
 #[logic]
 #[requires(s.len() == 0)]

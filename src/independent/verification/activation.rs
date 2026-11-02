@@ -719,47 +719,6 @@ where
     }
 }
 
-/// The topological sort, from `id`, of a set whose elements other than `id` all have a parent in
-/// it outputs all of it.
-#[logic]
-#[ensures(result == (all_linked(nodes) && acyclic(nodes)
-    && (forall<k> set.contains(&k) ==> nodes.contains(&k))
-    && (forall<k> set.contains(&k) && k != id ==> has_parent_in(nodes, set, k))
-    && (forall<k> admitted[k] == set.contains(&k))
-    && kahn_state(nodes, admitted, order, counts)
-    && 0 < order.len() && order[0] == id))]
-#[ensures(result ==> forall<k> set.contains(&k) ==> order.contains(k))]
-pub fn descendants_sorted_ok<K, T, S>(
-    nodes: Nodes<K, T, S>,
-    set: FSet<Id<K>>,
-    admitted: Mapping<Id<K>, bool>,
-    id: Id<K>,
-    order: Seq<Id<K>>,
-    counts: FMap<Id<K>, usize>,
-) -> bool
-where
-    K: Hash + Copy + Eq + Ord + DeepModel,
-    T: IndependentContents,
-    S: BuildHasher + Default + Clone,
-{
-    pearlite! {
-        let pre = all_linked(nodes) && acyclic(nodes)
-            && (forall<k> set.contains(&k) ==> nodes.contains(&k))
-            && (forall<k> set.contains(&k) && k != id ==> has_parent_in(nodes, set, k))
-            && (forall<k> admitted[k] == set.contains(&k))
-            && kahn_state(nodes, admitted, order, counts)
-            && 0 < order.len() && order[0] == id;
-        proof_assert!(pre ==> {
-            proof_assert!(order.contains(id));
-            proof_assert!(forall<k> set.contains(&k) && k != id
-                ==> exists<p> admitted_parent(nodes, admitted, k, p));
-            lemma_kahn_complete(nodes, admitted, order, counts);
-            true
-        } && forall<k> set.contains(&k) ==> order.contains(k));
-        pre
-    }
-}
-
 /// Nodes with an admitted parent have parents.
 #[logic]
 #[requires(forall<i> lo < i && i < s.len()

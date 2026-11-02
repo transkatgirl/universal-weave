@@ -746,6 +746,78 @@ where
     let _ = lemma_rebookmarked_valid::<K, T, S>;
 }
 
+/// `new` is `old` with node `id`'s children reordered.
+#[logic(open)]
+pub fn children_reordered<K, T, S>(
+    old: IndependentWeaveView<K, T, S>,
+    new: IndependentWeaveView<K, T, S>,
+    id: Id<K>,
+) -> bool
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let n = old.nodes[id]@;
+        let m = new.nodes[id]@;
+        old.nodes.contains(&id)
+            && (forall<k> new.nodes.contains(&k) == old.nodes.contains(&k))
+            && (forall<k> k != id ==> new.nodes[k]@ == old.nodes[k]@)
+            && m.id == n.id
+            && m.from == n.from
+            && m.active == n.active
+            && m.bookmarked == n.bookmarked
+            && same_elements(m.to, n.to)
+            && no_dup(m.to)
+            && new.roots == old.roots
+            && new.active == old.active
+            && new.bookmarked == old.bookmarked
+    }
+}
+
+/// Reordering one node's children preserves validity.
+#[logic]
+#[requires(old.valid())]
+#[requires(children_reordered(old, new, id))]
+#[ensures(new.valid())]
+pub fn lemma_children_reordered_valid<K, T, S>(
+    old: IndependentWeaveView<K, T, S>,
+    new: IndependentWeaveView<K, T, S>,
+    id: Id<K>,
+) where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    pearlite! {
+        let path = such_that(|path| path_of(old.nodes, old.active, path));
+        proof_assert!(forall<k> new.nodes.contains(&k) ==> new.nodes[k]@.from == old.nodes[k]@.from
+            && same_elements(new.nodes[k]@.to, old.nodes[k]@.to) && no_dup(new.nodes[k]@.to)
+            && new.nodes[k]@.id == old.nodes[k]@.id && new.nodes[k]@.active == old.nodes[k]@.active
+            && new.nodes[k]@.bookmarked == old.nodes[k]@.bookmarked);
+        proof_assert!(ranked(new.nodes, rank_of(old.nodes)));
+        proof_assert!(forall<k> new.nodes.contains(&k) ==> linked(old.nodes, k) && linked(new.nodes, k));
+        proof_assert!(structure(new.nodes, new.roots, new.active));
+        proof_assert!(new.valid_structure());
+        proof_assert!(path_of(new.nodes, new.active, path))
+    }
+}
+
+/// Reordering one node's children preserves validity.
+#[logic]
+#[requires(old.valid())]
+#[ensures(forall<new: IndependentWeaveView<K, T, S>> #[trigger(new.valid())]
+    children_reordered(old, new, id) ==> new.valid())]
+pub fn lemma_children_reordered<K, T, S>(old: IndependentWeaveView<K, T, S>, id: Id<K>)
+where
+    K: Hash + Copy + Eq + Ord + DeepModel,
+    T: IndependentContents,
+    S: BuildHasher + Default + Clone,
+{
+    let _ = lemma_children_reordered_valid::<K, T, S>;
+}
+
 pub mod activation;
 pub mod choice;
 pub mod conversion;
