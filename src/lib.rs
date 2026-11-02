@@ -28,6 +28,7 @@
 #![allow(clippy::pattern_type_mismatch, reason = "Conflicting lint")]
 #![allow(clippy::separated_literal_suffix, reason = "Conflicting lint")]
 #![allow(clippy::semicolon_outside_block, reason = "Conflicting lint")]
+#![allow(clippy::rest_pattern_accessible_field, reason = "Conflicting lint")]
 #![allow(
     clippy::field_scoped_visibility_modifiers,
     reason = "Used by IndependentWeave::from()"
@@ -46,6 +47,7 @@
 #![allow(clippy::question_mark_used, reason = "Readability")]
 #![allow(clippy::single_call_fn, reason = "Readability")]
 #![allow(clippy::single_char_lifetime_names, reason = "Readability")]
+#![allow(clippy::definition_in_module_root, reason = "Style")]
 #![allow(clippy::else_if_without_else, reason = "Style")]
 #![allow(clippy::if_then_some_else_none, reason = "Style")]
 #![allow(clippy::implicit_return, reason = "Style")]
