@@ -1,6 +1,6 @@
 [package]
 name = "universal-weave"
-version = "0.11.0"
+version = "0.11.1"
 authors = [
 	"transkatgirl",
 ]
@@ -48,7 +48,7 @@ contracts = "0.6.10"
 scratchpads = "0.1.0"
 hashbrown = { version = "0.17.1", features = [
 	"allocator-api2",
-	# Hashbrown's default (non-DOS-resistant) hasher is only used in two places: function contracts (only enabled in debug mode) and archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks).
+	# Hashbrown's default (non-DOS-resistant) hasher is only used in three places: function contracts (only enabled in debug mode), archived versions of the built-in Weave implementations (which were already, by their very nature, vulnerable to hash collision attacks), and PositionedWeave's mapping (which is keyed by monotonic counter values).
 	"default-hasher",
 	"inline-more",
 ], default-features = false }

@@ -1,5 +1,6 @@
 #cargo doc --features layout,rkyv,serde,legacy
 cargo build --target=aarch64-unknown-none --no-default-features --features layout,rkyv,serde,legacy
+cargo build --target=thumbv7em-none-eabi --no-default-features --features layout,rkyv,serde,legacy
 cargo build --release --target=aarch64-unknown-none --no-default-features --features layout,rkyv,serde,legacy
 cargo clippy --no-default-features
 cargo clippy --no-default-features --features rkyv
