@@ -1,4 +1,5 @@
 #cargo doc --features layout,rkyv,serde,legacy
+#cargo +1.98.0 build --features layout,rkyv,serde,legacy
 cargo build --target=aarch64-unknown-none --no-default-features --features layout,rkyv,serde,legacy
 cargo build --target=thumbv7em-none-eabi --no-default-features --features layout,rkyv,serde,legacy
 cargo build --release --target=aarch64-unknown-none --no-default-features --features layout,rkyv,serde,legacy
@@ -37,6 +38,7 @@ cargo clippy --release --no-default-features --features layout,rkyv,serde,legacy
 
 # Loro integration will soon be separated into new crate
 cargo doc --features loro,layout,rkyv,serde,legacy
+cargo +1.98.0 build --features loro,layout,rkyv,serde,legacy
 cargo build --no-default-features --features loro,layout,rkyv,serde,legacy
 cargo build --release --no-default-features --features loro,layout,rkyv,serde,legacy
 cargo clippy --no-default-features --features loro
