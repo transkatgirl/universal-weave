@@ -2487,6 +2487,24 @@ where
             .rev()
             .map(|id| self.weave.get_contents(&id).unwrap())
     }
+    /// Convenience function which returns an iterator over the content corresponding to `id`'s path, breaking if `stop` returns `true`.
+    ///
+    /// # Panics
+    ///
+    /// May panic if `stop` panics.
+    pub fn path_content_until<F>(&mut self, id: &K, mut stop: F) -> impl Iterator<Item = &T>
+    where
+        F: FnMut(&K) -> bool,
+    {
+        self.scratchpad.clear();
+        self.weave.get_path_from(id, &mut self.scratchpad);
+
+        self.scratchpad
+            .drain(..)
+            .rev()
+            .take_while(move |id| !stop(id))
+            .map(|id| self.weave.get_contents(&id).unwrap())
+    }
     /// Removes the specified range from the active path without removing the content from the underlying Weave.
     ///
     /// If the range is empty or starts past the end of the active path, this function does nothing. If the range extends beyond the active path, its length is clamped to the active path's length.
