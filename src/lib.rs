@@ -582,10 +582,9 @@ pub enum LayoutItem<K, V, P> {
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter and Weave in a malformed state unless otherwise specified by the implementation.
-pub trait Layouter<W, CW, K, N, T, V, P>
+pub trait Layouter<W, K, N, T, V, P>
 where
     W: Weave<K, N, T>,
-    CW: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: BuildableNode<K, T>,
 {
@@ -611,7 +610,7 @@ where
         weave: &mut W,
         min: V,
         max: V,
-        callback: impl FnMut(&CW, LayoutItem<K, V, P>),
+        callback: impl FnMut(&W, LayoutItem<K, V, P>),
     );
 }
 
@@ -733,10 +732,9 @@ where
 /// # Panics
 ///
 /// All panics should be assumed to leave the Layouter in a malformed state unless otherwise specified by the implementation.
-pub trait ImmutableLayouter<W, CW, K, N, T, V, P>
+pub trait ImmutableLayouter<W, K, N, T, V, P>
 where
     W: ImmutableWeave<K, N, T>,
-    CW: ImmutableWeave<K, N, T>,
     K: Hash + Copy + Eq + Ord,
     N: Node<K, T>,
 {
@@ -757,7 +755,7 @@ where
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
     ///
     /// `weave` must be the same [`ImmutableWeave`] as the one passed to [`ImmutableLayouter::layout()`].
-    fn view(&mut self, weave: &W, min: V, max: V, callback: impl FnMut(&CW, LayoutItem<K, V, P>));
+    fn view(&mut self, weave: &W, min: V, max: V, callback: impl FnMut(&W, LayoutItem<K, V, P>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

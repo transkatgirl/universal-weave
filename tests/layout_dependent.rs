@@ -396,7 +396,6 @@ impl StateMachineTest for WeaveWrapper {
         assert_eq!(
             Layouter::<
                 DependentWeave<u32, WeaveContent, u32, RandomState>,
-                DependentWeave<u32, WeaveContent, u32, RandomState>,
                 u32,
                 DependentNode<u32, WeaveContent, RandomState>,
                 WeaveContent,
@@ -404,7 +403,6 @@ impl StateMachineTest for WeaveWrapper {
                 ArrayVec<[Vec2; 6]>,
             >::size(&state.layouter),
             Layouter::<
-                DependentWeave<u32, WeaveContent, u32, RandomState>,
                 DependentWeave<u32, WeaveContent, u32, RandomState>,
                 u32,
                 DependentNode<u32, WeaveContent, RandomState>,
@@ -470,8 +468,8 @@ impl StateMachineTest for WeaveWrapper {
 
 fn compare_layouter_center<W, K, N, T>(
     weave: &mut W,
-    left: &mut impl Layouter<W, W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
-    right: &mut impl Layouter<W, W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     id: &K,
 ) where
     W: Weave<K, N, T>,
@@ -504,8 +502,8 @@ fn compare_layouter_center<W, K, N, T>(
 fn compare_layouter_views<W, K, N, T>(
     scratchpad: &mut Scratchpad,
     weave: &mut W,
-    left: &mut impl Layouter<W, W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
-    right: &mut impl Layouter<W, W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
+    right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     min: Vec2,
     max: Vec2,
 ) where
