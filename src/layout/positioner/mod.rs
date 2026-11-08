@@ -927,6 +927,8 @@ where
         if HAS_SEGMENTS {
             let total_runs = closed_runs.len();
 
+            assert!(total_runs < u32::MAX as usize, "Too many runs");
+
             left_offsets.resize(count + 1, 0);
             right_offsets.resize(count + 1, 0);
             left_runs.resize(total_runs, (0, 0, 0));
