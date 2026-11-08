@@ -439,7 +439,7 @@ where
         weave: &mut W,
         min: Vec2,
         max: Vec2,
-        mut callback: impl FnMut(&W, LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+        mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
         let mut path = Vec::new();
 
@@ -459,15 +459,12 @@ where
                     && line_min.y <= max.y
                     && line_max.y >= min.y
                 {
-                    callback(
-                        weave,
-                        LayoutItem::Polyline {
-                            from,
-                            to,
-                            active: is_active,
-                            points,
-                        },
-                    )
+                    callback(LayoutItem::Polyline {
+                        from,
+                        to,
+                        active: is_active,
+                        points,
+                    })
                 }
             }
         }
@@ -480,7 +477,7 @@ where
                 && center.y - half.y <= max.y
                 && center.y + half.y >= min.y
             {
-                callback(weave, LayoutItem::Node { id, center, size });
+                callback(LayoutItem::Node { id, center, size });
             }
         }
     }
@@ -1064,22 +1061,17 @@ fn compare_layouter_center<W, K, N, T>(
 {
     let mut center: Option<Vec2> = None;
 
-    left.view(
-        weave,
-        Vec2::splat(-1.0e30),
-        Vec2::splat(1.0e30),
-        |_, item| {
-            if let LayoutItem::Node {
-                id: node_id,
-                center: node_center,
-                ..
-            } = item
-                && id == &node_id
-            {
-                center = Some(node_center);
-            }
-        },
-    );
+    left.view(weave, Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+        if let LayoutItem::Node {
+            id: node_id,
+            center: node_center,
+            ..
+        } = item
+            && id == &node_id
+        {
+            center = Some(node_center);
+        }
+    });
 
     assert_eq!(left.center(id), center);
     if let Some(center) = center {
@@ -1106,10 +1098,10 @@ fn compare_layouter_views<W, K, N, T>(
     let mut layouter_output = lock.vec();
     let mut reference_layouter_output = lock.vec();
 
-    left.view(weave, min, max, |_, item| {
+    left.view(weave, min, max, |item| {
         layouter_output.push(item);
     });
-    right.view(weave, min, max, |_, item| {
+    right.view(weave, min, max, |item| {
         reference_layouter_output.push(item);
     });
 

@@ -478,22 +478,17 @@ fn compare_layouter_center<W, K, N, T>(
 {
     let mut center: Option<Vec2> = None;
 
-    left.view(
-        weave,
-        Vec2::splat(-1.0e30),
-        Vec2::splat(1.0e30),
-        |_, item| {
-            if let LayoutItem::Node {
-                id: node_id,
-                center: node_center,
-                ..
-            } = item
-                && id == &node_id
-            {
-                center = Some(node_center);
-            }
-        },
-    );
+    left.view(weave, Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+        if let LayoutItem::Node {
+            id: node_id,
+            center: node_center,
+            ..
+        } = item
+            && id == &node_id
+        {
+            center = Some(node_center);
+        }
+    });
 
     assert_eq!(left.center(id), center);
     assert_eq!(right.center(id), center);
@@ -516,10 +511,10 @@ fn compare_layouter_views<W, K, N, T>(
     let mut layouter_output = lock.vec();
     let mut reference_layouter_output = lock.vec();
 
-    left.view(weave, min, max, |_, item| {
+    left.view(weave, min, max, |item| {
         layouter_output.push(item);
     });
-    right.view(weave, min, max, |_, item| {
+    right.view(weave, min, max, |item| {
         reference_layouter_output.push(item);
     });
 

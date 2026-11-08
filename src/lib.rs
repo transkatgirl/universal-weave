@@ -605,13 +605,7 @@ where
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
     ///
     /// `weave` must be the same [`Weave`] as the one passed to [`Layouter::layout()`].
-    fn view(
-        &mut self,
-        weave: &mut W,
-        min: V,
-        max: V,
-        callback: impl FnMut(&W, LayoutItem<K, V, P>),
-    );
+    fn view(&mut self, weave: &mut W, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 /// A read-only [`Weave`].
@@ -755,7 +749,7 @@ where
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
     ///
     /// `weave` must be the same [`ImmutableWeave`] as the one passed to [`ImmutableLayouter::layout()`].
-    fn view(&mut self, weave: &W, min: V, max: V, callback: impl FnMut(&W, LayoutItem<K, V, P>));
+    fn view(&mut self, weave: &W, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
