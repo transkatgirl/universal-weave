@@ -51,5 +51,5 @@ Please [consider donating](https://github.com/sponsors/transkatgirl) if you cons
 	- Loro must be disabled when building for `no_std`
 	- Built-in 2D layout implementation requires target_pointer_width == 32 || target_pointer_width == 64
 	- Built-in position tracking wrapper requires target_has_atomic == "64" && target_has_atomic == "ptr"
-	- Recommended heap size is ~1.6 MB per 1,000 nodes for IndependentWeave + IndependentLayouter
+	- Recommended heap size is ~1.8 MB per 1,000 nodes for IndependentWeave + IndependentLayouter
 		- Significant memory efficiency improvements are planned for future releases
