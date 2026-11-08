@@ -109,8 +109,15 @@ where
 }
 
 impl<K, T, M, S>
-    Layouter<DependentWeave<K, T, M, S>, K, DependentNode<K, T, S>, T, Vec2, ArrayVec<[Vec2; 6]>>
-    for DependentLayouter<K, S>
+    Layouter<
+        DependentWeave<K, T, M, S>,
+        DependentWeave<K, T, M, S>,
+        K,
+        DependentNode<K, T, S>,
+        T,
+        Vec2,
+        ArrayVec<[Vec2; 6]>,
+    > for DependentLayouter<K, S>
 where
     K: Hash + Copy + Eq + Ord + 'static,
     S: BuildHasher + Default + Clone + 'static,
@@ -195,6 +202,7 @@ where
 
 impl<K, T, M, S>
     Layouter<
+        IndependentWeave<K, T, M, S>,
         IndependentWeave<K, T, M, S>,
         K,
         IndependentNode<K, T, S>,
@@ -297,7 +305,7 @@ where
     }
 }
 
-impl<W, K, N, T, S> Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for TopologicalLayouter<K, S>
+impl<W, K, N, T, S> Layouter<W, W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>> for TopologicalLayouter<K, S>
 where
     W: Weave<K, N, T>,
     K: Hash + Copy + Eq + Ord + 'static,
