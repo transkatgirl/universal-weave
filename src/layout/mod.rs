@@ -16,7 +16,8 @@ use scratchpads::Scratchpad;
 use tinyvec::ArrayVec;
 
 use crate::{
-    BuildableNode, IndependentContents, LayoutItem, Layouter, Weave,
+    ActivePathWeave as _, ActiveSingularWeave as _, BuildableNode, IndependentContents, LayoutItem,
+    Layouter, Weave,
     dependent::{DependentNode, DependentWeave},
     independent::{IndependentNode, IndependentWeave},
     layout::positioner::Layout2D,
@@ -78,6 +79,7 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K, S>,
+    identifiers: Vec<K>,
 }
 
 impl<K, S> Default for DependentLayouter<K, S>
@@ -101,6 +103,7 @@ where
         Self {
             spacing,
             layout: Layout2D::default(),
+            identifiers: Vec::new(),
         }
     }
 }
@@ -118,6 +121,7 @@ where
         weave: &mut DependentWeave<K, T, M, S>,
         sizes: impl FnMut(&DependentNode<K, T, S>) -> Vec2,
     ) {
+        self.identifiers.clear();
         self.layout.layout_dependent(weave, sizes, &self.spacing);
     }
     #[inline]
@@ -128,13 +132,20 @@ where
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
-    #[inline]
     fn view(
         &mut self,
+        weave: &mut DependentWeave<K, T, M, S>,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
+        let active = weave.active();
+
+        if self.identifiers.first() != active.as_ref() {
+            weave.get_active_path(&mut self.identifiers);
+            self.layout.mark_active_path(&self.identifiers);
+        }
+
         self.layout.view(min, max, callback);
     }
 }
@@ -153,7 +164,7 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K, S>,
-    topological: Vec<K>,
+    identifiers: Vec<K>,
 }
 
 impl<K, S> Default for IndependentLayouter<K, S>
@@ -177,7 +188,7 @@ where
         Self {
             spacing,
             layout: Layout2D::default(),
-            topological: Vec::new(),
+            identifiers: Vec::new(),
         }
     }
 }
@@ -201,10 +212,12 @@ where
         weave: &mut IndependentWeave<K, T, M, S>,
         sizes: impl FnMut(&IndependentNode<K, T, S>) -> Vec2,
     ) {
-        weave.get_ordered_identifiers(&mut self.topological);
+        weave.get_ordered_identifiers(&mut self.identifiers);
 
         self.layout
-            .layout_independent(weave, sizes, &self.spacing, &mut self.topological);
+            .layout_independent(weave, sizes, &self.spacing, &mut self.identifiers);
+
+        self.identifiers.clear();
     }
     #[inline]
     fn size(&self) -> Vec2 {
@@ -214,13 +227,22 @@ where
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
-    #[inline]
     fn view(
         &mut self,
+        weave: &mut IndependentWeave<K, T, M, S>,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
+        let active = weave.active();
+
+        if self.identifiers.len() != active.len()
+            || self.identifiers.iter().any(|id| !active.contains(id))
+        {
+            weave.get_active_path(&mut self.identifiers);
+            self.layout.mark_active_path(&self.identifiers);
+        }
+
         self.layout.view(min, max, callback);
     }
 }
@@ -239,7 +261,8 @@ where
     pub spacing: Spacing,
 
     layout: Layout2D<K, S>,
-    topological: Vec<K>,
+    identifiers: Vec<K>,
+    active: Vec<K>,
     scratchpad: Scratchpad,
 }
 
@@ -264,7 +287,8 @@ where
         Self {
             spacing,
             layout: Layout2D::default(),
-            topological: Vec::new(),
+            identifiers: Vec::new(),
+            active: Vec::new(),
             scratchpad: Scratchpad::new(),
         }
     }
@@ -279,11 +303,13 @@ where
     for<'a> &'a N::From: IntoIterator<Item = &'a K>,
 {
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&N) -> Vec2) {
-        weave.get_ordered_identifiers(&mut self.topological);
+        self.active.clear();
+
+        weave.get_ordered_identifiers(&mut self.identifiers);
 
         assert_eq!(
             weave.len(),
-            self.topological.len(),
+            self.identifiers.len(),
             "Malformed topological order"
         );
 
@@ -292,7 +318,7 @@ where
             sizes,
             &self.spacing,
             &mut self.scratchpad,
-            &mut self.topological,
+            &mut self.identifiers,
         );
     }
     #[inline]
@@ -303,13 +329,20 @@ where
     fn center(&self, id: &K) -> Option<Vec2> {
         self.layout.center(id)
     }
-    #[inline]
     fn view(
         &mut self,
+        weave: &mut W,
         min: Vec2,
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
+        weave.get_active_path(&mut self.identifiers);
+
+        if self.active != self.identifiers {
+            self.layout.mark_active_path(&self.identifiers);
+            self.active.clone_from(&self.identifiers);
+        }
+
         self.layout.view(min, max, callback);
     }
 }

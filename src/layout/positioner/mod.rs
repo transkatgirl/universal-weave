@@ -63,6 +63,8 @@ where
     polyline_reach: Vec<(f32, f32)>,
     polyline_block_bounds: Vec<(Vec2, Vec2)>,
     reach_prefix: Vec<f32>,
+    active_polylines: Vec<(u32, u32, u32)>,
+    rank_active_polyline: Vec<u32>,
     positions: HashMap<K, u32, S>,
 }
 
@@ -91,6 +93,8 @@ where
             polyline_reach: Vec::new(),
             polyline_block_bounds: Vec::new(),
             reach_prefix: Vec::new(),
+            active_polylines: Vec::new(),
+            rank_active_polyline: Vec::new(),
             positions: HashMap::with_hasher(S::default()),
         }
     }
@@ -123,6 +127,8 @@ where
         self.polyline_reach.clear();
         self.polyline_block_bounds.clear();
         self.reach_prefix.clear();
+        self.active_polylines.clear();
+        self.rank_active_polyline.clear();
         self.positions.clear();
         self.positions.reserve(reserved_nodes);
     }
@@ -380,6 +386,78 @@ where
 
         self.assign_dag_coordinates(&guard, &structure, spacing);
     }
+    pub fn mark_active_path(&mut self, path: &[K]) {
+        for (rank, _, _) in self.active_polylines.drain(..) {
+            self.rank_active_polyline[rank as usize] = u32::MAX;
+        }
+
+        if self.keys.is_empty() {
+            return;
+        }
+
+        let mut parent = None;
+        let mut floor = 0;
+        let sliced_real_offsets = &self.real_offsets[1..];
+
+        for (source, target) in path
+            .iter()
+            .rev()
+            .map(|id| self.positions.get(id).copied())
+            .filter_map(|child| mem::replace(&mut parent, child).zip(child))
+        {
+            let rank = if self
+                .real_offsets
+                .get(floor..)
+                .and_then(<[u32]>::first_chunk::<2>)
+                .copied()
+                .is_some_and(|[start, end]| (start..end).contains(&source))
+            {
+                floor
+            } else {
+                let rank = sliced_real_offsets.partition_point(|end| end <= &source);
+
+                if rank < floor {
+                    continue;
+                }
+
+                rank
+            };
+
+            let range = bucket_range(&self.polyline_offsets, rank);
+            let segment_range = bucket_range(&self.polyline_segment_offsets, rank);
+            let lines = &self.polylines[range.clone()];
+            let segments = &self.polyline_segments[segment_range.clone()];
+            let begin = lines.partition_point(|(line_source, _)| line_source < &source);
+
+            if let Some(offset) = lines[begin..]
+                .iter()
+                .take_while(|(line_source, _)| line_source == &source)
+                .position(|(_, line_target)| line_target == &target)
+            {
+                let index = (range.start + begin + offset) as u32;
+
+                let segment_index = segment_range.start
+                    + segments.partition_point(|(polyline, _, _)| *polyline < index);
+                let segment = self
+                    .polyline_segments
+                    .get(segment_index)
+                    .filter(|(polyline, _, _)| *polyline == index);
+
+                floor = segment.map_or(rank, |(_, _, seg_last)| *seg_last as usize) + 1;
+
+                self.rank_active_polyline[rank] = index;
+                self.active_polylines.push((
+                    rank as u32,
+                    index,
+                    if segment.is_some() {
+                        segment_index as u32
+                    } else {
+                        u32::MAX
+                    },
+                ));
+            }
+        }
+    }
 }
 
 struct LayoutCSR<'g> {
@@ -588,6 +666,7 @@ where
 
         self.polyline_offsets.resize(height_usize + 1, 0);
         self.polyline_segment_offsets.resize(height_usize + 1, 0);
+        self.rank_active_polyline.resize(height_usize, u32::MAX);
         self.polyline_bounds
             .resize(height_usize, (Vec2::INFINITY, Vec2::NEG_INFINITY));
         self.polyline_reach.resize(height_usize, (0.0, 0.0));
@@ -1660,8 +1739,14 @@ where
             let mut next_ends = self.layer_ends[next_rank + 1..].iter();
 
             for (
-                (((rank_min, rank_max), (range_start, range_end)), (segment_start, segment_end)),
-                ((left_reach, right_reach), source_band_end),
+                (
+                    (
+                        ((rank_min, rank_max), (range_start, range_end)),
+                        (segment_start, segment_end),
+                    ),
+                    ((left_reach, right_reach), source_band_end),
+                ),
+                active_polyline,
             ) in self.polyline_bounds[block_ranks.clone()]
                 .iter()
                 .copied()
@@ -1687,8 +1772,9 @@ where
                     self.polyline_reach[block_ranks.clone()]
                         .iter()
                         .copied()
-                        .zip(self.layer_ends[block_ranks].iter().copied()),
+                        .zip(self.layer_ends[block_ranks.clone()].iter().copied()),
                 )
+                .zip(self.rank_active_polyline[block_ranks].iter().copied())
             {
                 let rank_band_start =
                     mem::replace(&mut band_start, source_band_end + self.layer_gap);
@@ -1702,9 +1788,10 @@ where
                     continue;
                 }
 
-                let begin = range_start
-                    + self.polyline_source_x[range_start..range_end]
-                        .partition_point(|x| *x < min.x - right_reach);
+                let rank_source_x = &self.polyline_source_x[range_start..range_end];
+                let skipped = rank_source_x.partition_point(|x| *x < min.x - right_reach);
+                let rank_source_x = &rank_source_x[skipped..];
+                let begin = range_start + skipped;
 
                 let rank_center = f32::midpoint(rank_band_start, source_band_end);
                 let (next_center, next_band_start) = next_end.map_or((0.0, 0.0), |next_end| {
@@ -1720,12 +1807,13 @@ where
                     .copied()
                     .peekable();
 
-                for (index, (line, source_x)) in self.polylines[begin..range_end]
+                let active_polyline = active_polyline as usize;
+
+                for ((line, source_x), index) in self.polylines[begin..range_end]
                     .iter()
                     .copied()
-                    .zip(self.polyline_source_x[begin..range_end].iter().copied())
-                    .enumerate()
-                    .map(|(offset, item)| (begin + offset, item))
+                    .zip(rank_source_x.iter().copied())
+                    .zip(begin..)
                 {
                     if source_x - left_reach > max.x {
                         break;
@@ -1739,56 +1827,65 @@ where
                         }
                     });
 
-                    let target_x = self.x_coordinates[line.1 as usize];
-                    let (line_min_x, line_max_x) = if let Some((seg_x, _)) = segment_info {
-                        (
-                            source_x.min(target_x).min(seg_x),
-                            source_x.max(target_x).max(seg_x),
-                        )
-                    } else {
-                        (source_x.min(target_x), source_x.max(target_x))
-                    };
+                    if index == active_polyline {
+                        continue;
+                    }
 
-                    let source_border =
-                        (rank_center + self.sizes[line.0 as usize].y * 0.5).min(source_band_end);
-                    let (target_center, target_band_start, span_end) = if let Some((_, seg_last)) =
-                        segment_info
-                    {
-                        let [span_end, target_end] = adjacent(&self.layer_ends, seg_last as usize);
-                        let target_band_start = span_end + self.layer_gap;
-
-                        (
-                            f32::midpoint(target_band_start, target_end),
-                            target_band_start,
-                            span_end,
-                        )
-                    } else {
-                        (next_center, next_band_start, 0.0)
-                    };
-                    let target_border = (target_center - self.sizes[line.1 as usize].y * 0.5)
-                        .max(target_band_start);
-
-                    if line_min_x <= max.x
-                        && line_max_x >= min.x
-                        && source_border <= max.y
-                        && target_border >= min.y
-                    {
-                        callback(LayoutItem::Polyline {
-                            from: self.keys[line.0 as usize],
-                            to: self.keys[line.1 as usize],
-                            points: line_points(
-                                Vec2::new(source_x, source_border),
-                                source_band_end,
-                                segment_info.map(|(seg_x, _)| (seg_x, next_band_start, span_end)),
-                                Vec2::new(target_x, target_border),
-                                target_band_start,
-                            ),
-                        });
+                    if let Some(item) = self.polyline(
+                        min,
+                        max,
+                        (line, source_x),
+                        segment_info,
+                        [rank_center, source_band_end, next_center, next_band_start],
+                        false,
+                    ) {
+                        callback(item);
                     }
                 }
             }
 
             next_rank = block_end;
+        }
+
+        let active_first = first.min(last);
+        let active_start = self
+            .active_polylines
+            .partition_point(|(rank, _, _)| (*rank as usize) < active_first);
+
+        for (rank, index, segment) in self
+            .active_polylines
+            .iter()
+            .skip(active_start.saturating_sub(1))
+            .copied()
+            .map(|(rank, index, segment)| (rank as usize, index as usize, segment as usize))
+            .take_while(|(rank, _, _)| rank < &last)
+        {
+            let segment_info = self
+                .polyline_segments
+                .get(segment)
+                .map(|(_, seg_x, seg_last)| (*seg_x, *seg_last));
+
+            let rank_band_start = rank
+                .checked_sub(1)
+                .map_or(0.0, |previous| self.layer_ends[previous] + self.layer_gap);
+            let [source_band_end, next_end] = adjacent(&self.layer_ends, rank);
+            let next_band_start = source_band_end + self.layer_gap;
+
+            if let Some(item) = self.polyline(
+                min,
+                max,
+                (self.polylines[index], self.polyline_source_x[index]),
+                segment_info,
+                [
+                    f32::midpoint(rank_band_start, source_band_end),
+                    source_band_end,
+                    f32::midpoint(next_band_start, next_end),
+                    next_band_start,
+                ],
+                true,
+            ) {
+                callback(item);
+            }
         }
 
         let mut band_start = first
@@ -1830,6 +1927,66 @@ where
                     });
                 }
             }
+        }
+    }
+    #[allow(clippy::float_arithmetic, reason = "Coordinate calculation")]
+    #[inline(always)]
+    fn polyline(
+        &self,
+        min: Vec2,
+        max: Vec2,
+        (line, source_x): ((u32, u32), f32),
+        segment_info: Option<(f32, u32)>,
+        [rank_center, source_band_end, next_center, next_band_start]: [f32; 4],
+        active: bool,
+    ) -> Option<LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>> {
+        let target_x = self.x_coordinates[line.1 as usize];
+        let (line_min_x, line_max_x) = if let Some((seg_x, _)) = segment_info {
+            (
+                source_x.min(target_x).min(seg_x),
+                source_x.max(target_x).max(seg_x),
+            )
+        } else {
+            (source_x.min(target_x), source_x.max(target_x))
+        };
+
+        if line_min_x > max.x || line_max_x < min.x {
+            return None;
+        }
+
+        let source_border =
+            (rank_center + self.sizes[line.0 as usize].y * 0.5).min(source_band_end);
+        let (target_center, target_band_start, span_end) = if let Some((_, seg_last)) = segment_info
+        {
+            let [span_end, target_end] = adjacent(&self.layer_ends, seg_last as usize);
+            let target_band_start = span_end + self.layer_gap;
+
+            (
+                f32::midpoint(target_band_start, target_end),
+                target_band_start,
+                span_end,
+            )
+        } else {
+            (next_center, next_band_start, 0.0)
+        };
+        let target_border =
+            (target_center - self.sizes[line.1 as usize].y * 0.5).max(target_band_start);
+
+        if source_border <= max.y && target_border >= min.y {
+            Some(LayoutItem::Polyline {
+                from: self.keys[line.0 as usize],
+                to: self.keys[line.1 as usize],
+                active,
+                points: line_points(
+                    Vec2::new(source_x, source_border),
+                    source_band_end,
+                    segment_info.map(|(seg_x, _)| (seg_x, next_band_start, span_end)),
+                    Vec2::new(target_x, target_border),
+                    target_band_start,
+                ),
+            })
+        } else {
+            None
         }
     }
 }

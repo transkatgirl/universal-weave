@@ -570,6 +570,8 @@ pub enum LayoutItem<K, V, P> {
         from: K,
         /// Child node where the connection ends.
         to: K,
+        /// Whether the connection is a component of the active path.
+        active: bool,
         /// Points for a polyline routed between the two nodes.
         points: P,
     },
@@ -601,7 +603,7 @@ where
     #[must_use]
     fn center(&self, id: &K) -> Option<V>;
     /// Returns [`LayoutItem`]s within the specified bounds in the order that they should be rendered.
-    fn view(&mut self, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
+    fn view(&mut self, weave: &mut W, min: V, max: V, callback: impl FnMut(LayoutItem<K, V, P>));
 }
 
 /// A read-only [`Weave`].

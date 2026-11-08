@@ -272,6 +272,12 @@ impl StateMachineTest for WeaveWrapper {
         let map_id = |seed: u32| seed % (state.counter + 2);
         let old_node_count = state.weave.nodes().len();
         let target = map_id(transition.1);
+        let active_only = matches!(
+            transition.0,
+            WeaveTransition::SetActive { .. }
+                | WeaveTransition::SetActiveDependentSemantics { .. }
+                | WeaveTransition::SetActivePath { .. }
+        );
 
         match transition.0 {
             WeaveTransition::Insert {
@@ -464,6 +470,17 @@ impl StateMachineTest for WeaveWrapper {
             state.counter += 1;
         }
 
+        if active_only {
+            compare_layouter_views(
+                &mut state.scratchpad_arena,
+                &mut state.weave,
+                &mut state.layouter,
+                &mut state.reference_layouter,
+                Vec2::splat(-1.0e30),
+                Vec2::splat(1.0e30),
+            );
+        }
+
         if transition.2.is_multiple_of(4) {
             if let Ok(converted) = DependentWeave::try_from(state.weave.clone()) {
                 assert_eq!(state.weave, IndependentWeave::from(converted));
@@ -514,25 +531,21 @@ impl StateMachineTest for WeaveWrapper {
             >::size(&state.reference_layouter)
         );
 
-        compare_layouter_views::<
-            IndependentWeave<u32, WeaveContent, u32, RandomState>,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(
+        compare_layouter_views(
             &mut state.scratchpad_arena,
+            &mut state.weave,
             &mut state.layouter,
             &mut state.reference_layouter,
             Vec2::splat(-1.0e30),
             Vec2::splat(1.0e30),
         );
 
-        compare_layouter_center::<
-            IndependentWeave<u32, WeaveContent, u32, RandomState>,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(&mut state.layouter, &mut state.reference_layouter, &target);
+        compare_layouter_center(
+            &mut state.weave,
+            &mut state.layouter,
+            &mut state.reference_layouter,
+            &target,
+        );
 
         let subview_min = Vec2 {
             x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
@@ -554,13 +567,9 @@ impl StateMachineTest for WeaveWrapper {
                     * (MAX_TRANSITIONS * 20) as f32,
             };
 
-        compare_layouter_views::<
-            IndependentWeave<u32, WeaveContent, u32, RandomState>,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(
+        compare_layouter_views(
             &mut state.scratchpad_arena,
+            &mut state.weave,
             &mut state.layouter,
             &mut state.reference_layouter,
             subview_min,
@@ -577,6 +586,7 @@ impl StateMachineTest for WeaveWrapper {
 }
 
 fn compare_layouter_center<W, K, N, T>(
+    weave: &mut W,
     left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     id: &K,
@@ -587,7 +597,7 @@ fn compare_layouter_center<W, K, N, T>(
 {
     let mut center: Option<Vec2> = None;
 
-    left.view(Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+    left.view(weave, Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
         if let LayoutItem::Node {
             id: node_id,
             center: node_center,
@@ -605,6 +615,7 @@ fn compare_layouter_center<W, K, N, T>(
 
 fn compare_layouter_views<W, K, N, T>(
     scratchpad: &mut Scratchpad,
+    weave: &mut W,
     left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     min: Vec2,
@@ -619,10 +630,10 @@ fn compare_layouter_views<W, K, N, T>(
     let mut layouter_output = lock.vec();
     let mut reference_layouter_output = lock.vec();
 
-    left.view(min, max, |item| {
+    left.view(weave, min, max, |item| {
         layouter_output.push(item);
     });
-    right.view(min, max, |item| {
+    right.view(weave, min, max, |item| {
         reference_layouter_output.push(item);
     });
 

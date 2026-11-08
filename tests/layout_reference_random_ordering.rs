@@ -436,17 +436,36 @@ where
     }
     fn view(
         &mut self,
+        weave: &mut W,
         min: Vec2,
         max: Vec2,
         mut callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
-        for (from, to, line_min, line_max, points) in self.polylines.iter().copied() {
-            if line_min.x <= max.x
-                && line_max.x >= min.x
-                && line_min.y <= max.y
-                && line_max.y >= min.y
+        let mut path = Vec::new();
+
+        weave.get_active_path(&mut path);
+
+        let active: HashSet<(K, K)> = path.windows(2).map(|pair| (pair[1], pair[0])).collect();
+
+        for is_active in [false, true] {
+            for (from, to, line_min, line_max, points) in self
+                .polylines
+                .iter()
+                .filter(|line| active.contains(&(line.0, line.1)) == is_active)
+                .copied()
             {
-                callback(LayoutItem::Polyline { from, to, points })
+                if line_min.x <= max.x
+                    && line_max.x >= min.x
+                    && line_min.y <= max.y
+                    && line_max.y >= min.y
+                {
+                    callback(LayoutItem::Polyline {
+                        from,
+                        to,
+                        active: is_active,
+                        points,
+                    })
+                }
             }
         }
 
@@ -697,6 +716,12 @@ impl StateMachineTest for WeaveWrapper {
         let map_id = |seed: u32| seed % (state.counter + 2);
         let old_node_count = state.weave.nodes().len();
         let target = map_id(transition.1);
+        let active_only = matches!(
+            transition.0,
+            WeaveTransition::SetActive { .. }
+                | WeaveTransition::SetActiveDependentSemantics { .. }
+                | WeaveTransition::SetActivePath { .. }
+        );
 
         match transition.0 {
             WeaveTransition::Insert {
@@ -898,6 +923,17 @@ impl StateMachineTest for WeaveWrapper {
             state.counter += 1;
         }
 
+        if active_only {
+            compare_layouter_views(
+                &mut state.scratchpad_arena,
+                &mut state.weave,
+                &mut state.layouter,
+                &mut state.reference_layouter,
+                Vec2::splat(-1.0e30),
+                Vec2::splat(1.0e30),
+            );
+        }
+
         if transition.2.is_multiple_of(4) {
             if let Ok(converted) = DependentWeave::try_from(state.weave.clone()) {
                 assert_eq!(state.weave, IndependentWeave::from(converted));
@@ -934,9 +970,6 @@ impl StateMachineTest for WeaveWrapper {
             .reference_layouter
             .layout(&mut wrapped, |node| state.sizes[&node.id]);
 
-        state.weave = wrapped.weave;
-        state.priorities = wrapped.priorities;
-
         assert!(
             (Layouter::<
                 PrioritizedWeave,
@@ -959,25 +992,21 @@ impl StateMachineTest for WeaveWrapper {
                 <= TOLERANCE
         );
 
-        compare_layouter_views::<
-            PrioritizedWeave,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(
+        compare_layouter_views(
             &mut state.scratchpad_arena,
+            &mut wrapped,
             &mut state.layouter,
             &mut state.reference_layouter,
             Vec2::splat(-1.0e30),
             Vec2::splat(1.0e30),
         );
 
-        compare_layouter_center::<
-            IndependentWeave<u32, WeaveContent, u32, RandomState>,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(&mut state.layouter, &mut state.reference_layouter, &target);
+        compare_layouter_center(
+            &mut wrapped,
+            &mut state.layouter,
+            &mut state.reference_layouter,
+            &target,
+        );
 
         let subview_min = Vec2 {
             x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
@@ -999,18 +1028,17 @@ impl StateMachineTest for WeaveWrapper {
                     * (MAX_TRANSITIONS * 20) as f32,
             };
 
-        compare_layouter_views::<
-            PrioritizedWeave,
-            u32,
-            IndependentNode<u32, WeaveContent, RandomState>,
-            WeaveContent,
-        >(
+        compare_layouter_views(
             &mut state.scratchpad_arena,
+            &mut wrapped,
             &mut state.layouter,
             &mut state.reference_layouter,
             subview_min,
             subview_max,
         );
+
+        state.weave = wrapped.weave;
+        state.priorities = wrapped.priorities;
 
         state
     }
@@ -1022,6 +1050,7 @@ impl StateMachineTest for WeaveWrapper {
 }
 
 fn compare_layouter_center<W, K, N, T>(
+    weave: &mut W,
     left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     id: &K,
@@ -1032,7 +1061,7 @@ fn compare_layouter_center<W, K, N, T>(
 {
     let mut center: Option<Vec2> = None;
 
-    left.view(Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
+    left.view(weave, Vec2::splat(-1.0e30), Vec2::splat(1.0e30), |item| {
         if let LayoutItem::Node {
             id: node_id,
             center: node_center,
@@ -1054,6 +1083,7 @@ fn compare_layouter_center<W, K, N, T>(
 
 fn compare_layouter_views<W, K, N, T>(
     scratchpad: &mut Scratchpad,
+    weave: &mut W,
     left: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     right: &mut impl Layouter<W, K, N, T, Vec2, ArrayVec<[Vec2; 6]>>,
     min: Vec2,
@@ -1068,10 +1098,10 @@ fn compare_layouter_views<W, K, N, T>(
     let mut layouter_output = lock.vec();
     let mut reference_layouter_output = lock.vec();
 
-    left.view(min, max, |item| {
+    left.view(weave, min, max, |item| {
         layouter_output.push(item);
     });
-    right.view(min, max, |item| {
+    right.view(weave, min, max, |item| {
         reference_layouter_output.push(item);
     });
 
@@ -1092,15 +1122,22 @@ fn compare_layouter_views<W, K, N, T>(
                 assert!((size - right_size).abs().max_element() <= TOLERANCE);
             }
             (
-                LayoutItem::Polyline { from, to, points },
+                LayoutItem::Polyline {
+                    from,
+                    to,
+                    active,
+                    points,
+                },
                 LayoutItem::Polyline {
                     from: right_from,
                     to: right_to,
+                    active: right_active,
                     points: right_points,
                 },
             ) => {
                 assert_eq!(from, right_from);
                 assert_eq!(to, right_to);
+                assert_eq!(active, right_active);
                 assert!(points.len() >= 2 && right_points.len() >= 2);
                 assert!(
                     (points.first().unwrap() - right_points.first().unwrap())
