@@ -137,7 +137,7 @@ where
         weave: &mut DependentWeave<K, T, M, S>,
         min: Vec2,
         max: Vec2,
-        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+        mut callback: impl FnMut(&DependentWeave<K, T, M, S>, LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
         let active = weave.active();
 
@@ -146,7 +146,7 @@ where
             self.layout.mark_active_path(&self.identifiers);
         }
 
-        self.layout.view(min, max, callback);
+        self.layout.view(min, max, |item| callback(weave, item));
     }
 }
 
@@ -232,7 +232,10 @@ where
         weave: &mut IndependentWeave<K, T, M, S>,
         min: Vec2,
         max: Vec2,
-        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+        mut callback: impl FnMut(
+            &IndependentWeave<K, T, M, S>,
+            LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>,
+        ),
     ) {
         let active = weave.active();
 
@@ -243,7 +246,7 @@ where
             self.layout.mark_active_path(&self.identifiers);
         }
 
-        self.layout.view(min, max, callback);
+        self.layout.view(min, max, |item| callback(weave, item));
     }
 }
 
@@ -334,7 +337,7 @@ where
         weave: &mut W,
         min: Vec2,
         max: Vec2,
-        callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
+        mut callback: impl FnMut(&W, LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
         weave.get_active_path(&mut self.identifiers);
 
@@ -343,7 +346,7 @@ where
             self.active.clone_from(&self.identifiers);
         }
 
-        self.layout.view(min, max, callback);
+        self.layout.view(min, max, |item| callback(weave, item));
     }
 }
 
