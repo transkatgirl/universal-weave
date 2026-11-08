@@ -1950,7 +1950,7 @@ where
             (source_x.min(target_x), source_x.max(target_x))
         };
 
-        if line_min_x > max.x || line_max_x < min.x {
+        if !(line_min_x <= max.x && line_max_x >= min.x) {
             return None;
         }
 
