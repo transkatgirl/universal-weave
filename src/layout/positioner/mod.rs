@@ -1087,14 +1087,29 @@ where
             right = right.max(combined + extent);
         }
 
-        let mut cursor = self.layer_ends[0];
-        let mut valid = validate_output_float(cursor);
+        let mut band_start = 0.0;
+        let mut cursor = 0.0;
+        let mut valid = true;
 
-        for end in &mut self.layer_ends[1..] {
-            cursor += spacing.layer + *end;
+        for end in &mut self.layer_ends {
+            let half = *end * 0.5;
+
+            cursor = band_start + *end;
+
+            loop {
+                let center = f32::midpoint(band_start, cursor);
+
+                if center - half >= band_start && center + half <= cursor {
+                    break;
+                }
+
+                cursor = cursor.next_up();
+            }
+
             valid &= validate_output_float(cursor);
 
             *end = cursor;
+            band_start = cursor + spacing.layer;
         }
 
         self.size = Vec2::new(right - left, cursor);
@@ -1203,7 +1218,7 @@ where
                     .zip(start..)
                 {
                     let source_x = fourth[source];
-                    let source_border = (rank_center + source_size.y * 0.5).min(band_end);
+                    let source_border = rank_center + source_size.y * 0.5;
 
                     for target in bucket(&structure.down_flat, &structure.down_offsets, source)
                         .iter()
@@ -1222,24 +1237,18 @@ where
                             };
                         let target_position = position_of[real_target];
 
-                        let (target_center, target_band_start) =
-                            if let Some((_, seg_last)) = segment {
-                                let [span_end, target_end] =
-                                    adjacent(&self.layer_ends, seg_last as usize);
-                                let target_band_start = span_end + self.layer_gap;
+                        let target_center = if let Some((_, seg_last)) = segment {
+                            let [span_end, target_end] =
+                                adjacent(&self.layer_ends, seg_last as usize);
 
-                                (
-                                    f32::midpoint(target_band_start, target_end),
-                                    target_band_start,
-                                )
-                            } else {
-                                (next_center, next_band_start)
-                            };
+                            f32::midpoint(span_end + self.layer_gap, target_end)
+                        } else {
+                            next_center
+                        };
 
                         let target_x = fourth[real_target];
-                        let target_border = (target_center
-                            - self.sizes[target_position as usize].y * 0.5)
-                            .max(target_band_start);
+                        let target_border =
+                            target_center - self.sizes[target_position as usize].y * 0.5;
 
                         let (min_x, max_x) = if let Some((seg_x, seg_last)) = segment {
                             self.polyline_segments.push((
@@ -1272,7 +1281,7 @@ where
                 *offset = self.polylines.len() as u32;
                 *segment_offset = self.polyline_segments.len() as u32;
                 *bounds = (rank_min, rank_max);
-                *reach = rank_reach;
+                *reach = (rank_reach.0.next_up(), rank_reach.1.next_up());
             }
         }
 
@@ -1791,7 +1800,7 @@ where
                 }
 
                 let rank_source_x = &self.polyline_source_x[range_start..range_end];
-                let skipped = rank_source_x.partition_point(|x| *x < min.x - right_reach);
+                let skipped = rank_source_x.partition_point(|x| x + right_reach < min.x);
                 let rank_source_x = &rank_source_x[skipped..];
                 let begin = range_start + skipped;
 
@@ -1903,11 +1912,12 @@ where
         {
             let (start, end) = (start as usize, end as usize);
             let y = f32::midpoint(band_start, band_end);
+            let y_inside = y >= min.y && y <= max.y;
 
             band_start = band_end + self.layer_gap;
 
-            let cutoff = min.x - half_width;
-            let begin = start + self.x_coordinates[start..end].partition_point(|x| x < &cutoff);
+            let begin =
+                start + self.x_coordinates[start..end].partition_point(|x| x + half_width < min.x);
 
             for ((x, size), id) in self.x_coordinates[begin..end]
                 .iter()
@@ -1915,13 +1925,16 @@ where
                 .zip(self.sizes[begin..end].iter().copied())
                 .zip(self.keys[begin..end].iter().copied())
             {
-                let half = size * 0.5;
-
-                if x - half.x > max.x {
+                if x - half_width > max.x {
                     break;
                 }
 
-                if x + half.x >= min.x && y - half.y <= max.y && y + half.y >= min.y {
+                let half = size * 0.5;
+
+                if x + half.x >= min.x
+                    && x - half.x <= max.x
+                    && (y_inside || (y - half.y <= max.y && y + half.y >= min.y))
+                {
                     callback(LayoutItem::Node {
                         id,
                         center: Vec2::new(x, y),
@@ -1956,8 +1969,7 @@ where
             return None;
         }
 
-        let source_border =
-            (rank_center + self.sizes[line.0 as usize].y * 0.5).min(source_band_end);
+        let source_border = rank_center + self.sizes[line.0 as usize].y * 0.5;
         let (target_center, target_band_start, span_end) = if let Some((_, seg_last)) = segment_info
         {
             let [span_end, target_end] = adjacent(&self.layer_ends, seg_last as usize);
@@ -1971,8 +1983,7 @@ where
         } else {
             (next_center, next_band_start, 0.0)
         };
-        let target_border =
-            (target_center - self.sizes[line.1 as usize].y * 0.5).max(target_band_start);
+        let target_border = target_center - self.sizes[line.1 as usize].y * 0.5;
 
         if source_border <= max.y && target_border >= min.y {
             Some(LayoutItem::Polyline {
