@@ -1061,7 +1061,6 @@ where
         ];
 
         let mut left = f32::INFINITY;
-        let mut right = f32::NEG_INFINITY;
 
         let [first, second, third, mut fourth] = candidates;
 
@@ -1080,11 +1079,9 @@ where
             );
 
             let combined = f32::midpoint(a.min(b).max(c.min(d)), a.max(b).min(c.max(d)));
-            let extent = extent.abs();
 
             *coordinate = combined;
-            left = left.min(combined - extent);
-            right = right.max(combined + extent);
+            left = left.min(combined - extent.abs());
         }
 
         let mut band_start = 0.0;
@@ -1112,24 +1109,48 @@ where
             band_start = cursor + spacing.layer;
         }
 
-        self.size = Vec2::new(right - left, cursor);
-        valid &= validate_output_float(self.size.x);
+        let mut right = 0.0_f32;
 
-        for coordinate in &mut fourth {
-            *coordinate -= left;
-            valid &= validate_output_float(*coordinate);
+        if HAS_SEGMENTS {
+            for (coordinate, extent) in fourth.iter_mut().zip(extent.iter().copied()) {
+                let segment = extent.is_sign_negative();
+                let extent = extent.abs();
+
+                let shifted = *coordinate - left;
+                let clamped = if shifted < extent { extent } else { shifted };
+
+                valid &= !segment | validate_output_float(clamped);
+
+                *coordinate = if segment { clamped } else { *coordinate };
+                right = right.max(if segment { clamped + extent } else { 0.0 });
+            }
         }
 
-        assert!(valid, "Output is not normal and positive");
-
         self.x_coordinates.clear();
-        self.x_coordinates.extend(
-            structure
-                .real_flat
-                .iter()
-                .copied()
-                .map(|vertex| fourth[vertex as usize]),
-        );
+        self.x_coordinates.reserve(structure.real_flat.len());
+
+        for layer in buckets(&structure.real_flat, &self.real_offsets) {
+            let mut floor = 0.0;
+
+            for vertex in layer.iter().copied().map(|i| i as usize) {
+                let extent = extent[vertex];
+                let shifted = fourth[vertex] - left;
+
+                let clamped = if shifted < extent { extent } else { shifted };
+                let coordinate = if clamped < floor { floor } else { clamped };
+
+                valid &= validate_output_float(coordinate);
+
+                right = right.max(coordinate + extent);
+                floor = coordinate;
+                self.x_coordinates.push(coordinate);
+            }
+        }
+
+        self.size = Vec2::new(right, cursor);
+        valid &= validate_output_float(self.size.x);
+
+        assert!(valid, "Output is not normal and positive");
 
         {
             let ordinal_of = |vertex| {
@@ -1210,14 +1231,15 @@ where
 
                 band_start = next_band_start;
 
-                for ((source, source_size), source_position) in structure.real_flat[start..end]
+                for (((source, source_size), source_x), source_position) in structure.real_flat
+                    [start..end]
                     .iter()
                     .copied()
                     .map(|i| i as usize)
                     .zip(self.sizes[start..end].iter().copied())
+                    .zip(self.x_coordinates[start..end].iter().copied())
                     .zip(start..)
                 {
-                    let source_x = fourth[source];
                     let source_border = rank_center + source_size.y * 0.5;
 
                     for target in bucket(&structure.down_flat, &structure.down_offsets, source)
@@ -1246,7 +1268,7 @@ where
                             next_center
                         };
 
-                        let target_x = fourth[real_target];
+                        let target_x = self.x_coordinates[target_position as usize];
                         let target_border =
                             target_center - self.sizes[target_position as usize].y * 0.5;
 
