@@ -46,8 +46,8 @@ impl Default for Spacing {
     fn default() -> Self {
         Self {
             node: 16.0,
-            layer: 16.0,
-            corridor: 0.0,
+            layer: 32.0,
+            corridor: 16.0,
             edge: 8.0,
         }
     }
