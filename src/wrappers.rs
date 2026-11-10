@@ -2505,7 +2505,21 @@ where
             .take_while(move |id| !stop(id))
             .map(|id| self.weave.get_contents(&id).unwrap())
     }
-    /// Convenience function which returns an iterator over the nodes corresponding to `id`'s path.
+    /// Convenience function which returns an iterator over the nodes in the reversed active path.
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "Should never panic when underlying Weave is correctly implemented"
+    )]
+    pub fn active_nodes(&mut self) -> impl Iterator<Item = &N> {
+        self.scratchpad.clear();
+        self.weave.get_active_path(&mut self.scratchpad);
+
+        self.scratchpad
+            .drain(..)
+            .rev()
+            .map(|id| self.weave.get(&id).unwrap())
+    }
+    /// Convenience function which returns an iterator over the nodes in `id`'s reversed path.
     #[allow(
         clippy::missing_panics_doc,
         reason = "Should never panic when underlying Weave is correctly implemented"
@@ -2519,7 +2533,7 @@ where
             .rev()
             .map(|id| self.weave.get(&id).unwrap())
     }
-    /// Convenience function which returns an iterator over the content corresponding to `id`'s path, breaking if `stop` returns `true`.
+    /// Convenience function which returns an iterator over the nodes in `id`'s reversed path, breaking if `stop` returns `true`.
     ///
     /// # Panics
     ///
