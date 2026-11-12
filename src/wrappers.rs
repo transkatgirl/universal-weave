@@ -3188,7 +3188,7 @@ where
 ///
 /// # Limitations
 ///
-/// Each node can have at most one tracked position and cloning a [`PositionedWeave`] drops its tracked position mapping.
+/// Each node can have at most one tracked position. Cloning a [`PositionedWeave`] or replacing its counter drops its tracked position mapping.
 ///
 /// # Requirements
 ///
@@ -3323,6 +3323,14 @@ where
     #[inline]
     pub const fn counter(&self) -> &Arc<AtomicU64> {
         &self.counter
+    }
+    /// Replaces the counter used to generate positions.
+    ///
+    /// This function always drops the tracked position mapping.
+    #[inline]
+    pub fn replace_counter(&mut self, counter: Arc<AtomicU64>) {
+        self.clear_positions();
+        self.counter = counter;
     }
     /// Returns a reference to the mapping between tracked positions and their corresponding node identifiers.
     #[inline]
