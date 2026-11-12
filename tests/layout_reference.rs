@@ -151,6 +151,8 @@ where
         let mut builder = GraphBuilder::<K>::new();
         let mut indices: HashMap<K, usize> = HashMap::with_capacity(order.len());
 
+        let dummy_width = 2.0 * (self.spacing.edge_edge - self.spacing.node_edge);
+
         for id in order {
             let node = weave.get(&id).unwrap();
             let parents = node.from();
@@ -181,8 +183,7 @@ where
 
             for mut from in parents.into_iter().map(|id| indices[id]) {
                 for dummy_rank in builder.vertices[from].rank + 1..rank {
-                    let dummy =
-                        builder.push(None, Vec2::new(self.spacing.corridor, 0.0), dummy_rank);
+                    let dummy = builder.push(None, Vec2::new(dummy_width, 0.0), dummy_rank);
 
                     builder.link(from, dummy);
                     from = dummy;
@@ -196,10 +197,18 @@ where
             &mut builder.graph,
             &mut builder.layers,
             Some(PairSeparation {
-                vertex_gap: self.spacing.node as f64,
-                edge_gap: self.spacing.edge as f64,
+                vertex_gap: self.spacing.node_node as f64,
+                edge_gap: (2.0 * self.spacing.node_edge - self.spacing.edge_edge) as f64,
             }),
         );
+
+        for vertex in builder
+            .graph
+            .node_weights_mut()
+            .filter(|vertex| vertex.is_dummy)
+        {
+            vertex.size.0 = 0.0;
+        }
 
         p3_calculate_coordinates::align_to_smallest_width_layout(&builder.graph, &mut layouts);
 
@@ -383,10 +392,10 @@ impl ReferenceStateMachine for WeaveStateMachine {
                 (
                     Vec::with_capacity(MAX_TRANSITIONS),
                     Spacing {
-                        node: values.0 as f32 / 64.0,
-                        layer: values.1 as f32 / 64.0,
-                        corridor: values.2 as f32 / 64.0,
-                        edge: values.3 as f32 / 64.0,
+                        layer: values.0 as f32 / 64.0,
+                        node_node: values.1 as f32 / 64.0,
+                        node_edge: values.2 as f32 / 64.0,
+                        edge_edge: values.3 as f32 / 64.0,
                     },
                 )
             })

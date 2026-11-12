@@ -716,7 +716,7 @@ where
         }
 
         let mut extent = guard.vec_with_capacity(count);
-        extent.resize(count, 0.0);
+        extent.resize(count, -0.0);
 
         self.rank_half_width.resize(height, 0.0);
         self.layer_ends.resize(height, 0.0);
@@ -726,14 +726,8 @@ where
             .iter()
             .copied()
             .zip(extent.iter_mut())
-            .filter_map(|(top, extent)| {
-                if HAS_SEGMENTS && top & SEG_BIT != 0 {
-                    *extent = -(spacing.corridor * 0.5);
-                    None
-                } else {
-                    Some((top as usize, extent))
-                }
-            })
+            .filter(|(top, _)| !HAS_SEGMENTS || top & SEG_BIT == 0)
+            .map(|(top, extent)| (top as usize, extent))
             .zip(self.sizes.iter().copied())
         {
             let half_width = size.x * 0.5;
@@ -1114,15 +1108,12 @@ where
         if HAS_SEGMENTS {
             for (coordinate, extent) in fourth.iter_mut().zip(extent.iter().copied()) {
                 let segment = extent.is_sign_negative();
-                let extent = extent.abs();
-
                 let shifted = *coordinate - left;
-                let clamped = if shifted < extent { extent } else { shifted };
 
-                valid &= !segment | validate_output_float(clamped);
+                valid &= !segment | validate_output_float(shifted);
 
-                *coordinate = if segment { clamped } else { *coordinate };
-                right = right.max(if segment { clamped + extent } else { 0.0 });
+                *coordinate = if segment { shifted } else { *coordinate };
+                right = right.max(shifted);
             }
         }
 
@@ -1446,21 +1437,18 @@ where
             }
         }
 
-        let separation = |a: usize, b: usize| {
-            let (extent_a, extent_b) = (extent[a], extent[b]);
-
-            extent_a.abs()
-                + extent_b.abs()
+        let gaps = [spacing.node_node, spacing.node_edge, spacing.edge_edge];
+        let separation_of = |extent_a: f32, extent_b: f32| {
+            extent_a
+                + extent_b
                 + if HAS_SEGMENTS {
-                    if extent_a.is_sign_negative() | extent_b.is_sign_negative() {
-                        spacing.edge
-                    } else {
-                        spacing.node
-                    }
+                    gaps[usize::from(extent_a.is_sign_negative())
+                        + usize::from(extent_b.is_sign_negative())]
                 } else {
-                    spacing.node
+                    spacing.node_node
                 }
         };
+        let separation = |a: usize, b: usize| separation_of(extent[a], extent[b]);
         let runs_of = |vertex: usize| {
             if HAS_SEGMENTS {
                 Runs::Segments(bucket(runs_flat, runs_offsets, vertex).iter())
@@ -1485,6 +1473,7 @@ where
                 let (root_val, member, mut applied) = frame;
                 let (root_index, member_index) = (root_val as usize, member as usize);
                 let mut pending = runs_of(member_index).skip(applied as usize, DOWNWARD);
+                let member_extent = extent[member_index];
 
                 while let Some(neighbor) = pending.next(DOWNWARD) {
                     let neighbor_root = root[neighbor as usize];
@@ -1510,8 +1499,9 @@ where
                     if *sink_root == neighbor_sink {
                         let x_root = &mut x[root_index];
 
-                        *x_root =
-                            x_root.max(neighbor_x + separation(neighbor as usize, member_index));
+                        *x_root = x_root.max(
+                            neighbor_x + separation_of(extent[neighbor as usize], member_extent),
+                        );
                     }
 
                     applied += 1;

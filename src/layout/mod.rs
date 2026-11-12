@@ -31,24 +31,24 @@ mod positioner;
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 #[must_use]
 pub struct Spacing {
-    /// Gap between adjacent nodes.
-    pub node: f32,
     /// Gap between layers of nodes.
     pub layer: f32,
-    /// Reserved space for edges.
-    pub corridor: f32,
-    /// Gap between edges and adjacent items.
-    pub edge: f32,
+    /// Gap between two adjacent nodes within a layer.
+    pub node_node: f32,
+    /// Gap between an adjacent node and edge within a layer.
+    pub node_edge: f32,
+    /// Gap between two adjacent edges within a layer.
+    pub edge_edge: f32,
 }
 
 impl Default for Spacing {
     #[inline]
     fn default() -> Self {
         Self {
-            node: 16.0,
-            layer: 64.0,
-            corridor: 16.0,
-            edge: 8.0,
+            layer: 48.0,
+            node_node: 16.0,
+            node_edge: 16.0,
+            edge_edge: 16.0,
         }
     }
 }
@@ -58,10 +58,10 @@ impl Spacing {
     #[must_use]
     #[inline]
     pub const fn validate(&self) -> bool {
-        validate_float(self.node)
-            && validate_float(self.layer)
-            && validate_float(self.corridor)
-            && validate_float(self.edge)
+        validate_float(self.layer)
+            && validate_float(self.node_node)
+            && validate_float(self.node_edge)
+            && validate_float(self.edge_edge)
     }
 }
 

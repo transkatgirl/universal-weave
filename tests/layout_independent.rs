@@ -56,10 +56,10 @@ impl ReferenceStateMachine for WeaveStateMachine {
                 (
                     Vec::with_capacity(MAX_TRANSITIONS),
                     Spacing {
-                        node: values.0 as f32 / 64.0,
-                        layer: values.1 as f32 / 64.0,
-                        corridor: values.2 as f32 / 64.0,
-                        edge: values.3 as f32 / 64.0,
+                        layer: values.0 as f32 / 64.0,
+                        node_node: values.1 as f32 / 64.0,
+                        node_edge: values.2 as f32 / 64.0,
+                        edge_edge: values.3 as f32 / 64.0,
                     },
                 )
             })
