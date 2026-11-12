@@ -3182,13 +3182,13 @@ where
     }
 }
 
-/// A [`Weave`] wrapper which tracks positions at node ends across actions performed on the inner [`Weave`].
+/// A [`Weave`] wrapper which tracks positions at node boundaries across actions performed on the inner [`Weave`].
 ///
-/// Tracked positions are unique incremental `u64` identifiers which map to the node whose contents end at that position. Once a position stops existing, it no longer maps to a node.
+/// Tracked positions are unique incremental `u64` identifiers which map to the node whose contents start or end at that position (see [`PositionAlignment`]). Once a position stops existing, it no longer maps to a node.
 ///
 /// # Limitations
 ///
-/// Each node can have at most one tracked position. Cloning a [`PositionedWeave`] or replacing its counter drops its tracked position mapping.
+/// Each node can have at most one tracked position per [`PositionAlignment`]. Cloning a [`PositionedWeave`] or replacing its counter drops its tracked position mapping.
 ///
 /// # Requirements
 ///
@@ -3215,8 +3215,9 @@ where
     pub weave: W,
 
     counter: Arc<AtomicU64>,
-    node_positions: HashMap<K, u64, S>,
-    position_nodes: HashMap<u64, K>,
+    start_positions: HashMap<K, u64, S>,
+    end_positions: HashMap<K, u64, S>,
+    position_nodes: HashMap<u64, (K, PositionAlignment)>,
 
     _phantom_n: PhantomData<N>,
     _phantom_t: PhantomData<T>,
@@ -3298,7 +3299,8 @@ where
         Self {
             weave,
             counter,
-            node_positions: HashMap::default(),
+            start_positions: HashMap::default(),
+            end_positions: HashMap::default(),
             position_nodes: HashMap::default(),
             _phantom_n: PhantomData,
             _phantom_t: PhantomData,
@@ -3332,18 +3334,33 @@ where
         self.clear_positions();
         self.counter = counter;
     }
-    /// Returns a reference to the mapping between tracked positions and their corresponding node identifiers.
+    /// Returns a reference to the mapping between tracked positions and their corresponding node identifiers and alignments.
     #[inline]
-    pub const fn positions(&self) -> &HashMap<u64, K> {
+    pub const fn positions(&self) -> &HashMap<u64, (K, PositionAlignment)> {
         &self.position_nodes
     }
-    /// Returns the position of the node with the specified identifier if it is already tracked.
+    /// Returns `true` if a position with the specified alignment is already tracked for the node with the specified identifier.
     #[must_use]
     #[inline]
-    pub fn get_position(&self, id: &K) -> Option<u64> {
-        self.node_positions.get(id).copied()
+    pub fn contains_position(&self, id: &K, alignment: PositionAlignment) -> bool {
+        match alignment {
+            PositionAlignment::End => &self.end_positions,
+            PositionAlignment::Start => &self.start_positions,
+        }
+        .contains_key(id)
     }
-    /// Returns the position of the node with the specified identifier, starting to track the position if it is not already tracked.
+    /// Returns the position with the specified alignment of the node with the specified identifier if it is already tracked.
+    #[must_use]
+    #[inline]
+    pub fn get_position(&self, id: &K, alignment: PositionAlignment) -> Option<u64> {
+        match alignment {
+            PositionAlignment::End => &self.end_positions,
+            PositionAlignment::Start => &self.start_positions,
+        }
+        .get(id)
+        .copied()
+    }
+    /// Returns the position with the specified alignment of the node with the specified identifier, starting to track the position if it is not already tracked.
     ///
     /// Returns `None` if the Weave does not contain a node with the specified identifier.
     ///
@@ -3351,8 +3368,14 @@ where
     ///
     /// May panic if the position counter has gone backwards.
     #[must_use]
-    pub fn get_or_insert_position(&mut self, id: &K) -> Option<u64> {
-        if let Some(position) = self.node_positions.get(id).copied() {
+    pub fn get_or_insert_position(&mut self, id: &K, alignment: PositionAlignment) -> Option<u64> {
+        if let Some(position) = match alignment {
+            PositionAlignment::End => &self.end_positions,
+            PositionAlignment::Start => &self.start_positions,
+        }
+        .get(id)
+        .copied()
+        {
             return Some(position);
         }
 
@@ -3363,42 +3386,55 @@ where
         let position = self.counter.fetch_add(1, atomic::Ordering::Relaxed);
 
         assert!(
-            self.position_nodes.try_insert(position, *id).is_ok(),
+            self.position_nodes
+                .try_insert(position, (*id, alignment))
+                .is_ok(),
             "Position is not unique"
         );
-        self.node_positions.insert(*id, position);
+        match alignment {
+            PositionAlignment::End => &mut self.end_positions,
+            PositionAlignment::Start => &mut self.start_positions,
+        }
+        .insert(*id, position);
 
         Some(position)
     }
-    /// Returns the identifier of the position's corresponding node, if any.
+    /// Returns the identifier of the position's corresponding node along with the position's alignment, if any.
     #[must_use]
     #[inline]
-    pub fn resolve_position(&self, position: u64) -> Option<K> {
+    pub fn resolve_position(&self, position: u64) -> Option<(K, PositionAlignment)> {
         self.position_nodes.get(&position).copied()
     }
-    /// Stops tracking the specified position, returning the identifier of the corresponding node.
-    pub fn remove_position(&mut self, position: u64) -> Option<K> {
-        let id = self.position_nodes.remove(&position)?;
-        self.node_positions.remove(&id);
+    /// Stops tracking the specified position, returning the identifier of the corresponding node along with the position's alignment.
+    #[inline]
+    pub fn remove_position(&mut self, position: u64) -> Option<(K, PositionAlignment)> {
+        let (id, alignment) = self.position_nodes.remove(&position)?;
+        match alignment {
+            PositionAlignment::End => &mut self.end_positions,
+            PositionAlignment::Start => &mut self.start_positions,
+        }
+        .remove(&id);
 
-        Some(id)
+        Some((id, alignment))
     }
     /// Stops tracking all positions.
     #[inline]
     pub fn clear_positions(&mut self) {
-        self.node_positions.clear();
+        self.start_positions.clear();
+        self.end_positions.clear();
         self.position_nodes.clear();
     }
-    fn move_position(&mut self, from: &K, to: K) {
-        let position = self.node_positions.remove(from);
+    fn move_end(&mut self, from: &K, to: K) {
+        let position = self.end_positions.remove(from);
 
-        if let Some(previous) = self.node_positions.remove(&to) {
-            self.position_nodes.remove(&previous);
+        if let Some(position) = self.end_positions.remove(&to) {
+            self.position_nodes.remove(&position);
         }
 
         if let Some(position) = position {
-            self.node_positions.insert(to, position);
-            self.position_nodes.insert(position, to);
+            self.end_positions.insert(to, position);
+            self.position_nodes
+                .insert(position, (to, PositionAlignment::End));
         }
     }
 }
@@ -3417,14 +3453,16 @@ where
             WeaveAction::Remove(_) => {
                 self.weave.apply(action);
 
-                self.node_positions.retain(|id, position| {
-                    if self.weave.contains(id) {
-                        true
-                    } else {
-                        self.position_nodes.remove(position);
-                        false
-                    }
-                });
+                for positions in [&mut self.start_positions, &mut self.end_positions] {
+                    positions.retain(|id, position| {
+                        if self.weave.contains(id) {
+                            true
+                        } else {
+                            self.position_nodes.remove(position);
+                            false
+                        }
+                    });
+                }
             }
             WeaveAction::Clear => {
                 self.weave.apply(action);
@@ -3436,7 +3474,10 @@ where
                 self.weave.apply(action);
 
                 if !existed && self.weave.contains(&new_id) {
-                    self.move_position(&id, new_id);
+                    if let Some(position) = self.start_positions.remove(&new_id) {
+                        self.position_nodes.remove(&position);
+                    }
+                    self.move_end(&id, new_id);
                 }
             }
             WeaveAction::MergeWithParent(id) => {
@@ -3451,7 +3492,10 @@ where
                     && !self.weave.contains(&id)
                     && self.weave.contains(&parent)
                 {
-                    self.move_position(&id, parent);
+                    if let Some(position) = self.start_positions.remove(&id) {
+                        self.position_nodes.remove(&position);
+                    }
+                    self.move_end(&id, parent);
                 }
             }
             WeaveAction::Insert(_)
@@ -3548,7 +3592,10 @@ where
         self.weave.remove_tracked(id, |node| {
             let node_id = node.id();
 
-            if let Some(position) = self.node_positions.remove(&node_id) {
+            if let Some(position) = self.start_positions.remove(&node_id) {
+                self.position_nodes.remove(&position);
+            }
+            if let Some(position) = self.end_positions.remove(&node_id) {
                 self.position_nodes.remove(&position);
             }
 
@@ -3561,7 +3608,12 @@ where
     }
     fn remove_tracked(&mut self, id: &K, mut on_removal: impl FnMut(N)) -> bool {
         self.weave.remove_tracked(id, |node| {
-            if let Some(position) = self.node_positions.remove(&node.id()) {
+            let id = node.id();
+
+            if let Some(position) = self.start_positions.remove(&id) {
+                self.position_nodes.remove(&position);
+            }
+            if let Some(position) = self.end_positions.remove(&id) {
                 self.position_nodes.remove(&position);
             }
 
@@ -3736,7 +3788,11 @@ where
 {
     fn split(&mut self, id: &K, at: usize, new_id: K) -> bool {
         if self.weave.split(id, at, new_id) {
-            self.move_position(id, new_id);
+            if let Some(position) = self.start_positions.remove(&new_id) {
+                self.position_nodes.remove(&position);
+            }
+            self.move_end(id, new_id);
+
             true
         } else {
             false
@@ -3744,7 +3800,22 @@ where
     }
     fn merge_with_parent(&mut self, id: &K) -> Option<K> {
         self.weave.merge_with_parent(id).inspect(|merged| {
-            self.move_position(id, *merged);
+            if let Some(position) = self.start_positions.remove(id) {
+                self.position_nodes.remove(&position);
+            }
+            self.move_end(id, *merged);
         })
     }
+}
+
+/// The node content boundary alignment for a position tracked by [`PositionedWeave`].
+#[cfg(all(target_has_atomic = "64", target_has_atomic = "ptr"))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "rkyv", derive(Archive, Deserialize, Serialize))]
+#[cfg_attr(feature = "serde", derive(SerdeSerialize, SerdeDeserialize))]
+pub enum PositionAlignment {
+    /// Align positions to the start of node contents (same alignment as node identifiers within a [`Weave`]).
+    Start,
+    /// Align positions to the end of node contents, such as when tracking where to append a child node.
+    End,
 }
