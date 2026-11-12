@@ -3,6 +3,7 @@
 ## Correctness
 
 - [ ] **Improve Layouter handling of floating-point rounding error**
+    - 840K wide layout has error of ~0.15, 8.4M wide layout has error of ~1.1
 - [ ] **Turn function contracts into readable, executable documentation**
 	- [ ] DependentWeave
 	- [ ] IndependentWeave
