@@ -2464,7 +2464,9 @@ where
         clippy::missing_panics_doc,
         reason = "Should never panic when underlying Weave is correctly implemented"
     )]
-    pub fn active_content(&mut self) -> impl Iterator<Item = &T> {
+    pub fn active_content(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator<Item = &T> {
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
 
@@ -2478,7 +2480,10 @@ where
         clippy::missing_panics_doc,
         reason = "Should never panic when underlying Weave is correctly implemented"
     )]
-    pub fn path_content(&mut self, id: &K) -> impl Iterator<Item = &T> {
+    pub fn path_content(
+        &mut self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = &T> + DoubleEndedIterator<Item = &T> {
         self.scratchpad.clear();
         self.weave.get_path_from(id, &mut self.scratchpad);
 
@@ -2510,7 +2515,9 @@ where
         clippy::missing_panics_doc,
         reason = "Should never panic when underlying Weave is correctly implemented"
     )]
-    pub fn active_nodes(&mut self) -> impl Iterator<Item = &N> {
+    pub fn active_nodes(
+        &mut self,
+    ) -> impl ExactSizeIterator<Item = &N> + DoubleEndedIterator<Item = &N> {
         self.scratchpad.clear();
         self.weave.get_active_path(&mut self.scratchpad);
 
@@ -2524,7 +2531,10 @@ where
         clippy::missing_panics_doc,
         reason = "Should never panic when underlying Weave is correctly implemented"
     )]
-    pub fn path_nodes(&mut self, id: &K) -> impl Iterator<Item = &N> {
+    pub fn path_nodes(
+        &mut self,
+        id: &K,
+    ) -> impl ExactSizeIterator<Item = &N> + DoubleEndedIterator<Item = &N> {
         self.scratchpad.clear();
         self.weave.get_path_from(id, &mut self.scratchpad);
 
