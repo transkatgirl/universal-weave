@@ -492,7 +492,10 @@ struct PassScratch<'a, 'g> {
     merged_top_offsets: &'a [u32],
     merged_bottom_flat: &'a [u32],
     merged_bottom_offsets: &'a [u32],
-    medians: &'a mut ScratchpadVec<'g, Medians>,
+    up_offsets: &'a [u32],
+    up_flat: &'a [u32],
+    down_offsets: &'a [u32],
+    down_flat: &'a [u32],
     root: &'a mut ScratchpadVec<'g, u32>,
     align: &'a mut ScratchpadVec<'g, u32>,
     sink: &'a mut ScratchpadVec<'g, u32>,
@@ -990,7 +993,10 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            medians: &mut guard.vec_with_capacity(count),
+            up_offsets: &structure.up_offsets,
+            up_flat: &structure.up_flat,
+            down_offsets: &structure.down_offsets,
+            down_flat: &structure.down_flat,
             root: &mut root,
             align: &mut guard.vec_with_capacity(count),
             sink: &mut guard.vec_with_capacity(count),
@@ -999,13 +1005,6 @@ where
         };
 
         let mut extents = [(0.0, 0.0); 4];
-
-        fill_medians(
-            scratch.medians,
-            &structure.up_offsets,
-            &structure.up_flat,
-            &structure.top,
-        );
 
         extents[0] = Self::coordinate_pass::<true, true, HAS_SEGMENTS>(
             &mut scratch,
@@ -1016,13 +1015,6 @@ where
             &mut scratch,
             spacing,
             &mut candidates[1],
-        );
-
-        fill_medians(
-            scratch.medians,
-            &structure.down_offsets,
-            &structure.down_flat,
-            &structure.top,
         );
 
         extents[2] = Self::coordinate_pass::<false, true, HAS_SEGMENTS>(
@@ -1343,7 +1335,10 @@ where
             merged_top_offsets,
             merged_bottom_flat,
             merged_bottom_offsets,
-            medians,
+            up_offsets,
+            up_flat,
+            down_offsets,
+            down_flat,
             root,
             align,
             sink,
@@ -1357,6 +1352,11 @@ where
             (*merged_bottom_flat, *merged_bottom_offsets)
         };
         let edge_marked = if DOWNWARD { *marked_up } else { *marked };
+        let (median_offsets, median_flat) = if DOWNWARD {
+            (*up_offsets, *up_flat)
+        } else {
+            (*down_offsets, *down_flat)
+        };
         let (runs_flat, runs_offsets) = if LEFTWARD {
             (*left_runs, *left_offsets)
         } else {
@@ -1394,19 +1394,21 @@ where
             let mut last = None;
 
             let mut process = |vertex: usize| {
-                let median = &medians[vertex];
+                let [base, next] = adjacent(median_offsets, vertex);
+                let degree = next - base;
 
-                let entries: &[(u32, u32)] = match median.kind {
-                    MedianKind::None => return,
-                    MedianKind::Single => &[median.entries[0]],
-                    MedianKind::Ordered if !LEFTWARD => &[median.entries[1], median.entries[0]],
-                    MedianKind::Ordered | MedianKind::Fixed => &median.entries[..2],
-                };
+                if degree == 0 {
+                    return;
+                }
 
-                for (neighbor, position) in entries.iter().copied() {
-                    let neighbor = neighbor as usize;
+                let low = base + ((degree - 1) >> 1_u32);
+                let high = base + (degree >> 1_u32);
 
-                    if (!HAS_SEGMENTS || edge_marked.is_empty() || !edge_marked[position as usize])
+                for step in 0..=(high - low) {
+                    let position = if LEFTWARD { low + step } else { high - step } as usize;
+                    let neighbor = median_flat[position] as usize;
+
+                    if (!HAS_SEGMENTS || edge_marked.is_empty() || !edge_marked[position])
                         && last.is_none_or(|last| {
                             if LEFTWARD {
                                 last < neighbor
@@ -2104,77 +2106,6 @@ impl Runs<'_> {
             Self::Single(neighbor) => neighbor.take(),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum MedianKind {
-    None,
-    Single,
-    Ordered,
-    Fixed,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct Medians {
-    entries: [(u32, u32); 2],
-    kind: MedianKind,
-}
-
-fn fill_medians(
-    medians: &mut ScratchpadVec<'_, Medians>,
-    offsets: &[u32],
-    flat: &[u32],
-    top: &[u32],
-) {
-    medians.clear();
-    medians.extend(
-        offsets
-            .iter()
-            .copied()
-            .zip(offsets.iter().copied().skip(1))
-            .map(|(base, next)| {
-                let degree = next - base;
-
-                if degree == 0 {
-                    Medians {
-                        entries: [(0, 0); 2],
-                        kind: MedianKind::None,
-                    }
-                } else {
-                    let low_position = base + ((degree - 1) >> 1_u32);
-                    let high_position = base + (degree >> 1_u32);
-                    let low = (flat[low_position as usize], low_position);
-
-                    if low_position == high_position {
-                        Medians {
-                            entries: [low, low],
-                            kind: MedianKind::Single,
-                        }
-                    } else {
-                        let high = (flat[high_position as usize], high_position);
-                        let low_segment = top[low.0 as usize] & SEG_BIT != 0;
-                        let high_segment = top[high.0 as usize] & SEG_BIT != 0;
-
-                        if low_segment == high_segment {
-                            Medians {
-                                entries: [low, high],
-                                kind: MedianKind::Ordered,
-                            }
-                        } else if low_segment {
-                            Medians {
-                                entries: [low, high],
-                                kind: MedianKind::Fixed,
-                            }
-                        } else {
-                            Medians {
-                                entries: [high, low],
-                                kind: MedianKind::Fixed,
-                            }
-                        }
-                    }
-                }
-            }),
-    );
 }
 
 fn ends_from_counts(offsets: &mut [u32]) -> usize {

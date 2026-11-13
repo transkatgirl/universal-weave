@@ -1,6 +1,6 @@
 [package]
 name = "universal-weave"
-version = "0.13.0"
+version = "0.13.1"
 authors = [
 	"transkatgirl",
 ]
@@ -77,7 +77,7 @@ proptest                            = "1.12.0"
 proptest-state-machine              = "0.9.0"
 proptest-derive                     = "0.9.0"
 universal_weave_structure_reference = { package = "universal-weave", version = "=0.4.0" }
-rust-sugiyama-fork                  = "=0.5.1"
+rust-sugiyama-fork                  = "=0.6.0"
 
 [profile.test.build-override]
 opt-level = 2

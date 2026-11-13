@@ -7,7 +7,10 @@ use glam::Vec2;
 use hashbrown::{HashMap, HashSet};
 use rust_sugiyama_fork::{
     PairSeparation,
-    algorithm::{Edge, Vertex, p3_calculate_coordinates},
+    algorithm::{
+        Edge, Vertex,
+        p3_calculate_coordinates::{self, MedianOrder},
+    },
     petgraph::stable_graph::{NodeIndex, StableDiGraph},
 };
 
@@ -312,6 +315,7 @@ where
                 vertex_gap: self.spacing.node_node as f64,
                 edge_gap: (2.0 * self.spacing.node_edge - self.spacing.edge_edge) as f64,
             }),
+            MedianOrder::EdgeOrder,
         );
 
         for vertex in builder
