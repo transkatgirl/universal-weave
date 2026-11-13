@@ -68,10 +68,6 @@ impl Spacing {
 /// A 2D [`Layouter`] which takes a [`DependentWeave`] as input.
 ///
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
-///
-/// # Panics
-///
-/// Panics if [`Self::spacing`] or `sizes` provides a value which is not a positive normal number or positive zero.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct DependentLayouter<K, S>
@@ -157,10 +153,6 @@ where
 /// A 2D [`Layouter`] which takes an [`IndependentWeave`] as input.
 ///
 /// This layout algorithm has identical behavior to [`TopologicalLayouter`].
-///
-/// # Panics
-///
-/// Panics if [`Self::spacing`] or `sizes` provides a value which is not a positive normal number or positive zero.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct IndependentLayouter<K, S>
@@ -258,10 +250,6 @@ where
 /// A 2D [`Layouter`] which orders nodes using [`Weave::get_ordered_identifiers()`].
 ///
 /// However, this additional flexibility may result in worse performance and memory usage characteristics compared to [`DependentLayouter`] or [`IndependentLayouter`].
-///
-/// # Panics
-///
-/// Panics if [`Self::spacing`] or `sizes` provides a value which is not a positive normal number or positive zero.
 #[derive(Debug, Clone)]
 #[must_use]
 pub struct TopologicalLayouter<K, S>
