@@ -512,15 +512,17 @@ impl StateMachineTest for WeaveWrapper {
             .reference_layouter
             .layout(&mut state.weave, |node| state.sizes[&node.id]);
 
+        let size = Layouter::<
+            IndependentWeave<u32, WeaveContent, u32, RandomState>,
+            u32,
+            IndependentNode<u32, WeaveContent, RandomState>,
+            WeaveContent,
+            Vec2,
+            ArrayVec<[Vec2; 6]>,
+        >::size(&state.layouter);
+
         assert_eq!(
-            Layouter::<
-                IndependentWeave<u32, WeaveContent, u32, RandomState>,
-                u32,
-                IndependentNode<u32, WeaveContent, RandomState>,
-                WeaveContent,
-                Vec2,
-                ArrayVec<[Vec2; 6]>,
-            >::size(&state.layouter),
+            size,
             Layouter::<
                 IndependentWeave<u32, WeaveContent, u32, RandomState>,
                 u32,
@@ -547,25 +549,14 @@ impl StateMachineTest for WeaveWrapper {
             &target,
         );
 
-        let subview_min = Vec2 {
-            x: ((transition.3.0 as f32 / u32::MAX as f32) - 0.5)
-                * 2.0
-                * (MAX_TRANSITIONS * 20) as f32
-                * 3.0,
-            y: ((transition.3.1 as f32 / u32::MAX as f32) - 0.5)
-                * 2.0
-                * (MAX_TRANSITIONS * 20) as f32
-                * 3.0,
-        };
+        let subview_min =
+            (Vec2::new(transition.3.0 as f32, transition.3.1 as f32) / u32::MAX as f32 * 1.5
+                - 0.25)
+                * size;
         let subview_max = subview_min
-            + Vec2 {
-                x: ((transition.4.0 as f32 / u32::MAX as f32) - 0.5)
-                    * 2.0
-                    * (MAX_TRANSITIONS * 20) as f32,
-                y: ((transition.4.1 as f32 / u32::MAX as f32) - 0.5)
-                    * 2.0
-                    * (MAX_TRANSITIONS * 20) as f32,
-            };
+            + (Vec2::new(transition.4.0 as f32, transition.4.1 as f32) / u32::MAX as f32 * 1.5
+                - 0.25)
+                * size;
 
         compare_layouter_views(
             &mut state.scratchpad_arena,

@@ -304,6 +304,7 @@ where
 {
     fn layout(&mut self, weave: &mut W, sizes: impl FnMut(&N) -> Vec2) {
         self.active.clear();
+        self.identifiers.clear();
 
         weave.get_ordered_identifiers(&mut self.identifiers);
 
@@ -336,6 +337,8 @@ where
         max: Vec2,
         callback: impl FnMut(LayoutItem<K, Vec2, ArrayVec<[Vec2; 6]>>),
     ) {
+        self.identifiers.clear();
+
         weave.get_active_path(&mut self.identifiers);
 
         if self.active != self.identifiers {
